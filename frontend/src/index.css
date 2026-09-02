@@ -16,6 +16,9 @@
   --success: #16a34a;
   --success-bg: #ecfdf5;
   --neutral-bg: #f3f4f6;
+  --warning: #b45309;
+  --warning-bg: #fffbeb;
+  --warning-border: #fde68a;
   --error: #dc2626;
   --error-bg: #fef2f2;
 
@@ -351,6 +354,52 @@ textarea:focus {
 .badge-inactive {
   background: var(--neutral-bg);
   color: var(--text-muted);
+}
+
+.quality-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  text-transform: capitalize;
+}
+
+.quality-good {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.quality-limited {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.quality-empty {
+  background: var(--error-bg);
+  color: var(--error);
+}
+
+.content-warning {
+  background: var(--warning-bg);
+  color: var(--warning);
+  border: 1px solid var(--warning-border);
+  font-size: 13px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+}
+
+.preview-text-block {
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--neutral-bg);
+  border-radius: var(--radius);
+  padding: 12px;
+  font: 13px/1.5 var(--mono, monospace);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
 }
 
 /* Grid of entity cards */

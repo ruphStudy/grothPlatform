@@ -52,6 +52,39 @@ export interface TargetAudience {
   goals: string[];
 }
 
+export interface WebsitePreviewSource {
+  configuredUrl: string;
+  finalUrl: string;
+  contentType?: string;
+  fetchedAt: string;
+}
+
+export interface WebsitePreview {
+  productId: string;
+  websiteUrl: string;
+  finalUrl: string;
+  title?: string;
+  metaDescription?: string;
+  headings: {
+    h1: string[];
+    h2: string[];
+    h3: string[];
+  };
+  paragraphs: string[];
+  listItems: string[];
+  ctas: string[];
+  textContentPreview: string;
+  extraction: {
+    originalCharacters: number;
+    extractedCharacters: number;
+    truncated: boolean;
+  };
+  contentQuality: 'good' | 'limited' | 'empty';
+  contentWarning?: string;
+  source: WebsitePreviewSource;
+  fetchedAt: string;
+}
+
 export interface ProductIntelligenceProfile {
   id: string;
   organizationId: string;
