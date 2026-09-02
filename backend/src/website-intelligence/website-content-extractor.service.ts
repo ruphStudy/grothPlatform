@@ -39,6 +39,12 @@ const NAV_LIKE_TERMS = new Set([
 
 const HTML_LIKE_CONTENT_TYPES = new Set(['text/html', 'application/xhtml+xml']);
 
+// Rescues short but commercially meaningful fragments (e.g. "$19/month",
+// "Pro", "Contact Sales") from the generic MIN_PARAGRAPH_LENGTH filter below,
+// without weakening that filter for ordinary short noise like "OK" or "X".
+const HIGH_VALUE_SHORT_TEXT_PATTERN =
+  /[$₹€£]\s?\d|\bper\s?(month|year|mo|yr)\b|\/\s?(mo|month|yr|year)\b|\bfree\b|\btrial\b|\bstarter\b|\bbasic\b|\bpro\b|\bbusiness\b|\benterprise\b|contact\s?sales/i;
+
 @Injectable()
 export class WebsiteContentExtractorService {
   private readonly logger = new Logger(WebsiteContentExtractorService.name);
@@ -147,7 +153,8 @@ export class WebsiteContentExtractorService {
     const result: string[] = [];
     $('p').each((_, el) => {
       const text = this.normalizeWhitespace($(el).text());
-      if (!text || text.length < MIN_PARAGRAPH_LENGTH || seen.has(text)) return;
+      if (!text || seen.has(text)) return;
+      if (text.length < MIN_PARAGRAPH_LENGTH && !this.isHighValueShortText(text)) return;
       seen.add(text);
       result.push(text);
     });
@@ -193,6 +200,10 @@ export class WebsiteContentExtractorService {
     if (title) parts.push(title);
     parts.push(...headings.h1, ...headings.h2, ...headings.h3, ...paragraphs, ...listItems, ...ctas);
     return parts.filter(Boolean).join('\n');
+  }
+
+  private isHighValueShortText(text: string): boolean {
+    return HIGH_VALUE_SHORT_TEXT_PATTERN.test(text);
   }
 
   private normalizeWhitespace(value: string): string {
