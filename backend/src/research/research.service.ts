@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, ServiceUnavailableException } from '@n
 import { ConfigService } from '@nestjs/config';
 import type { ResearchProvider } from './interfaces/research-provider.interface';
 import { DisabledResearchProvider } from './providers/disabled-research.provider';
+import { TavilyResearchProvider } from './providers/tavily-research.provider';
 import { extractSourceDomain } from './research-url.util';
 import type { ResearchSearchRequest, ResearchSearchResponse } from './types/research.types';
 
@@ -18,6 +19,7 @@ export class ResearchService {
   constructor(
     private readonly configService: ConfigService,
     private readonly disabledResearchProvider: DisabledResearchProvider,
+    private readonly tavilyResearchProvider: TavilyResearchProvider,
   ) {}
 
   async search(request: ResearchSearchRequest): Promise<ResearchSearchResponse> {
@@ -42,6 +44,9 @@ export class ResearchService {
     const providerName = this.configService.get<string>('RESEARCH_PROVIDER') ?? 'disabled';
     if (providerName === 'disabled') {
       return this.disabledResearchProvider;
+    }
+    if (providerName === 'tavily') {
+      return this.tavilyResearchProvider;
     }
     throw new ServiceUnavailableException(`Unsupported research provider: ${providerName}`);
   }
