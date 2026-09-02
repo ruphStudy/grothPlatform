@@ -10,22 +10,31 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { WebsiteFetchResult } from './website-fetch.types';
+import { WebsiteUrlSecurityService } from './website-url-security.service';
 
 const DEFAULT_TIMEOUT_MS = 10000;
 const DEFAULT_MAX_BYTES = 2_000_000;
+const DEFAULT_MAX_REDIRECTS = 5;
 const USER_AGENT = 'GIP-WebsiteFetchService/1.0';
 const ALLOWED_CONTENT_TYPES = ['text/html', 'text/plain', 'application/xhtml+xml'];
+const REDIRECT_STATUS_CODES = new Set([301, 302, 303, 307, 308]);
 
 @Injectable()
 export class WebsiteFetchService {
   private readonly logger = new Logger(WebsiteFetchService.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly urlSecurityService: WebsiteUrlSecurityService,
+  ) {}
 
   async fetchWebsite(rawUrl: string): Promise<WebsiteFetchResult> {
-    const url = this.parseAndValidateUrl(rawUrl);
+    let currentUrl = this.parseUrl(rawUrl);
+    this.validateUrlSafety(currentUrl);
+
     const timeoutMs = this.getTimeoutMs();
     const maxBytes = this.getMaxBytes();
+    const maxRedirects = this.getMaxRedirects();
 
     const controller = new AbortController();
     let timedOut = false;
@@ -35,24 +44,61 @@ export class WebsiteFetchService {
     }, timeoutMs);
 
     try {
+      await this.urlSecurityService.validateDestination(currentUrl);
+
       let response: Response;
-      try {
-        response = await fetch(url.toString(), {
-          method: 'GET',
-          redirect: 'follow',
-          credentials: 'omit',
-          signal: controller.signal,
-          headers: {
-            'User-Agent': USER_AGENT,
-            Accept: 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1',
-          },
-        });
-      } catch (err) {
-        if (timedOut) {
-          throw new RequestTimeoutException('Website fetch timed out');
+      let redirectCount = 0;
+
+      for (;;) {
+        try {
+          response = await fetch(currentUrl.toString(), {
+            method: 'GET',
+            redirect: 'manual',
+            credentials: 'omit',
+            signal: controller.signal,
+            headers: {
+              'User-Agent': USER_AGENT,
+              Accept: 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1',
+            },
+          });
+        } catch (err) {
+          if (timedOut) {
+            throw new RequestTimeoutException('Website fetch timed out');
+          }
+          this.logger.warn(`Website fetch failed for ${currentUrl.toString()}: ${(err as Error).message}`);
+          throw new ServiceUnavailableException('Failed to reach the website');
         }
-        this.logger.warn(`Website fetch failed for ${url.toString()}: ${(err as Error).message}`);
-        throw new ServiceUnavailableException('Failed to reach the website');
+
+        if (!REDIRECT_STATUS_CODES.has(response.status)) {
+          break;
+        }
+
+        // Never read a redirect response body.
+        if (response.body) {
+          await response.body.cancel().catch(() => undefined);
+        }
+
+        redirectCount += 1;
+        if (redirectCount > maxRedirects) {
+          throw new BadGatewayException('Website fetch exceeded the maximum allowed redirects');
+        }
+
+        const location = response.headers.get('location');
+        if (!location) {
+          throw new BadGatewayException('Website redirect is missing a Location header');
+        }
+
+        let nextUrl: URL;
+        try {
+          nextUrl = new URL(location, currentUrl);
+        } catch {
+          throw new BadGatewayException('Website redirected to an invalid URL');
+        }
+
+        this.validateUrlSafety(nextUrl);
+        await this.urlSecurityService.validateDestination(nextUrl);
+
+        currentUrl = nextUrl;
       }
 
       const contentType = response.headers.get('content-type');
@@ -75,7 +121,7 @@ export class WebsiteFetchService {
         if (timedOut) {
           throw new RequestTimeoutException('Website fetch timed out');
         }
-        this.logger.warn(`Failed reading website body for ${url.toString()}: ${(err as Error).message}`);
+        this.logger.warn(`Failed reading website body for ${currentUrl.toString()}: ${(err as Error).message}`);
         throw new ServiceUnavailableException('Failed to read website response');
       }
 
@@ -83,7 +129,7 @@ export class WebsiteFetchService {
       const parsedContentLength = contentLengthHeader ? Number(contentLengthHeader) : Buffer.byteLength(body, 'utf-8');
 
       return {
-        finalUrl: response.url || url.toString(),
+        finalUrl: currentUrl.toString(),
         statusCode: response.status,
         contentType: contentType ?? undefined,
         body,
@@ -95,23 +141,22 @@ export class WebsiteFetchService {
     }
   }
 
-  private parseAndValidateUrl(rawUrl: string): URL {
-    let parsed: URL;
+  private parseUrl(rawUrl: string): URL {
     try {
-      parsed = new URL(rawUrl);
+      return new URL(rawUrl);
     } catch {
       throw new BadRequestException('Invalid URL');
     }
+  }
 
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+  private validateUrlSafety(url: URL): void {
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
       throw new BadRequestException('Only http and https URLs are supported');
     }
 
-    if (parsed.username || parsed.password) {
+    if (url.username || url.password) {
       throw new BadRequestException('URL must not contain embedded credentials');
     }
-
-    return parsed;
   }
 
   private isAllowedContentType(contentType: string | null): boolean {
@@ -157,5 +202,11 @@ export class WebsiteFetchService {
     const value = this.configService.get<string>('WEBSITE_FETCH_MAX_BYTES');
     const parsed = value ? Number(value) : NaN;
     return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_BYTES;
+  }
+
+  private getMaxRedirects(): number {
+    const value = this.configService.get<string>('WEBSITE_FETCH_MAX_REDIRECTS');
+    const parsed = value ? Number(value) : NaN;
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_MAX_REDIRECTS;
   }
 }
