@@ -4,6 +4,7 @@ import { FetchTestDto } from './dto/fetch-test.dto';
 import { WebsiteContentExtractorService } from './website-content-extractor.service';
 import { WebsiteFetchService } from './website-fetch.service';
 import { WebsitePageDiscoveryService } from './website-page-discovery.service';
+import { WebsitePageSelectionService } from './website-page-selection.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('website-intelligence')
@@ -12,6 +13,7 @@ export class WebsiteIntelligenceController {
     private readonly websiteFetchService: WebsiteFetchService,
     private readonly websiteContentExtractorService: WebsiteContentExtractorService,
     private readonly websitePageDiscoveryService: WebsitePageDiscoveryService,
+    private readonly websitePageSelectionService: WebsitePageSelectionService,
   ) {}
 
   /**
@@ -67,6 +69,25 @@ export class WebsiteIntelligenceController {
       sourceUrl: dto.url,
       finalUrl: fetchResult.finalUrl,
       pages,
+    };
+  }
+
+  /**
+   * TEMPORARY development-only endpoint for Sprint 8B verification.
+   * Not tied to Organization/Product. Selection only — does not fetch
+   * selected pages.
+   */
+  @Post('select-pages-test')
+  async selectPagesTest(@Body() dto: FetchTestDto) {
+    const fetchResult = await this.websiteFetchService.fetchWebsite(dto.url);
+    const discovered = this.websitePageDiscoveryService.discoverPages(fetchResult);
+    const selected = this.websitePageSelectionService.selectImportantPages(discovered);
+    return {
+      sourceUrl: dto.url,
+      finalUrl: fetchResult.finalUrl,
+      discoveredCount: discovered.length,
+      selectedCount: selected.length,
+      pages: selected,
     };
   }
 }

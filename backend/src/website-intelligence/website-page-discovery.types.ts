@@ -18,3 +18,8 @@ export interface WebsiteDiscoveredPage {
   category: WebsitePageCategory;
   score: number;
 }
+
+export interface WebsiteSelectedPage extends WebsiteDiscoveredPage {
+  priority: number;
+  selectionReason: string;
+}
