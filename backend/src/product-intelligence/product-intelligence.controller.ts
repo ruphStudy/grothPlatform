@@ -33,4 +33,13 @@ export class ProductIntelligenceController {
   ) {
     return this.productIntelligenceService.previewWebsite(organizationId, productId, req.user.userId);
   }
+
+  @Post('product-knowledge-preview')
+  previewProductKnowledge(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.productIntelligenceService.previewProductKnowledge(organizationId, productId, req.user.userId);
+  }
 }

@@ -85,6 +85,74 @@ export interface WebsitePreview {
   fetchedAt: string;
 }
 
+export interface ProductKnowledgePageRef {
+  url: string;
+  category: string;
+  fetchedAt: string;
+}
+
+export interface ProductKnowledgeFailure {
+  url: string;
+  category: string;
+  reason: string;
+}
+
+export interface ProductKnowledgeFaqItem {
+  question: string;
+  answer?: string;
+}
+
+export interface ProductKnowledgeAssessment {
+  confidenceScore: number;
+  coverage: {
+    identity: number;
+    features: number;
+    pricing: number;
+    faq: number;
+    documentation: number;
+  };
+  missingInformation: string[];
+  warnings: string[];
+  quality: 'high' | 'medium' | 'low';
+}
+
+export interface ProductWebsiteKnowledgePreview {
+  productId: string;
+  source: {
+    configuredUrl: string;
+    finalHomepageUrl: string;
+    homepageFetchedAt: string;
+  };
+  pagesAnalyzed: ProductKnowledgePageRef[];
+  identity: {
+    title?: string;
+    metaDescription?: string;
+    keyStatements: string[];
+  };
+  features: string[];
+  pricing: {
+    signals: string[];
+  };
+  faqs: ProductKnowledgeFaqItem[];
+  documentation: {
+    topics: string[];
+    technicalFacts: string[];
+  };
+  callsToAction: string[];
+  assessment: ProductKnowledgeAssessment;
+  extractionStats: {
+    discoveredPages: number;
+    selectedPages: number;
+    attemptedPages: number;
+    successfulPages: number;
+    failedPages: number;
+  };
+  failures: ProductKnowledgeFailure[];
+  combinedTextPreview: string;
+  combinedTextLength: number;
+  combinedTextTruncated: boolean;
+}
+
 export interface ProductIntelligenceProfile {
   id: string;
   organizationId: string;

@@ -7,7 +7,21 @@ import { Card } from '../components/Card';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { Loading } from '../components/Loading';
 import { PageHeader } from '../components/PageHeader';
-import type { Product, ProductIntelligenceProfile, WebsitePreview } from '../types';
+import type { Product, ProductIntelligenceProfile, ProductWebsiteKnowledgePreview, WebsitePreview } from '../types';
+
+function qualityBadgeClass(quality: 'high' | 'medium' | 'low'): string {
+  if (quality === 'high') return 'quality-good';
+  if (quality === 'medium') return 'quality-limited';
+  return 'quality-empty';
+}
+
+const COVERAGE_LABELS: { key: keyof ProductWebsiteKnowledgePreview['assessment']['coverage']; label: string }[] = [
+  { key: 'identity', label: 'Identity' },
+  { key: 'features', label: 'Features' },
+  { key: 'pricing', label: 'Pricing' },
+  { key: 'faq', label: 'FAQ' },
+  { key: 'documentation', label: 'Documentation' },
+];
 
 export default function ProductPage() {
   const { organizationId, productId } = useParams<{ organizationId: string; productId: string }>();
@@ -20,6 +34,9 @@ export default function ProductPage() {
   const [websitePreview, setWebsitePreview] = useState<WebsitePreview | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [productKnowledge, setProductKnowledge] = useState<ProductWebsiteKnowledgePreview | null>(null);
+  const [buildingKnowledge, setBuildingKnowledge] = useState(false);
+  const [knowledgeError, setKnowledgeError] = useState<string | null>(null);
 
   async function loadData() {
     if (!organizationId || !productId) return;
@@ -82,6 +99,22 @@ export default function ProductPage() {
       setPreviewError(err instanceof ApiError ? err.message : 'Website preview failed');
     } finally {
       setPreviewing(false);
+    }
+  }
+
+  async function handleBuildProductKnowledge() {
+    setKnowledgeError(null);
+    setBuildingKnowledge(true);
+    try {
+      const data = await apiRequest<ProductWebsiteKnowledgePreview>(
+        `/organizations/${organizationId}/products/${productId}/intelligence/product-knowledge-preview`,
+        { method: 'POST' },
+      );
+      setProductKnowledge(data);
+    } catch (err) {
+      setKnowledgeError(err instanceof ApiError ? err.message : 'Building product knowledge failed');
+    } finally {
+      setBuildingKnowledge(false);
     }
   }
 
@@ -302,6 +335,251 @@ export default function ProductPage() {
               <span>
                 Truncated: <strong>{websitePreview.extraction.truncated ? 'Yes' : 'No'}</strong>
               </span>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      <Card className="analysis-card">
+        <div className="analysis-header">
+          <div>
+            <h2 className="card-title">Product Knowledge</h2>
+            <p className="card-subtitle">
+              Build consolidated, multi-page website knowledge with a deterministic confidence score before running
+              AI analysis.
+            </p>
+          </div>
+          {product?.websiteUrl && (
+            <button
+              type="button"
+              onClick={handleBuildProductKnowledge}
+              className="btn btn-primary"
+              disabled={buildingKnowledge}
+            >
+              {buildingKnowledge ? 'Building product knowledge...' : 'Build Product Knowledge'}
+            </button>
+          )}
+        </div>
+
+        {!product?.websiteUrl && (
+          <p className="muted" style={{ marginTop: 10 }}>
+            Add a website URL to enable Product Knowledge.
+          </p>
+        )}
+
+        <ErrorMessage message={knowledgeError} />
+        {buildingKnowledge && (
+          <div className="analyzing-state">
+            <span className="spinner" /> Building product knowledge...
+          </div>
+        )}
+
+        {productKnowledge && (
+          <div style={{ marginTop: 16 }}>
+            <Card className="profile-section confidence-card">
+              <h3 className="section-title">Knowledge Confidence</h3>
+              <div className="confidence-row">
+                <div className="confidence-track">
+                  <div className="confidence-fill" style={{ width: `${productKnowledge.assessment.confidenceScore}%` }} />
+                </div>
+                <span className="confidence-value">{productKnowledge.assessment.confidenceScore} / 100</span>
+                <span className={`quality-badge ${qualityBadgeClass(productKnowledge.assessment.quality)}`}>
+                  {productKnowledge.assessment.quality}
+                </span>
+              </div>
+
+              <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {COVERAGE_LABELS.map(({ key, label }) => (
+                  <div key={key} className="confidence-row">
+                    <span className="summary-label" style={{ minWidth: 100, marginBottom: 0 }}>
+                      {label}
+                    </span>
+                    <div className="confidence-track">
+                      <div className="confidence-fill" style={{ width: `${productKnowledge.assessment.coverage[key]}%` }} />
+                    </div>
+                    <span className="confidence-value">{productKnowledge.assessment.coverage[key]}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <div style={{ marginTop: 16 }}>
+              <h3 className="section-title">Missing Information</h3>
+              {productKnowledge.assessment.missingInformation.length > 0 ? (
+                <ul className="bullet-list">
+                  {productKnowledge.assessment.missingInformation.map((item, i) => (
+                    <li key={i}>{item}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="muted">No major knowledge gaps detected.</p>
+              )}
+            </div>
+
+            {productKnowledge.assessment.warnings.length > 0 && (
+              <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {productKnowledge.assessment.warnings.map((warning, i) => (
+                  <div key={i} className="content-warning">
+                    {warning}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ marginTop: 16 }}>
+              <h3 className="section-title">Identity</h3>
+              <p>
+                <strong>{productKnowledge.identity.title || 'No title found'}</strong>
+              </p>
+              {productKnowledge.identity.metaDescription && (
+                <p className="muted">{productKnowledge.identity.metaDescription}</p>
+              )}
+              {productKnowledge.identity.keyStatements.length > 0 && (
+                <ul className="bullet-list" style={{ marginTop: 8 }}>
+                  {productKnowledge.identity.keyStatements.map((item, i) => (
+                    <li key={i}>{item}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <h3 className="section-title">Features</h3>
+              {productKnowledge.features.length > 0 ? (
+                <ul className="bullet-list">
+                  {productKnowledge.features.map((item, i) => (
+                    <li key={i}>{item}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="muted">No product features were detected.</p>
+              )}
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <h3 className="section-title">Pricing</h3>
+              {productKnowledge.pricing.signals.length > 0 ? (
+                <div className="tag-list">
+                  {productKnowledge.pricing.signals.map((signal, i) => (
+                    <span key={i} className="tag">
+                      {signal}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted">No pricing information was found.</p>
+              )}
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <h3 className="section-title">FAQ</h3>
+              {productKnowledge.faqs.length > 0 ? (
+                productKnowledge.faqs.map((faq, i) => (
+                  <div key={i} className="audience-card">
+                    <h4>{faq.question}</h4>
+                    {faq.answer && <p className="audience-meta">{faq.answer}</p>}
+                  </div>
+                ))
+              ) : (
+                <p className="muted">No FAQ knowledge found.</p>
+              )}
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <h3 className="section-title">Documentation</h3>
+              {productKnowledge.documentation.topics.length === 0 &&
+              productKnowledge.documentation.technicalFacts.length === 0 ? (
+                <p className="muted">No documentation knowledge found.</p>
+              ) : (
+                <>
+                  {productKnowledge.documentation.topics.length > 0 && (
+                    <>
+                      <span className="summary-label">Topics</span>
+                      <ul className="bullet-list">
+                        {productKnowledge.documentation.topics.map((item, i) => (
+                          <li key={i}>{item}</li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {productKnowledge.documentation.technicalFacts.length > 0 && (
+                    <>
+                      <span className="summary-label" style={{ marginTop: 10 }}>
+                        Technical Facts
+                      </span>
+                      <ul className="bullet-list">
+                        {productKnowledge.documentation.technicalFacts.map((item, i) => (
+                          <li key={i}>{item}</li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+
+            {productKnowledge.callsToAction.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <h3 className="section-title">Calls To Action</h3>
+                <div className="tag-list">
+                  {productKnowledge.callsToAction.map((cta, i) => (
+                    <span key={i} className="tag">
+                      {cta}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ marginTop: 16 }}>
+              <h3 className="section-title">Sources Analyzed</h3>
+              <ul className="bullet-list">
+                {productKnowledge.pagesAnalyzed.map((page, i) => (
+                  <li key={i}>
+                    <strong>{page.category}</strong> — {page.url} ({new Date(page.fetchedAt).toLocaleString()})
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {productKnowledge.failures.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <h3 className="section-title">Some pages could not be analyzed</h3>
+                <ul className="bullet-list">
+                  {productKnowledge.failures.map((failure, i) => (
+                    <li key={i}>
+                      <strong>{failure.category}</strong> — {failure.url}: {failure.reason}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="profile-meta" style={{ marginTop: 16 }}>
+              <span>
+                Discovered: <strong>{productKnowledge.extractionStats.discoveredPages}</strong>
+              </span>
+              <span>
+                Selected: <strong>{productKnowledge.extractionStats.selectedPages}</strong>
+              </span>
+              <span>
+                Attempted: <strong>{productKnowledge.extractionStats.attemptedPages}</strong>
+              </span>
+              <span>
+                Successful: <strong>{productKnowledge.extractionStats.successfulPages}</strong>
+              </span>
+              <span>
+                Failed: <strong>{productKnowledge.extractionStats.failedPages}</strong>
+              </span>
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <h3 className="section-title">Combined Knowledge Preview</h3>
+              <pre className="preview-text-block">{productKnowledge.combinedTextPreview}</pre>
+              <p className="muted" style={{ marginTop: 6 }}>
+                Length: {productKnowledge.combinedTextLength} chars
+                {productKnowledge.combinedTextTruncated ? ' (truncated)' : ''}
+              </p>
             </div>
           </div>
         )}

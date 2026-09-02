@@ -15,6 +15,7 @@ import { ProductsService } from '../products/products.service';
 import { WebsiteContentExtractorService } from '../website-intelligence/website-content-extractor.service';
 import type { WebsiteExtractedContent } from '../website-intelligence/website-content.types';
 import { WebsiteFetchService } from '../website-intelligence/website-fetch.service';
+import { ProductWebsiteKnowledgeService } from '../website-intelligence/product-website-knowledge.service';
 import { ProductAnalysisResultDto } from './dto/product-analysis-result.dto';
 import { normalizeAnalysisResult } from './normalize-analysis-result';
 import { buildProductUnderstandingPrompt, type WebsiteEvidence } from './prompts/product-understanding.prompt';
@@ -46,6 +47,7 @@ export class ProductIntelligenceService {
     private readonly aiService: AiService,
     private readonly websiteFetchService: WebsiteFetchService,
     private readonly websiteContentExtractorService: WebsiteContentExtractorService,
+    private readonly productWebsiteKnowledgeService: ProductWebsiteKnowledgeService,
   ) {}
 
   private toSafeProfile(profile: ProductIntelligenceProfileDocument) {
@@ -190,6 +192,39 @@ export class ProductIntelligenceService {
         fetchedAt: extracted.fetchedAt,
       },
       fetchedAt: extracted.fetchedAt,
+    };
+  }
+
+  /**
+   * Live, multi-page consolidated knowledge preview (Sprint 8G). Does not
+   * call AI and does not persist anything — review/preview only.
+   */
+  async previewProductKnowledge(organizationId: string, productId: string, userId: string) {
+    const product = await this.productsService.findOne(organizationId, productId, userId);
+
+    const websiteUrl = product.websiteUrl?.trim();
+    if (!websiteUrl) {
+      throw new BadRequestException('Product website URL is not configured');
+    }
+
+    const knowledge = await this.productWebsiteKnowledgeService.buildKnowledge(websiteUrl);
+
+    return {
+      productId: product.id,
+      source: knowledge.source,
+      pagesAnalyzed: knowledge.pagesAnalyzed,
+      identity: knowledge.identity,
+      features: knowledge.features,
+      pricing: knowledge.pricing,
+      faqs: knowledge.faqs,
+      documentation: knowledge.documentation,
+      callsToAction: knowledge.callsToAction,
+      assessment: knowledge.assessment,
+      extractionStats: knowledge.extractionStats,
+      failures: knowledge.failures,
+      combinedTextPreview: knowledge.combinedText.slice(0, 5000),
+      combinedTextLength: knowledge.combinedText.length,
+      combinedTextTruncated: knowledge.combinedTextTruncated,
     };
   }
 
