@@ -159,6 +159,7 @@ export class WebsiteIntelligenceController {
       combinedTextTruncated: knowledge.combinedTextTruncated,
       extractionStats: knowledge.extractionStats,
       failures: knowledge.failures,
+      assessment: knowledge.assessment,
     };
   }
 }

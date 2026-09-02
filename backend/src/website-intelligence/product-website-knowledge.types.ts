@@ -14,7 +14,24 @@ export interface ProductWebsiteKnowledgeFailure {
   reason: string;
 }
 
-export interface ProductWebsiteKnowledge {
+export interface ProductKnowledgeAssessment {
+  confidenceScore: number;
+
+  coverage: {
+    identity: number;
+    features: number;
+    pricing: number;
+    faq: number;
+    documentation: number;
+  };
+
+  missingInformation: string[];
+  warnings: string[];
+
+  quality: 'high' | 'medium' | 'low';
+}
+
+export interface ProductWebsiteKnowledgeBase {
   source: {
     configuredUrl: string;
     finalHomepageUrl: string;
@@ -56,4 +73,8 @@ export interface ProductWebsiteKnowledge {
   };
 
   failures: ProductWebsiteKnowledgeFailure[];
+}
+
+export interface ProductWebsiteKnowledge extends ProductWebsiteKnowledgeBase {
+  assessment: ProductKnowledgeAssessment;
 }

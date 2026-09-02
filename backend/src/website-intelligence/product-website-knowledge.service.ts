@@ -8,7 +8,8 @@ import { WebsitePageDiscoveryService } from './website-page-discovery.service';
 import { WebsitePageSelectionService } from './website-page-selection.service';
 import type { WebsiteFaqItem, WebsitePageKnowledge } from './website-page-knowledge.types';
 import { WebsiteSupportPageExtractionService } from './website-support-page-extraction.service';
-import type { ProductWebsiteKnowledge, ProductWebsitePageRef } from './product-website-knowledge.types';
+import type { ProductWebsiteKnowledge, ProductWebsiteKnowledgeBase, ProductWebsitePageRef } from './product-website-knowledge.types';
+import { ProductKnowledgeAssessmentService } from './product-knowledge-assessment.service';
 
 const DEFAULT_MAX_IDENTITY_STATEMENTS = 30;
 const DEFAULT_MAX_FEATURES = 50;
@@ -42,6 +43,7 @@ export class ProductWebsiteKnowledgeService {
     private readonly websitePageSelectionService: WebsitePageSelectionService,
     private readonly websiteCorePageExtractionService: WebsiteCorePageExtractionService,
     private readonly websiteSupportPageExtractionService: WebsiteSupportPageExtractionService,
+    private readonly productKnowledgeAssessmentService: ProductKnowledgeAssessmentService,
   ) {}
 
   async buildKnowledge(homepageUrl: string): Promise<ProductWebsiteKnowledge> {
@@ -83,7 +85,7 @@ export class ProductWebsiteKnowledgeService {
       documentation,
     );
 
-    return {
+    const base: ProductWebsiteKnowledgeBase = {
       source: {
         configuredUrl: homepageUrl,
         finalHomepageUrl: homepageFetchResult.finalUrl,
@@ -107,6 +109,9 @@ export class ProductWebsiteKnowledgeService {
       },
       failures,
     };
+
+    const assessment = this.productKnowledgeAssessmentService.assess(base);
+    return { ...base, assessment };
   }
 
   private buildIdentity(
