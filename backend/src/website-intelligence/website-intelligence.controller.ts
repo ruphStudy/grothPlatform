@@ -7,6 +7,7 @@ import { WebsiteFetchService } from './website-fetch.service';
 import { WebsitePageDiscoveryService } from './website-page-discovery.service';
 import { WebsitePageSelectionService } from './website-page-selection.service';
 import { WebsiteSupportPageExtractionService } from './website-support-page-extraction.service';
+import { ProductWebsiteKnowledgeService } from './product-website-knowledge.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('website-intelligence')
@@ -18,6 +19,7 @@ export class WebsiteIntelligenceController {
     private readonly websitePageSelectionService: WebsitePageSelectionService,
     private readonly websiteCorePageExtractionService: WebsiteCorePageExtractionService,
     private readonly websiteSupportPageExtractionService: WebsiteSupportPageExtractionService,
+    private readonly productWebsiteKnowledgeService: ProductWebsiteKnowledgeService,
   ) {}
 
   /**
@@ -132,6 +134,31 @@ export class WebsiteIntelligenceController {
       extractedCount: result.extraction.pages.length,
       pages: result.extraction.pages,
       failures: result.extraction.failures,
+    };
+  }
+
+  /**
+   * TEMPORARY development-only endpoint for Sprint 8E verification.
+   * Not tied to Organization/Product. Consolidates homepage + core + support
+   * page knowledge into a single deterministic ProductWebsiteKnowledge object.
+   */
+  @Post('product-knowledge-test')
+  async productKnowledgeTest(@Body() dto: FetchTestDto) {
+    const knowledge = await this.productWebsiteKnowledgeService.buildKnowledge(dto.url);
+    return {
+      source: knowledge.source,
+      pagesAnalyzed: knowledge.pagesAnalyzed,
+      identity: knowledge.identity,
+      features: knowledge.features,
+      pricing: knowledge.pricing,
+      faqs: knowledge.faqs,
+      documentation: knowledge.documentation,
+      callsToAction: knowledge.callsToAction,
+      combinedTextPreview: knowledge.combinedText.slice(0, 5000),
+      combinedTextLength: knowledge.combinedText.length,
+      combinedTextTruncated: knowledge.combinedTextTruncated,
+      extractionStats: knowledge.extractionStats,
+      failures: knowledge.failures,
     };
   }
 }

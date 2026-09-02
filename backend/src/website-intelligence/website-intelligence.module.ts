@@ -7,6 +7,7 @@ import { WebsitePageDiscoveryService } from './website-page-discovery.service';
 import { WebsitePageSelectionService } from './website-page-selection.service';
 import { WebsiteSupportPageExtractionService } from './website-support-page-extraction.service';
 import { WebsiteUrlSecurityService } from './website-url-security.service';
+import { ProductWebsiteKnowledgeService } from './product-website-knowledge.service';
 
 @Module({
   controllers: [WebsiteIntelligenceController],
@@ -18,6 +19,7 @@ import { WebsiteUrlSecurityService } from './website-url-security.service';
     WebsitePageSelectionService,
     WebsiteCorePageExtractionService,
     WebsiteSupportPageExtractionService,
+    ProductWebsiteKnowledgeService,
   ],
   exports: [
     WebsiteFetchService,
@@ -26,6 +28,7 @@ import { WebsiteUrlSecurityService } from './website-url-security.service';
     WebsitePageSelectionService,
     WebsiteCorePageExtractionService,
     WebsiteSupportPageExtractionService,
+    ProductWebsiteKnowledgeService,
   ],
 })
 export class WebsiteIntelligenceModule {}
