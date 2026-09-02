@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { FetchTestDto } from './dto/fetch-test.dto';
 import { WebsiteContentExtractorService } from './website-content-extractor.service';
 import { WebsiteFetchService } from './website-fetch.service';
+import { WebsitePageDiscoveryService } from './website-page-discovery.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('website-intelligence')
@@ -10,6 +11,7 @@ export class WebsiteIntelligenceController {
   constructor(
     private readonly websiteFetchService: WebsiteFetchService,
     private readonly websiteContentExtractorService: WebsiteContentExtractorService,
+    private readonly websitePageDiscoveryService: WebsitePageDiscoveryService,
   ) {}
 
   /**
@@ -49,6 +51,22 @@ export class WebsiteIntelligenceController {
       ctas: extracted.ctas,
       textContentPreview: extracted.textContent.slice(0, 5000),
       extraction: extracted.extraction,
+    };
+  }
+
+  /**
+   * TEMPORARY development-only endpoint for Sprint 8A verification.
+   * Not tied to Organization/Product. Discovery only — does not fetch
+   * discovered pages.
+   */
+  @Post('discover-test')
+  async discoverTest(@Body() dto: FetchTestDto) {
+    const fetchResult = await this.websiteFetchService.fetchWebsite(dto.url);
+    const pages = this.websitePageDiscoveryService.discoverPages(fetchResult);
+    return {
+      sourceUrl: dto.url,
+      finalUrl: fetchResult.finalUrl,
+      pages,
     };
   }
 }
