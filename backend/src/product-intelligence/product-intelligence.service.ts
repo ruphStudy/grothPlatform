@@ -21,9 +21,19 @@ import { buildProductUnderstandingPrompt, type WebsiteEvidence } from './prompts
 import {
   ProductIntelligenceProfile,
   ProductIntelligenceProfileDocument,
+  WEBSITE_CONTENT_QUALITIES,
 } from './schemas/product-intelligence-profile.schema';
 
 type ContentQuality = 'good' | 'limited' | 'empty';
+type WebsiteContentQuality = (typeof WEBSITE_CONTENT_QUALITIES)[number];
+
+interface WebsiteContext {
+  evidence: WebsiteEvidence;
+  websiteAnalyzed: boolean;
+  websiteAnalysisUrl?: string;
+  websiteAnalysisFetchedAt?: Date;
+  websiteContentQuality: WebsiteContentQuality;
+}
 
 @Injectable()
 export class ProductIntelligenceService {
@@ -59,6 +69,10 @@ export class ProductIntelligenceService {
       aiProvider: profile.aiProvider,
       aiModel: profile.aiModel,
       version: profile.version,
+      websiteAnalyzed: profile.websiteAnalyzed ?? false,
+      websiteAnalysisUrl: profile.websiteAnalysisUrl,
+      websiteAnalysisFetchedAt: profile.websiteAnalysisFetchedAt,
+      websiteContentQuality: profile.websiteContentQuality,
       createdAt: (profile as any).createdAt,
       updatedAt: (profile as any).updatedAt,
     };
@@ -67,7 +81,7 @@ export class ProductIntelligenceService {
   async analyze(organizationId: string, productId: string, userId: string) {
     const product = await this.productsService.findOne(organizationId, productId, userId);
 
-    const website = await this.buildWebsiteEvidence(String(product.id), product.websiteUrl);
+    const websiteContext = await this.gatherWebsiteContext(String(product.id), product.websiteUrl);
 
     const { systemPrompt, userPrompt } = buildProductUnderstandingPrompt({
       name: product.name,
@@ -76,7 +90,7 @@ export class ProductIntelligenceService {
       productType: product.productType,
       primaryGoal: product.primaryGoal,
       targetMarkets: product.targetMarkets,
-      website,
+      website: websiteContext.evidence,
     });
 
     let generation: Awaited<ReturnType<AiService['generateStructured']>>;
@@ -119,6 +133,10 @@ export class ProductIntelligenceService {
           aiProvider: generation.provider,
           aiModel: generation.model,
           version,
+          websiteAnalyzed: websiteContext.websiteAnalyzed,
+          websiteAnalysisUrl: websiteContext.websiteAnalysisUrl,
+          websiteAnalysisFetchedAt: websiteContext.websiteAnalysisFetchedAt,
+          websiteContentQuality: websiteContext.websiteContentQuality,
         },
         { upsert: true, new: true },
       )
@@ -218,13 +236,14 @@ export class ProductIntelligenceService {
   }
 
   /**
-   * Best-effort website evidence for the AI prompt. Website fetching is
-   * additional evidence only — any failure here must not fail analyze().
+   * Best-effort website evidence for the AI prompt, plus the metadata
+   * persisted onto the profile. Website fetching is additional evidence
+   * only — any failure here must not fail analyze().
    */
-  private async buildWebsiteEvidence(productId: string, websiteUrl?: string): Promise<WebsiteEvidence> {
+  private async gatherWebsiteContext(productId: string, websiteUrl?: string): Promise<WebsiteContext> {
     const trimmedUrl = websiteUrl?.trim();
     if (!trimmedUrl) {
-      return { status: 'unavailable' };
+      return { evidence: { status: 'unavailable' }, websiteAnalyzed: false, websiteContentQuality: 'unavailable' };
     }
 
     try {
@@ -235,23 +254,39 @@ export class ProductIntelligenceService {
       );
 
       if (contentQuality === 'empty') {
-        return { status: 'unavailable', reason: 'Website content was insufficient to analyze' };
+        return {
+          evidence: { status: 'unavailable', reason: 'Website content was insufficient to analyze' },
+          websiteAnalyzed: false,
+          websiteAnalysisUrl: extracted.url,
+          websiteAnalysisFetchedAt: extracted.fetchedAt,
+          websiteContentQuality: 'empty',
+        };
       }
 
       return {
-        status: contentQuality === 'good' ? 'available' : 'limited',
-        finalUrl: extracted.url,
-        title: extracted.title,
-        metaDescription: extracted.metaDescription,
-        headings: extracted.headings,
-        paragraphs: extracted.paragraphs,
-        listItems: extracted.listItems,
-        ctas: extracted.ctas,
-        textContent: extracted.textContent,
+        evidence: {
+          status: contentQuality === 'good' ? 'available' : 'limited',
+          finalUrl: extracted.url,
+          title: extracted.title,
+          metaDescription: extracted.metaDescription,
+          headings: extracted.headings,
+          paragraphs: extracted.paragraphs,
+          listItems: extracted.listItems,
+          ctas: extracted.ctas,
+          textContent: extracted.textContent,
+        },
+        websiteAnalyzed: true,
+        websiteAnalysisUrl: extracted.url,
+        websiteAnalysisFetchedAt: extracted.fetchedAt,
+        websiteContentQuality: contentQuality,
       };
     } catch (err) {
       this.logger.warn(`Website enrichment unavailable for product ${productId}: ${(err as Error).message}`);
-      return { status: 'unavailable', reason: 'Website could not be reached or analyzed' };
+      return {
+        evidence: { status: 'unavailable', reason: 'Website could not be reached or analyzed' },
+        websiteAnalyzed: false,
+        websiteContentQuality: 'unavailable',
+      };
     }
   }
 }

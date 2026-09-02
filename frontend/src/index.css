@@ -381,6 +381,11 @@ textarea:focus {
   color: var(--error);
 }
 
+.quality-unavailable {
+  background: var(--neutral-bg);
+  color: var(--text-muted);
+}
+
 .content-warning {
   background: var(--warning-bg);
   color: var(--warning);

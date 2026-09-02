@@ -105,6 +105,10 @@ export interface ProductIntelligenceProfile {
   aiProvider: string;
   aiModel: string;
   version: number;
+  websiteAnalyzed: boolean;
+  websiteAnalysisUrl?: string;
+  websiteAnalysisFetchedAt?: string;
+  websiteContentQuality?: 'good' | 'limited' | 'empty' | 'unavailable';
   createdAt: string;
   updatedAt: string;
 }

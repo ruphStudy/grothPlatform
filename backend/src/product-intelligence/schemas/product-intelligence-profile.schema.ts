@@ -2,6 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 
 export const BUSINESS_MODELS = ['b2b', 'b2c', 'b2b2c', 'marketplace', 'unknown'] as const;
+export const WEBSITE_CONTENT_QUALITIES = ['good', 'limited', 'empty', 'unavailable'] as const;
 
 export type ProductIntelligenceProfileDocument = HydratedDocument<ProductIntelligenceProfile>;
 
@@ -76,6 +77,18 @@ export class ProductIntelligenceProfile {
 
   @Prop({ required: true, default: 1 })
   version: number;
+
+  @Prop({ type: Boolean, required: true, default: false })
+  websiteAnalyzed: boolean;
+
+  @Prop({ type: String })
+  websiteAnalysisUrl?: string;
+
+  @Prop({ type: Date })
+  websiteAnalysisFetchedAt?: Date;
+
+  @Prop({ type: String, enum: WEBSITE_CONTENT_QUALITIES })
+  websiteContentQuality?: (typeof WEBSITE_CONTENT_QUALITIES)[number];
 }
 
 export const ProductIntelligenceProfileSchema = SchemaFactory.createForClass(ProductIntelligenceProfile);

@@ -434,6 +434,29 @@ export default function ProductPage() {
             </div>
           </Card>
 
+          <Card className="profile-section">
+            <h3 className="section-title">Website Evidence</h3>
+            <p>
+              Website analyzed: <strong>{profile.websiteAnalyzed ? 'Yes' : 'No'}</strong>
+            </p>
+            <p style={{ marginTop: 6 }}>
+              Website quality:{' '}
+              <span className={`quality-badge quality-${profile.websiteContentQuality ?? 'unavailable'}`}>
+                {profile.websiteContentQuality ?? 'unavailable'}
+              </span>
+            </p>
+            {profile.websiteAnalysisUrl && (
+              <p className="muted" style={{ marginTop: 6 }}>
+                {profile.websiteAnalysisUrl}
+              </p>
+            )}
+            {profile.websiteAnalysisFetchedAt && (
+              <p className="muted" style={{ marginTop: 4 }}>
+                Fetched: {new Date(profile.websiteAnalysisFetchedAt).toLocaleString()}
+              </p>
+            )}
+          </Card>
+
           <div className="profile-meta">
             <span>
               Provider: <strong>{profile.aiProvider}</strong>
