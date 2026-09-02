@@ -7,7 +7,7 @@ export class CreateProductDto {
   name: string;
 
   @IsOptional()
-  @IsUrl()
+  @IsUrl({ require_tld: false, protocols: ['http', 'https'], require_protocol: true })
   websiteUrl?: string;
 
   @IsOptional()
