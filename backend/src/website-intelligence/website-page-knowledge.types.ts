@@ -1,4 +1,9 @@
-export type WebsiteKnowledgePageCategory = 'about' | 'product' | 'features' | 'pricing';
+export type WebsiteKnowledgePageCategory = 'about' | 'product' | 'features' | 'pricing' | 'faq' | 'docs';
+
+export interface WebsiteFaqItem {
+  question: string;
+  answer?: string;
+}
 
 export interface WebsitePageKnowledge {
   url: string;
@@ -13,6 +18,12 @@ export interface WebsitePageKnowledge {
   featureItems: string[];
   pricingSignals: string[];
   ctas: string[];
+
+  // Populated only for category 'faq'; empty otherwise.
+  faqItems: WebsiteFaqItem[];
+  // Populated only for category 'docs'; empty otherwise.
+  docTopics: string[];
+  technicalFacts: string[];
 
   textContent: string;
   fetchedAt: Date;

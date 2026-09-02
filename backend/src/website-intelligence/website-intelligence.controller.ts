@@ -6,6 +6,7 @@ import { WebsiteCorePageExtractionService } from './website-core-page-extraction
 import { WebsiteFetchService } from './website-fetch.service';
 import { WebsitePageDiscoveryService } from './website-page-discovery.service';
 import { WebsitePageSelectionService } from './website-page-selection.service';
+import { WebsiteSupportPageExtractionService } from './website-support-page-extraction.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('website-intelligence')
@@ -16,6 +17,7 @@ export class WebsiteIntelligenceController {
     private readonly websitePageDiscoveryService: WebsitePageDiscoveryService,
     private readonly websitePageSelectionService: WebsitePageSelectionService,
     private readonly websiteCorePageExtractionService: WebsiteCorePageExtractionService,
+    private readonly websiteSupportPageExtractionService: WebsiteSupportPageExtractionService,
   ) {}
 
   /**
@@ -101,6 +103,26 @@ export class WebsiteIntelligenceController {
   @Post('core-pages-test')
   async corePagesTest(@Body() dto: FetchTestDto) {
     const result = await this.websiteCorePageExtractionService.extractFromHomepage(dto.url);
+    return {
+      sourceUrl: dto.url,
+      finalUrl: result.homepageFetchResult.finalUrl,
+      discoveredCount: result.discovered.length,
+      selectedCount: result.selected.length,
+      attemptedCount: result.extraction.pages.length + result.extraction.failures.length,
+      extractedCount: result.extraction.pages.length,
+      pages: result.extraction.pages,
+      failures: result.extraction.failures,
+    };
+  }
+
+  /**
+   * TEMPORARY development-only endpoint for Sprint 8D verification.
+   * Not tied to Organization/Product. Extracts deterministic knowledge from
+   * selected faq/docs pages only.
+   */
+  @Post('support-pages-test')
+  async supportPagesTest(@Body() dto: FetchTestDto) {
+    const result = await this.websiteSupportPageExtractionService.extractFromHomepage(dto.url);
     return {
       sourceUrl: dto.url,
       finalUrl: result.homepageFetchResult.finalUrl,
