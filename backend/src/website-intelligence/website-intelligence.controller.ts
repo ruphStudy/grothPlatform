@@ -1,17 +1,21 @@
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { FetchTestDto } from './dto/fetch-test.dto';
+import { WebsiteContentExtractorService } from './website-content-extractor.service';
 import { WebsiteFetchService } from './website-fetch.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('website-intelligence')
 export class WebsiteIntelligenceController {
-  constructor(private readonly websiteFetchService: WebsiteFetchService) {}
+  constructor(
+    private readonly websiteFetchService: WebsiteFetchService,
+    private readonly websiteContentExtractorService: WebsiteContentExtractorService,
+  ) {}
 
   /**
    * TEMPORARY development-only endpoint for Sprint 7A verification.
-   * Not tied to Organization/Product. Remove once HTML extraction (Sprint 7B)
-   * is integrated with Product Intelligence.
+   * Not tied to Organization/Product. Remove once website extraction is
+   * integrated with Product Intelligence.
    */
   @Post('fetch-test')
   async fetchTest(@Body() dto: FetchTestDto) {
@@ -23,6 +27,28 @@ export class WebsiteIntelligenceController {
       contentLength: result.contentLength,
       fetchedAt: result.fetchedAt,
       bodyPreview: result.body.slice(0, 1000),
+    };
+  }
+
+  /**
+   * TEMPORARY development-only endpoint for Sprint 7D verification.
+   * Not tied to Organization/Product. Remove once website extraction is
+   * integrated with Product Intelligence.
+   */
+  @Post('extract-test')
+  async extractTest(@Body() dto: FetchTestDto) {
+    const fetchResult = await this.websiteFetchService.fetchWebsite(dto.url);
+    const extracted = this.websiteContentExtractorService.extract(fetchResult);
+    return {
+      url: extracted.url,
+      title: extracted.title,
+      metaDescription: extracted.metaDescription,
+      headings: extracted.headings,
+      paragraphs: extracted.paragraphs,
+      listItems: extracted.listItems,
+      ctas: extracted.ctas,
+      textContentPreview: extracted.textContent.slice(0, 5000),
+      extraction: extracted.extraction,
     };
   }
 }
