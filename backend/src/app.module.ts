@@ -8,6 +8,7 @@ import { OrganizationsModule } from './organizations/organizations.module';
 import { ProductIntelligenceModule } from './product-intelligence/product-intelligence.module';
 import { ProductsModule } from './products/products.module';
 import { UsersModule } from './users/users.module';
+import { WebsiteIntelligenceModule } from './website-intelligence/website-intelligence.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { UsersModule } from './users/users.module';
     OrganizationsModule,
     ProductsModule,
     ProductIntelligenceModule,
+    WebsiteIntelligenceModule,
   ],
   controllers: [AppController],
   providers: [AppService],
