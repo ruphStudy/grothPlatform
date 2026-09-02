@@ -4,6 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { MarketIntelligenceModule } from './market-intelligence/market-intelligence.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { ProductIntelligenceModule } from './product-intelligence/product-intelligence.module';
 import { ProductsModule } from './products/products.module';
@@ -28,6 +29,7 @@ import { WebsiteIntelligenceModule } from './website-intelligence/website-intell
     ProductIntelligenceModule,
     WebsiteIntelligenceModule,
     ResearchModule,
+    MarketIntelligenceModule,
   ],
   controllers: [AppController],
   providers: [AppService],
