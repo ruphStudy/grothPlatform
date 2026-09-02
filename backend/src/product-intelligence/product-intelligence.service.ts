@@ -1,4 +1,11 @@
-import { BadRequestException, HttpException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
@@ -10,7 +17,7 @@ import type { WebsiteExtractedContent } from '../website-intelligence/website-co
 import { WebsiteFetchService } from '../website-intelligence/website-fetch.service';
 import { ProductAnalysisResultDto } from './dto/product-analysis-result.dto';
 import { normalizeAnalysisResult } from './normalize-analysis-result';
-import { buildProductUnderstandingPrompt } from './prompts/product-understanding.prompt';
+import { buildProductUnderstandingPrompt, type WebsiteEvidence } from './prompts/product-understanding.prompt';
 import {
   ProductIntelligenceProfile,
   ProductIntelligenceProfileDocument,
@@ -20,6 +27,8 @@ type ContentQuality = 'good' | 'limited' | 'empty';
 
 @Injectable()
 export class ProductIntelligenceService {
+  private readonly logger = new Logger(ProductIntelligenceService.name);
+
   constructor(
     @InjectModel(ProductIntelligenceProfile.name)
     private readonly profileModel: Model<ProductIntelligenceProfileDocument>,
@@ -58,6 +67,8 @@ export class ProductIntelligenceService {
   async analyze(organizationId: string, productId: string, userId: string) {
     const product = await this.productsService.findOne(organizationId, productId, userId);
 
+    const website = await this.buildWebsiteEvidence(String(product.id), product.websiteUrl);
+
     const { systemPrompt, userPrompt } = buildProductUnderstandingPrompt({
       name: product.name,
       websiteUrl: product.websiteUrl,
@@ -65,6 +76,7 @@ export class ProductIntelligenceService {
       productType: product.productType,
       primaryGoal: product.primaryGoal,
       targetMarkets: product.targetMarkets,
+      website,
     });
 
     let generation: Awaited<ReturnType<AiService['generateStructured']>>;
@@ -137,9 +149,7 @@ export class ProductIntelligenceService {
       throw new BadRequestException('Product website URL is not configured');
     }
 
-    const fetchResult = await this.websiteFetchService.fetchWebsite(websiteUrl);
-    const extracted = this.websiteContentExtractorService.extract(fetchResult);
-    const { contentQuality, contentWarning } = this.assessContentQuality(extracted);
+    const { fetchResult, extracted, contentQuality, contentWarning } = await this.fetchAndExtractWebsite(websiteUrl);
 
     return {
       productId: product.id,
@@ -188,5 +198,60 @@ export class ProductIntelligenceService {
     }
 
     return { contentQuality: 'good' };
+  }
+
+  /**
+   * Shared fetch + extract + quality-assessment sequence used by both
+   * previewWebsite() (errors propagate to the caller) and analyze()
+   * (errors are caught and treated as "website unavailable").
+   */
+  private async fetchAndExtractWebsite(websiteUrl: string): Promise<{
+    fetchResult: Awaited<ReturnType<WebsiteFetchService['fetchWebsite']>>;
+    extracted: WebsiteExtractedContent;
+    contentQuality: ContentQuality;
+    contentWarning?: string;
+  }> {
+    const fetchResult = await this.websiteFetchService.fetchWebsite(websiteUrl);
+    const extracted = this.websiteContentExtractorService.extract(fetchResult);
+    const { contentQuality, contentWarning } = this.assessContentQuality(extracted);
+    return { fetchResult, extracted, contentQuality, contentWarning };
+  }
+
+  /**
+   * Best-effort website evidence for the AI prompt. Website fetching is
+   * additional evidence only — any failure here must not fail analyze().
+   */
+  private async buildWebsiteEvidence(productId: string, websiteUrl?: string): Promise<WebsiteEvidence> {
+    const trimmedUrl = websiteUrl?.trim();
+    if (!trimmedUrl) {
+      return { status: 'unavailable' };
+    }
+
+    try {
+      const { extracted, contentQuality } = await this.fetchAndExtractWebsite(trimmedUrl);
+
+      this.logger.debug(
+        `Website enrichment attempted for product ${productId}: yes, contentQuality=${contentQuality}, extractedChars=${extracted.extraction.extractedCharacters}`,
+      );
+
+      if (contentQuality === 'empty') {
+        return { status: 'unavailable', reason: 'Website content was insufficient to analyze' };
+      }
+
+      return {
+        status: contentQuality === 'good' ? 'available' : 'limited',
+        finalUrl: extracted.url,
+        title: extracted.title,
+        metaDescription: extracted.metaDescription,
+        headings: extracted.headings,
+        paragraphs: extracted.paragraphs,
+        listItems: extracted.listItems,
+        ctas: extracted.ctas,
+        textContent: extracted.textContent,
+      };
+    } catch (err) {
+      this.logger.warn(`Website enrichment unavailable for product ${productId}: ${(err as Error).message}`);
+      return { status: 'unavailable', reason: 'Website could not be reached or analyzed' };
+    }
   }
 }
