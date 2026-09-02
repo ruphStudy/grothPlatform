@@ -24,4 +24,13 @@ export class ProductIntelligenceController {
   ) {
     return this.productIntelligenceService.getProfile(organizationId, productId, req.user.userId);
   }
+
+  @Post('website-preview')
+  previewWebsite(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.productIntelligenceService.previewWebsite(organizationId, productId, req.user.userId);
+  }
 }
