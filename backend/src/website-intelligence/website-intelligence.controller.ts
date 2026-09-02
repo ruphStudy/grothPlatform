@@ -2,6 +2,7 @@ import { Body, Controller, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { FetchTestDto } from './dto/fetch-test.dto';
 import { WebsiteContentExtractorService } from './website-content-extractor.service';
+import { WebsiteCorePageExtractionService } from './website-core-page-extraction.service';
 import { WebsiteFetchService } from './website-fetch.service';
 import { WebsitePageDiscoveryService } from './website-page-discovery.service';
 import { WebsitePageSelectionService } from './website-page-selection.service';
@@ -14,6 +15,7 @@ export class WebsiteIntelligenceController {
     private readonly websiteContentExtractorService: WebsiteContentExtractorService,
     private readonly websitePageDiscoveryService: WebsitePageDiscoveryService,
     private readonly websitePageSelectionService: WebsitePageSelectionService,
+    private readonly websiteCorePageExtractionService: WebsiteCorePageExtractionService,
   ) {}
 
   /**
@@ -88,6 +90,26 @@ export class WebsiteIntelligenceController {
       discoveredCount: discovered.length,
       selectedCount: selected.length,
       pages: selected,
+    };
+  }
+
+  /**
+   * TEMPORARY development-only endpoint for Sprint 8C verification.
+   * Not tied to Organization/Product. Extracts deterministic knowledge from
+   * selected about/product/features/pricing pages only.
+   */
+  @Post('core-pages-test')
+  async corePagesTest(@Body() dto: FetchTestDto) {
+    const result = await this.websiteCorePageExtractionService.extractFromHomepage(dto.url);
+    return {
+      sourceUrl: dto.url,
+      finalUrl: result.homepageFetchResult.finalUrl,
+      discoveredCount: result.discovered.length,
+      selectedCount: result.selected.length,
+      attemptedCount: result.extraction.pages.length + result.extraction.failures.length,
+      extractedCount: result.extraction.pages.length,
+      pages: result.extraction.pages,
+      failures: result.extraction.failures,
     };
   }
 }
