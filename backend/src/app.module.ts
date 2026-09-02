@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { ProductIntelligenceModule } from './product-intelligence/product-intelligence.module';
 import { ProductsModule } from './products/products.module';
+import { ResearchModule } from './research/research.module';
 import { UsersModule } from './users/users.module';
 import { WebsiteIntelligenceModule } from './website-intelligence/website-intelligence.module';
 
@@ -26,6 +27,7 @@ import { WebsiteIntelligenceModule } from './website-intelligence/website-intell
     ProductsModule,
     ProductIntelligenceModule,
     WebsiteIntelligenceModule,
+    ResearchModule,
   ],
   controllers: [AppController],
   providers: [AppService],
