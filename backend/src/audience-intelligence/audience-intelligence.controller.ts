@@ -1,5 +1,6 @@
 import { Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AudienceIntelligencePreviewService } from './audience-intelligence-preview.service';
 import { AudienceJtbdService } from './audience-jtbd.service';
 import { AudiencePainPointService } from './audience-pain-point.service';
 import { AudiencePrioritizationService } from './audience-prioritization.service';
@@ -19,7 +20,17 @@ export class AudienceIntelligenceController {
     private readonly audiencePainPointService: AudiencePainPointService,
     private readonly audienceJtbdService: AudienceJtbdService,
     private readonly audiencePrioritizationService: AudiencePrioritizationService,
+    private readonly audienceIntelligencePreviewService: AudienceIntelligencePreviewService,
   ) {}
+
+  @Post('intelligence-preview')
+  intelligencePreview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.audienceIntelligencePreviewService.buildForProduct(organizationId, productId, req.user.userId);
+  }
 
   @Post('signals-preview')
   signalsPreview(

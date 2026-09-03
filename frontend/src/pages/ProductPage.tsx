@@ -8,12 +8,28 @@ import { ErrorMessage } from '../components/ErrorMessage';
 import { Loading } from '../components/Loading';
 import { PageHeader } from '../components/PageHeader';
 import type {
+  AudienceIntelligencePreview,
   CompetitiveIntelligencePreview,
   Product,
   ProductIntelligenceProfile,
   ProductWebsiteKnowledgePreview,
   WebsitePreview,
 } from '../types';
+
+function labelize(value: string): string {
+  return value
+    .split('_')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+function relationshipLabel(value: string): string {
+  return value.replace(/_/g, ' ');
+}
+
+function tierLabel(tier: string): string {
+  return labelize(tier);
+}
 
 function qualityBadgeClass(quality: 'high' | 'medium' | 'low'): string {
   if (quality === 'high') return 'quality-good';
@@ -67,6 +83,9 @@ export default function ProductPage() {
   const [competitiveIntelligence, setCompetitiveIntelligence] = useState<CompetitiveIntelligencePreview | null>(null);
   const [buildingCI, setBuildingCI] = useState(false);
   const [ciError, setCiError] = useState<string | null>(null);
+  const [audienceIntelligence, setAudienceIntelligence] = useState<AudienceIntelligencePreview | null>(null);
+  const [buildingAudienceIntelligence, setBuildingAudienceIntelligence] = useState(false);
+  const [audienceIntelligenceError, setAudienceIntelligenceError] = useState<string | null>(null);
 
   async function loadData() {
     if (!organizationId || !productId) return;
@@ -161,6 +180,22 @@ export default function ProductPage() {
       setCiError(err instanceof ApiError ? err.message : 'Building competitive intelligence failed');
     } finally {
       setBuildingCI(false);
+    }
+  }
+
+  async function handleBuildAudienceIntelligence() {
+    setAudienceIntelligenceError(null);
+    setBuildingAudienceIntelligence(true);
+    try {
+      const data = await apiRequest<AudienceIntelligencePreview>(
+        `/organizations/${organizationId}/products/${productId}/audience/intelligence-preview`,
+        { method: 'POST' },
+      );
+      setAudienceIntelligence(data);
+    } catch (err) {
+      setAudienceIntelligenceError(err instanceof ApiError ? err.message : 'Building audience intelligence failed');
+    } finally {
+      setBuildingAudienceIntelligence(false);
     }
   }
 
@@ -1061,6 +1096,448 @@ export default function ProductPage() {
             </div>
           </div>
         )}
+      </Card>
+
+      <Card className="analysis-card">
+        <div className="analysis-header">
+          <div>
+            <h2 className="card-title">Audience Intelligence</h2>
+            <p className="card-subtitle">
+              Discover audience signals, segments, ICPs, buyer/user roles, pain-point hypotheses, jobs-to-be-done, and
+              evidence-based prioritization.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleBuildAudienceIntelligence}
+            className="btn btn-primary"
+            disabled={buildingAudienceIntelligence}
+          >
+            {buildingAudienceIntelligence
+              ? 'Building audience intelligence...'
+              : audienceIntelligence
+                ? 'Rebuild Audience Intelligence'
+                : 'Build Audience Intelligence'}
+          </button>
+        </div>
+
+        <ErrorMessage message={audienceIntelligenceError} />
+        {buildingAudienceIntelligence && (
+          <div className="analyzing-state">
+            <span className="spinner" /> Building audience intelligence...
+            <p className="muted" style={{ marginTop: 4 }}>
+              Analyzing audience evidence, segments, ICPs, buyer/user roles, pain points and jobs-to-be-done.
+            </p>
+          </div>
+        )}
+
+        {audienceIntelligence && (() => {
+          const ai = audienceIntelligence;
+          const segmentName = (id?: string) => ai.segments.segments.find((s) => s.id === id)?.name;
+          const primaryAudienceName = segmentName(ai.prioritization.primarySegmentId) ?? segmentName(ai.segments.primarySegmentId);
+          const primaryIcp = ai.icp.candidates.find((c) => c.id === ai.icp.primaryIcpId);
+          const primaryUserEntity = ai.buyerUserMap.entities.find((e) => e.segmentId === ai.buyerUserMap.primaryUserSegmentId);
+          const primaryBuyerEntity = ai.buyerUserMap.entities.find((e) => e.segmentId === ai.buyerUserMap.primaryBuyerSegmentId);
+
+          const strongestPains = ai.painPoints.strongestPainPointIds
+            .map((id) => ai.painPoints.painPoints.find((p) => p.id === id))
+            .filter((p): p is (typeof ai.painPoints.painPoints)[number] => !!p);
+          const remainingPains = ai.painPoints.painPoints.filter((p) => !ai.painPoints.strongestPainPointIds.includes(p.id));
+
+          const strongestJobs = ai.jtbd.strongestJobIds
+            .map((id) => ai.jtbd.jobs.find((j) => j.id === id))
+            .filter((j): j is (typeof ai.jtbd.jobs)[number] => !!j);
+          const remainingJobs = ai.jtbd.jobs.filter((j) => !ai.jtbd.strongestJobIds.includes(j.id));
+
+          const evidenceGaps = Array.from(
+            new Set([
+              ...ai.signals.missingSignals,
+              ...ai.icp.missingEvidence,
+              ...ai.buyerUserMap.missingEvidence,
+              ...ai.painPoints.missingEvidence,
+              ...ai.jtbd.missingEvidence,
+              ...ai.prioritization.missingEvidence,
+            ]),
+          );
+
+          const tierBadgeClass = (tier: string) => {
+            if (tier === 'primary') return 'quality-good';
+            if (tier === 'secondary') return 'quality-limited';
+            return 'quality-empty';
+          };
+
+          return (
+            <div style={{ marginTop: 16 }}>
+              {/* Overview */}
+              <Card className="profile-section confidence-card">
+                <h3 className="section-title">Overview</h3>
+                <ConfidenceBar label="Audience Confidence" score={ai.prioritization.confidenceScore} />
+                <div className="summary-grid" style={{ marginTop: 14 }}>
+                  <div>
+                    <span className="summary-label">Primary Audience</span>
+                    <p>{primaryAudienceName ?? 'Not determined'}</p>
+                  </div>
+                  <div>
+                    <span className="summary-label">Primary ICP</span>
+                    <p>{primaryIcp?.name ?? 'Not determined'}</p>
+                  </div>
+                  <div>
+                    <span className="summary-label">Primary User</span>
+                    <p>{primaryUserEntity?.segmentName ?? 'Not determined'}</p>
+                  </div>
+                  <div>
+                    <span className="summary-label">Primary Buyer</span>
+                    <p>{primaryBuyerEntity?.segmentName ?? 'Not determined'}</p>
+                  </div>
+                  <div>
+                    <span className="summary-label">Total Segments</span>
+                    <p>{ai.stats.segmentCount}</p>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Audience Signals */}
+              <div style={{ marginTop: 20 }}>
+                <h3 className="section-title">Audience Signals</h3>
+                <ConfidenceBar label="Signal Confidence" score={ai.signals.confidenceScore} />
+                <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {([
+                    ['Roles', ai.signals.roles],
+                    ['User Types', ai.signals.userTypes],
+                    ['Company Types', ai.signals.companyTypes],
+                    ['Company Sizes', ai.signals.companySizes],
+                    ['Industries', ai.signals.industries],
+                    ['Use Cases', ai.signals.useCases],
+                    ['Lifecycle Stages', ai.signals.lifecycleStages],
+                    ['Buyer Signals', ai.signals.buyerSignals],
+                    ['Business Model', ai.signals.businessModelSignals],
+                  ] as [string, string[]][]).map(([label, values]) => (
+                    <div key={label}>
+                      <span className="summary-label">{label}</span>
+                      {values.length > 0 ? (
+                        <div className="tag-list">
+                          {values.slice(0, 12).map((v, i) => (
+                            <span key={i} className="tag">{v}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="muted">None detected.</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {ai.signals.missingSignals.length > 0 && (
+                  <div style={{ marginTop: 12 }}>
+                    <span className="summary-label">Missing Signals</span>
+                    <ul className="bullet-list">
+                      {ai.signals.missingSignals.map((m, i) => <li key={i}>{m}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {ai.signals.warnings.map((w, i) => (
+                  <div key={i} className="content-warning" style={{ marginTop: 8 }}>{w}</div>
+                ))}
+
+                <details style={{ marginTop: 10 }}>
+                  <summary className="summary-label" style={{ cursor: 'pointer' }}>
+                    Show detailed signals ({ai.signals.signals.length})
+                  </summary>
+                  <ul className="bullet-list" style={{ marginTop: 8 }}>
+                    {ai.signals.signals.map((s, i) => (
+                      <li key={i}><strong>{s.label}</strong> ({labelize(s.category)}) — confidence {s.confidenceScore}</li>
+                    ))}
+                  </ul>
+                </details>
+              </div>
+
+              {/* Audience Segments */}
+              <div style={{ marginTop: 20 }}>
+                <h3 className="section-title">Audience Segments</h3>
+                {ai.segments.segments.length === 0 ? (
+                  <p className="muted" style={{ marginTop: 8 }}>No coherent audience segments were detected from current evidence.</p>
+                ) : (
+                  <div className="grid-cards" style={{ marginTop: 10 }}>
+                    {ai.segments.segments.map((seg) => (
+                      <Card key={seg.id} className="entity-card">
+                        <div className="entity-card-header">
+                          <h4 style={{ margin: 0 }}>{seg.name}</h4>
+                          {seg.id === ai.segments.primarySegmentId && <span className="tag">Primary</span>}
+                        </div>
+                        <p className="entity-card-meta">{labelize(seg.segmentType)} · Confidence {seg.confidenceScore}</p>
+                        {seg.roles.length > 0 && (
+                          <div className="tag-list">{seg.roles.map((r, i) => <span key={i} className="tag">{r}</span>)}</div>
+                        )}
+                        {seg.useCases.length > 0 && (
+                          <p className="muted" style={{ margin: '6px 0 0' }}>{seg.useCases.join(', ')}</p>
+                        )}
+                        <div className="profile-meta">
+                          {seg.industries[0] && <span>Industry: <strong>{seg.industries[0]}</strong></span>}
+                          {seg.businessModelSignals[0] && <span>Model: <strong>{seg.businessModelSignals[0]}</strong></span>}
+                          {seg.buyerSignals.length > 0 && <span>Buyer signals: <strong>{seg.buyerSignals.length}</strong></span>}
+                        </div>
+                        <details style={{ marginTop: 8 }}>
+                          <summary className="summary-label" style={{ cursor: 'pointer' }}>Details</summary>
+                          <div style={{ marginTop: 6 }}>
+                            {seg.evidence.length > 0 && (
+                              <ul className="bullet-list">{seg.evidence.slice(0, 5).map((e, i) => <li key={i}>{e}</li>)}</ul>
+                            )}
+                            {seg.warnings.map((w, i) => <div key={i} className="content-warning" style={{ marginTop: 6 }}>{w}</div>)}
+                          </div>
+                        </details>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+                {ai.segments.ungroupedSignals.length > 0 && (
+                  <details style={{ marginTop: 10 }}>
+                    <summary className="summary-label" style={{ cursor: 'pointer' }}>
+                      Ungrouped signals ({ai.segments.ungroupedSignals.length})
+                    </summary>
+                    <div className="tag-list" style={{ marginTop: 6 }}>
+                      {ai.segments.ungroupedSignals.map((s, i) => <span key={i} className="tag">{s}</span>)}
+                    </div>
+                  </details>
+                )}
+              </div>
+
+              {/* ICP */}
+              <div style={{ marginTop: 20 }}>
+                <h3 className="section-title">Ideal Customer Profile Candidates</h3>
+                <p className="muted">ICP candidates are evidence-based product-fit hypotheses and are not validated revenue/customer data.</p>
+                {ai.icp.candidates.length === 0 ? (
+                  <p className="muted" style={{ marginTop: 8 }}>No ICP candidates met the evidence threshold.</p>
+                ) : (
+                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {ai.icp.candidates.slice(0, 5).map((c) => (
+                      <div key={c.id} className="audience-card">
+                        <div className="entity-card-header">
+                          <h4 style={{ margin: 0 }}>{c.name}</h4>
+                          {c.id === ai.icp.primaryIcpId && <span className="tag">Primary ICP</span>}
+                        </div>
+                        <p className="audience-meta">
+                          Fit: <strong>{c.fitScore}</strong> ({c.fitLevel}) · Confidence: <strong>{c.confidenceScore}</strong> · Segment: {c.segmentName}
+                        </p>
+                        {c.useCases.length > 0 && <p className="audience-meta">Use cases: {c.useCases.join(', ')}</p>}
+                        {(c.companyTypes.length > 0 || c.companySizes.length > 0) && (
+                          <p className="audience-meta">Company context: {[...c.companyTypes, ...c.companySizes].join(', ')}</p>
+                        )}
+                        {c.buyerSignals.length > 0 && <p className="audience-meta">Buyer signals: {c.buyerSignals.join(', ')}</p>}
+                        {c.reasons.length > 0 && (
+                          <ul className="bullet-list" style={{ marginTop: 6 }}>{c.reasons.slice(0, 4).map((r, i) => <li key={i}>{r}</li>)}</ul>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Buyer vs User */}
+              <div style={{ marginTop: 20 }}>
+                <h3 className="section-title">Buyer vs User Mapping</h3>
+                {ai.buyerUserMap.entities.length === 0 ? (
+                  <p className="muted" style={{ marginTop: 8 }}>No buyer/user roles could be determined from current evidence.</p>
+                ) : (
+                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {ai.buyerUserMap.entities.map((e, i) => (
+                      <div key={i} className="audience-card">
+                        <div className="entity-card-header">
+                          <h4 style={{ margin: 0 }}>{e.segmentName}</h4>
+                          <div className="tag-list">
+                            {e.segmentId === ai.buyerUserMap.primaryUserSegmentId && <span className="tag">Primary User</span>}
+                            {e.segmentId === ai.buyerUserMap.primaryBuyerSegmentId && <span className="tag">Primary Buyer</span>}
+                          </div>
+                        </div>
+                        <div className="tag-list">
+                          {e.commercialRoles.map((r, j) => <span key={j} className="tag">{labelize(r)}</span>)}
+                        </div>
+                        <p className="audience-meta">Confidence: {e.confidenceScore}</p>
+                        {e.reasons.length > 0 && (
+                          <ul className="bullet-list" style={{ marginTop: 6 }}>{e.reasons.slice(0, 3).map((r, j) => <li key={j}>{r}</li>)}</ul>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ marginTop: 12 }}>
+                  <span className="summary-label">Relationships</span>
+                  {ai.buyerUserMap.relationships.length > 0 ? (
+                    <ul className="bullet-list">
+                      {ai.buyerUserMap.relationships.slice(0, 15).map((r, i) => (
+                        <li key={i}>
+                          <strong>{segmentName(r.fromSegmentId) ?? r.fromSegmentId}</strong> → {relationshipLabel(r.relationship)} → <strong>{segmentName(r.toSegmentId) ?? r.toSegmentId}</strong>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="muted">No clear cross-segment buyer/user relationship was detected.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Pain Points */}
+              <div style={{ marginTop: 20 }}>
+                <h3 className="section-title">Possible Audience Pain Points</h3>
+                <p className="muted">
+                  These are hypotheses inferred from product and audience evidence and should be validated with customer research.
+                </p>
+                {ai.painPoints.painPoints.length === 0 ? (
+                  <p className="muted" style={{ marginTop: 8 }}>No pain-point hypotheses were generated from current evidence.</p>
+                ) : (
+                  <>
+                    <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {(strongestPains.length > 0 ? strongestPains : ai.painPoints.painPoints.slice(0, 8)).map((p) => (
+                        <div key={p.id} className="audience-card">
+                          <h4>{p.title}</h4>
+                          <p className="audience-meta">{p.segmentName} · {labelize(p.category)} · Severity {p.severityScore} · Confidence {p.confidenceScore}</p>
+                          <p>{p.description}</p>
+                          <div className="content-warning" style={{ marginTop: 6 }}>{p.caution}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {remainingPains.length > 0 && (
+                      <details style={{ marginTop: 10 }}>
+                        <summary className="summary-label" style={{ cursor: 'pointer' }}>
+                          Show {remainingPains.length} more pain point(s)
+                        </summary>
+                        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {remainingPains.map((p) => (
+                            <div key={p.id} className="audience-card">
+                              <h4>{p.title}</h4>
+                              <p className="audience-meta">{p.segmentName} · {labelize(p.category)} · Severity {p.severityScore}</p>
+                              <p className="muted">{p.description}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* JTBD */}
+              <div style={{ marginTop: 20 }}>
+                <h3 className="section-title">Jobs-to-be-Done</h3>
+                <p className="muted">Jobs-to-be-Done are inferred hypotheses, not direct customer statements.</p>
+                {ai.jtbd.jobs.length === 0 ? (
+                  <p className="muted" style={{ marginTop: 8 }}>No Jobs-to-be-Done were generated from current evidence.</p>
+                ) : (
+                  <>
+                    <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {(strongestJobs.length > 0 ? strongestJobs : ai.jtbd.jobs.slice(0, 8)).map((j) => (
+                        <div key={j.id} className="audience-card">
+                          <h4>{j.segmentName}{ai.jtbd.primaryJobIdBySegment[j.segmentId] === j.id ? ' — Primary Job' : ''}</h4>
+                          <p>"{j.statement}"</p>
+                          <p className="audience-meta">
+                            {labelize(j.type)} · Priority {j.priorityScore} · Confidence {j.confidenceScore}
+                            {j.relatedUseCases.length > 0 ? ` · ${j.relatedUseCases.join(', ')}` : ''}
+                          </p>
+                          <details>
+                            <summary className="summary-label" style={{ cursor: 'pointer' }}>Details</summary>
+                            <p className="audience-meta" style={{ marginTop: 6 }}>
+                              Situation: {j.situation} · Motivation: {j.motivation} · Desired outcome: {j.desiredOutcome}
+                            </p>
+                          </details>
+                        </div>
+                      ))}
+                    </div>
+                    {remainingJobs.length > 0 && (
+                      <details style={{ marginTop: 10 }}>
+                        <summary className="summary-label" style={{ cursor: 'pointer' }}>
+                          Show {remainingJobs.length} more job(s)
+                        </summary>
+                        <ul className="bullet-list" style={{ marginTop: 8 }}>
+                          {remainingJobs.map((j) => <li key={j.id}>{j.segmentName}: "{j.statement}"</li>)}
+                        </ul>
+                      </details>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Prioritization */}
+              <div style={{ marginTop: 20 }}>
+                <h3 className="section-title">Audience Prioritization</h3>
+                <ConfidenceBar label="Overall Confidence" score={ai.prioritization.confidenceScore} />
+                <div className="content-warning" style={{ marginTop: 10 }}>
+                  Audience priority is an evidence-based marketing heuristic, not a prediction of revenue, market size, CAC or LTV.
+                </div>
+
+                {ai.prioritization.rationale.length > 0 && (
+                  <ul className="bullet-list" style={{ marginTop: 10 }}>
+                    {ai.prioritization.rationale.map((r, i) => <li key={i}>{r}</li>)}
+                  </ul>
+                )}
+
+                {ai.prioritization.priorities.length === 0 ? (
+                  <p className="muted" style={{ marginTop: 8 }}>No segments were available to prioritize.</p>
+                ) : (
+                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {ai.prioritization.priorities.slice(0, 8).map((p, i) => (
+                      <Card key={p.segmentId} className="entity-card">
+                        <div className="entity-card-header">
+                          <h4 style={{ margin: 0 }}>#{i + 1} {p.segmentName}</h4>
+                          <span className={`quality-badge ${tierBadgeClass(p.tier)}`}>{tierLabel(p.tier)}</span>
+                        </div>
+                        <div className="profile-meta">
+                          <span>Priority: <strong>{p.priorityScore}</strong></span>
+                          <span>Confidence: <strong>{p.confidenceScore}</strong></span>
+                          {p.icpFitScore !== undefined && <span>ICP Fit: <strong>{p.icpFitScore}</strong></span>}
+                        </div>
+                        {p.useCases.length > 0 && <p className="muted" style={{ margin: '6px 0 0' }}>{p.useCases.join(', ')}</p>}
+                        {p.reasons.length > 0 && <p style={{ marginTop: 6 }}>{p.reasons.join(' ')}</p>}
+                        {p.strengths.length > 0 && (
+                          <>
+                            <span className="summary-label" style={{ marginTop: 8 }}>Strengths</span>
+                            <ul className="bullet-list">{p.strengths.map((s, j) => <li key={j}>{s}</li>)}</ul>
+                          </>
+                        )}
+                        {p.weaknesses.length > 0 && (
+                          <>
+                            <span className="summary-label" style={{ marginTop: 8 }}>Weaknesses</span>
+                            <ul className="bullet-list">{p.weaknesses.map((w, j) => <li key={j}>{w}</li>)}</ul>
+                          </>
+                        )}
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Evidence Gaps */}
+              {evidenceGaps.length > 0 && (
+                <div style={{ marginTop: 20 }}>
+                  <h3 className="section-title">Evidence Gaps</h3>
+                  <ul className="bullet-list">
+                    {evidenceGaps.map((g, i) => <li key={i}>{g}</li>)}
+                  </ul>
+                </div>
+              )}
+
+              {/* Important Notes */}
+              {ai.warnings.length > 0 && (
+                <div style={{ marginTop: 20 }}>
+                  <h3 className="section-title">Important Notes</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {ai.warnings.map((w, i) => <div key={i} className="content-warning">{w}</div>)}
+                  </div>
+                </div>
+              )}
+
+              {/* Stats */}
+              <div className="profile-meta" style={{ marginTop: 20 }}>
+                <span>Signals: <strong>{ai.stats.signalCount}</strong></span>
+                <span>Segments: <strong>{ai.stats.segmentCount}</strong></span>
+                <span>ICP candidates: <strong>{ai.stats.icpCandidateCount}</strong></span>
+                <span>Relationships: <strong>{ai.stats.relationshipCount}</strong></span>
+                <span>Pain points: <strong>{ai.stats.painPointCount}</strong></span>
+                <span>Jobs: <strong>{ai.stats.jobCount}</strong></span>
+                <span>Generated: <strong>{new Date(ai.generatedAt).toLocaleString()}</strong></span>
+              </div>
+            </div>
+          );
+        })()}
       </Card>
 
       <Card className="analysis-card">

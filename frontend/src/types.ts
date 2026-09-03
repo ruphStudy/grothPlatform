@@ -349,6 +349,276 @@ export interface CompetitiveIntelligencePreview {
   generatedAt: string;
 }
 
+// --- Sprint 10: Audience Intelligence ---
+
+export type AudienceSignalCategory =
+  | 'role'
+  | 'user_type'
+  | 'company_type'
+  | 'company_size'
+  | 'industry'
+  | 'lifecycle'
+  | 'use_case'
+  | 'buyer'
+  | 'business_model';
+
+export interface AudienceSignal {
+  label: string;
+  category: AudienceSignalCategory;
+  confidenceScore: number;
+  evidence: string[];
+  sources: string[];
+}
+
+export interface AudienceSignalResult {
+  signals: AudienceSignal[];
+  roles: string[];
+  userTypes: string[];
+  companyTypes: string[];
+  companySizes: string[];
+  industries: string[];
+  lifecycleStages: string[];
+  useCases: string[];
+  buyerSignals: string[];
+  businessModelSignals: string[];
+  confidenceScore: number;
+  missingSignals: string[];
+  warnings: string[];
+}
+
+export type AudienceSegmentType = 'individual' | 'team' | 'business' | 'institution' | 'marketplace_side';
+
+export interface AudienceSegment {
+  id: string;
+  name: string;
+  segmentType: AudienceSegmentType;
+  roles: string[];
+  userTypes: string[];
+  companyTypes: string[];
+  companySizes: string[];
+  industries: string[];
+  useCases: string[];
+  lifecycleStages: string[];
+  buyerSignals: string[];
+  businessModelSignals: string[];
+  confidenceScore: number;
+  evidence: string[];
+  sourceSignals: string[];
+  warnings: string[];
+}
+
+export interface AudienceSegmentResult {
+  segments: AudienceSegment[];
+  primarySegmentId?: string;
+  confidenceScore: number;
+  ungroupedSignals: string[];
+  warnings: string[];
+  generatedAt: string;
+}
+
+export type IcpFitLevel = 'strong' | 'moderate' | 'weak';
+
+export interface IcpCandidate {
+  id: string;
+  name: string;
+  segmentId: string;
+  segmentName: string;
+  fitScore: number;
+  confidenceScore: number;
+  fitLevel: IcpFitLevel;
+  roles: string[];
+  userTypes: string[];
+  companyTypes: string[];
+  companySizes: string[];
+  industries: string[];
+  useCases: string[];
+  buyerSignals: string[];
+  businessModelSignals: string[];
+  reasons: string[];
+  evidence: string[];
+  missingEvidence: string[];
+  warnings: string[];
+}
+
+export interface IcpResult {
+  candidates: IcpCandidate[];
+  primaryIcpId?: string;
+  confidenceScore: number;
+  missingEvidence: string[];
+  warnings: string[];
+  generatedAt: string;
+}
+
+export type AudienceCommercialRole =
+  | 'end_user'
+  | 'primary_user'
+  | 'buyer'
+  | 'economic_buyer'
+  | 'decision_maker'
+  | 'influencer'
+  | 'administrator'
+  | 'beneficiary';
+
+export type BuyerUserRelationshipType = 'buys_for' | 'administers_for' | 'decides_for' | 'influences' | 'uses_with' | 'benefits_from';
+
+export interface BuyerUserEntity {
+  segmentId: string;
+  segmentName: string;
+  roles: string[];
+  commercialRoles: AudienceCommercialRole[];
+  confidenceScore: number;
+  evidence: string[];
+  reasons: string[];
+  warnings: string[];
+}
+
+export interface BuyerUserRelationship {
+  fromSegmentId: string;
+  toSegmentId: string;
+  relationship: BuyerUserRelationshipType;
+  confidenceScore: number;
+  reasons: string[];
+}
+
+export interface BuyerUserMapResult {
+  entities: BuyerUserEntity[];
+  relationships: BuyerUserRelationship[];
+  endUserSegmentIds: string[];
+  buyerSegmentIds: string[];
+  decisionMakerSegmentIds: string[];
+  administratorSegmentIds: string[];
+  primaryBuyerSegmentId?: string;
+  primaryUserSegmentId?: string;
+  confidenceScore: number;
+  missingEvidence: string[];
+  warnings: string[];
+  generatedAt: string;
+}
+
+export type PainPointCategory =
+  | 'efficiency'
+  | 'quality'
+  | 'consistency'
+  | 'visibility'
+  | 'learning'
+  | 'workflow'
+  | 'administration'
+  | 'collaboration'
+  | 'cost'
+  | 'adoption'
+  | 'decision_making'
+  | 'coordination';
+
+export interface AudiencePainPoint {
+  id: string;
+  segmentId: string;
+  segmentName: string;
+  title: string;
+  category: PainPointCategory;
+  description: string;
+  severityScore: number;
+  confidenceScore: number;
+  evidence: string[];
+  reasons: string[];
+  relatedUseCases: string[];
+  relatedLifecycleStages: string[];
+  relatedCommercialRoles: string[];
+  caution: string;
+}
+
+export interface AudiencePainPointResult {
+  painPoints: AudiencePainPoint[];
+  bySegment: { segmentId: string; painPointIds: string[] }[];
+  strongestPainPointIds: string[];
+  confidenceScore: number;
+  missingEvidence: string[];
+  warnings: string[];
+  generatedAt: string;
+}
+
+export type AudienceJobType = 'functional' | 'outcome' | 'administrative' | 'decision' | 'learning' | 'coordination';
+
+export interface AudienceJob {
+  id: string;
+  segmentId: string;
+  segmentName: string;
+  type: AudienceJobType;
+  situation: string;
+  motivation: string;
+  desiredOutcome: string;
+  statement: string;
+  priorityScore: number;
+  confidenceScore: number;
+  relatedUseCases: string[];
+  relatedPainPointIds: string[];
+  relatedCommercialRoles: string[];
+  evidence: string[];
+  reasons: string[];
+  caution: string;
+}
+
+export interface AudienceJtbdResult {
+  jobs: AudienceJob[];
+  bySegment: { segmentId: string; jobIds: string[] }[];
+  primaryJobIdBySegment: Record<string, string>;
+  strongestJobIds: string[];
+  confidenceScore: number;
+  missingEvidence: string[];
+  warnings: string[];
+  generatedAt: string;
+}
+
+export type AudiencePriorityTier = 'primary' | 'secondary' | 'experimental' | 'insufficient_evidence';
+
+export interface AudiencePriority {
+  segmentId: string;
+  segmentName: string;
+  priorityScore: number;
+  confidenceScore: number;
+  tier: AudiencePriorityTier;
+  icpFitScore?: number;
+  roleSummary: string[];
+  useCases: string[];
+  reasons: string[];
+  strengths: string[];
+  weaknesses: string[];
+  evidence: string[];
+  warnings: string[];
+}
+
+export interface AudiencePrioritizationResult {
+  priorities: AudiencePriority[];
+  primarySegmentId?: string;
+  secondarySegmentIds: string[];
+  experimentalSegmentIds: string[];
+  confidenceScore: number;
+  rationale: string[];
+  missingEvidence: string[];
+  warnings: string[];
+  generatedAt: string;
+}
+
+export interface AudienceIntelligencePreview {
+  signals: AudienceSignalResult;
+  segments: AudienceSegmentResult;
+  icp: IcpResult;
+  buyerUserMap: BuyerUserMapResult;
+  painPoints: AudiencePainPointResult;
+  jtbd: AudienceJtbdResult;
+  prioritization: AudiencePrioritizationResult;
+  stats: {
+    signalCount: number;
+    segmentCount: number;
+    icpCandidateCount: number;
+    relationshipCount: number;
+    painPointCount: number;
+    jobCount: number;
+    prioritizedSegmentCount: number;
+  };
+  warnings: string[];
+  generatedAt: string;
+}
+
 export interface ProductIntelligenceProfile {
   id: string;
   organizationId: string;

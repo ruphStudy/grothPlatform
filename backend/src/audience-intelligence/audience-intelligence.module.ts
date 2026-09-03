@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MarketIntelligenceModule } from '../market-intelligence/market-intelligence.module';
 import { ProductsModule } from '../products/products.module';
 import { WebsiteIntelligenceModule } from '../website-intelligence/website-intelligence.module';
+import { AudienceIntelligencePreviewService } from './audience-intelligence-preview.service';
 import { AudienceJtbdService } from './audience-jtbd.service';
 import { AudiencePainPointService } from './audience-pain-point.service';
 import { AudiencePrioritizationService } from './audience-prioritization.service';
@@ -14,7 +15,25 @@ import { IcpService } from './icp.service';
 @Module({
   imports: [ProductsModule, WebsiteIntelligenceModule, MarketIntelligenceModule],
   controllers: [AudienceIntelligenceController],
-  providers: [AudienceSignalService, AudienceSegmentService, IcpService, BuyerUserMapService, AudiencePainPointService, AudienceJtbdService, AudiencePrioritizationService],
-  exports: [AudienceSignalService, AudienceSegmentService, IcpService, BuyerUserMapService, AudiencePainPointService, AudienceJtbdService, AudiencePrioritizationService],
+  providers: [
+    AudienceSignalService,
+    AudienceSegmentService,
+    IcpService,
+    BuyerUserMapService,
+    AudiencePainPointService,
+    AudienceJtbdService,
+    AudiencePrioritizationService,
+    AudienceIntelligencePreviewService,
+  ],
+  exports: [
+    AudienceSignalService,
+    AudienceSegmentService,
+    IcpService,
+    BuyerUserMapService,
+    AudiencePainPointService,
+    AudienceJtbdService,
+    AudiencePrioritizationService,
+    AudienceIntelligencePreviewService,
+  ],
 })
 export class AudienceIntelligenceModule {}
