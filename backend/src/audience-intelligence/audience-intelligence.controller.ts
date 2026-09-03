@@ -2,6 +2,7 @@ import { Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AudienceJtbdService } from './audience-jtbd.service';
 import { AudiencePainPointService } from './audience-pain-point.service';
+import { AudiencePrioritizationService } from './audience-prioritization.service';
 import { AudienceSegmentService } from './audience-segment.service';
 import { AudienceSignalService } from './audience-signal.service';
 import { BuyerUserMapService } from './buyer-user-map.service';
@@ -17,6 +18,7 @@ export class AudienceIntelligenceController {
     private readonly buyerUserMapService: BuyerUserMapService,
     private readonly audiencePainPointService: AudiencePainPointService,
     private readonly audienceJtbdService: AudienceJtbdService,
+    private readonly audiencePrioritizationService: AudiencePrioritizationService,
   ) {}
 
   @Post('signals-preview')
@@ -118,6 +120,28 @@ export class AudienceIntelligenceController {
       buyerUserSummary: { entityCount: buyerUserMap.entities.length, confidenceScore: buyerUserMap.confidenceScore },
       painPointsSummary: { count: painPoints.painPoints.length, confidenceScore: painPoints.confidenceScore },
       jtbd,
+    };
+  }
+
+  @Post('prioritization-preview')
+  async prioritizationPreview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+  ) {
+    const { signals, segments, icp, buyerUserMap, painPoints, jtbd, prioritization } = await this.audiencePrioritizationService.prioritizeForProduct(
+      organizationId,
+      productId,
+      req.user.userId,
+    );
+    return {
+      signalsSummary: { confidenceScore: signals.confidenceScore },
+      segmentsSummary: { count: segments.segments.length, confidenceScore: segments.confidenceScore },
+      icpSummary: { count: icp.candidates.length, primaryIcpId: icp.primaryIcpId, confidenceScore: icp.confidenceScore },
+      buyerUserSummary: { entityCount: buyerUserMap.entities.length, confidenceScore: buyerUserMap.confidenceScore },
+      painPointsSummary: { count: painPoints.painPoints.length, confidenceScore: painPoints.confidenceScore },
+      jtbdSummary: { count: jtbd.jobs.length, confidenceScore: jtbd.confidenceScore },
+      prioritization,
     };
   }
 }
