@@ -1,5 +1,6 @@
 import { Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AudienceJtbdService } from './audience-jtbd.service';
 import { AudiencePainPointService } from './audience-pain-point.service';
 import { AudienceSegmentService } from './audience-segment.service';
 import { AudienceSignalService } from './audience-signal.service';
@@ -15,6 +16,7 @@ export class AudienceIntelligenceController {
     private readonly icpService: IcpService,
     private readonly buyerUserMapService: BuyerUserMapService,
     private readonly audiencePainPointService: AudiencePainPointService,
+    private readonly audienceJtbdService: AudienceJtbdService,
   ) {}
 
   @Post('signals-preview')
@@ -95,6 +97,27 @@ export class AudienceIntelligenceController {
       icpSummary: { count: icp.candidates.length, primaryIcpId: icp.primaryIcpId, confidenceScore: icp.confidenceScore },
       buyerUserSummary: { entityCount: buyerUserMap.entities.length, confidenceScore: buyerUserMap.confidenceScore },
       painPoints,
+    };
+  }
+
+  @Post('jtbd-preview')
+  async jtbdPreview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+  ) {
+    const { signals, segments, icp, buyerUserMap, painPoints, jtbd } = await this.audienceJtbdService.generateForProduct(
+      organizationId,
+      productId,
+      req.user.userId,
+    );
+    return {
+      signalsSummary: { confidenceScore: signals.confidenceScore },
+      segmentsSummary: { count: segments.segments.length, confidenceScore: segments.confidenceScore },
+      icpSummary: { count: icp.candidates.length, primaryIcpId: icp.primaryIcpId, confidenceScore: icp.confidenceScore },
+      buyerUserSummary: { entityCount: buyerUserMap.entities.length, confidenceScore: buyerUserMap.confidenceScore },
+      painPointsSummary: { count: painPoints.painPoints.length, confidenceScore: painPoints.confidenceScore },
+      jtbd,
     };
   }
 }
