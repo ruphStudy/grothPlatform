@@ -1,5 +1,6 @@
 import { Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AudiencePainPointService } from './audience-pain-point.service';
 import { AudienceSegmentService } from './audience-segment.service';
 import { AudienceSignalService } from './audience-signal.service';
 import { BuyerUserMapService } from './buyer-user-map.service';
@@ -13,6 +14,7 @@ export class AudienceIntelligenceController {
     private readonly audienceSegmentService: AudienceSegmentService,
     private readonly icpService: IcpService,
     private readonly buyerUserMapService: BuyerUserMapService,
+    private readonly audiencePainPointService: AudiencePainPointService,
   ) {}
 
   @Post('signals-preview')
@@ -73,6 +75,26 @@ export class AudienceIntelligenceController {
       segmentsSummary: { count: segments.segments.length, confidenceScore: segments.confidenceScore },
       icpSummary: { count: icp.candidates.length, primaryIcpId: icp.primaryIcpId, confidenceScore: icp.confidenceScore },
       buyerUserMap,
+    };
+  }
+
+  @Post('pain-points-preview')
+  async painPointsPreview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+  ) {
+    const { signals, segments, icp, buyerUserMap, painPoints } = await this.audiencePainPointService.identifyForProduct(
+      organizationId,
+      productId,
+      req.user.userId,
+    );
+    return {
+      signalsSummary: { confidenceScore: signals.confidenceScore },
+      segmentsSummary: { count: segments.segments.length, confidenceScore: segments.confidenceScore },
+      icpSummary: { count: icp.candidates.length, primaryIcpId: icp.primaryIcpId, confidenceScore: icp.confidenceScore },
+      buyerUserSummary: { entityCount: buyerUserMap.entities.length, confidenceScore: buyerUserMap.confidenceScore },
+      painPoints,
     };
   }
 }
