@@ -5,6 +5,7 @@ import { CompetitorFeatureComparisonService } from './competitor-feature-compari
 import { CompetitorPositioningService } from './competitor-positioning.service';
 import { CompetitorWebsiteAnalysisService } from './competitor-website-analysis.service';
 import { MarketCategoryService } from './market-category.service';
+import { MarketGapService } from './market-gap.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('organizations/:organizationId/products/:productId/market')
@@ -15,6 +16,7 @@ export class MarketCategoryController {
     private readonly competitorWebsiteAnalysisService: CompetitorWebsiteAnalysisService,
     private readonly competitorFeatureComparisonService: CompetitorFeatureComparisonService,
     private readonly competitorPositioningService: CompetitorPositioningService,
+    private readonly marketGapService: MarketGapService,
   ) {}
 
   @Post('category-preview')
@@ -60,5 +62,14 @@ export class MarketCategoryController {
     @Param('productId') productId: string,
   ) {
     return this.competitorPositioningService.analyzeForProduct(organizationId, productId, req.user.userId);
+  }
+
+  @Post('gaps-preview')
+  gapsPreview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.marketGapService.analyzeForProduct(organizationId, productId, req.user.userId);
   }
 }

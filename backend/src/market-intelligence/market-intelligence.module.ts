@@ -8,6 +8,7 @@ import { CompetitorPositioningService } from './competitor-positioning.service';
 import { CompetitorWebsiteAnalysisService } from './competitor-website-analysis.service';
 import { MarketCategoryController } from './market-category.controller';
 import { MarketCategoryService } from './market-category.service';
+import { MarketGapService } from './market-gap.service';
 
 @Module({
   imports: [ProductsModule, WebsiteIntelligenceModule, ResearchModule],
@@ -18,6 +19,7 @@ import { MarketCategoryService } from './market-category.service';
     CompetitorWebsiteAnalysisService,
     CompetitorFeatureComparisonService,
     CompetitorPositioningService,
+    MarketGapService,
   ],
   exports: [
     MarketCategoryService,
@@ -25,6 +27,7 @@ import { MarketCategoryService } from './market-category.service';
     CompetitorWebsiteAnalysisService,
     CompetitorFeatureComparisonService,
     CompetitorPositioningService,
+    MarketGapService,
   ],
 })
 export class MarketIntelligenceModule {}
