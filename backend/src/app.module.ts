@@ -5,6 +5,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { AudienceIntelligenceModule } from './audience-intelligence/audience-intelligence.module';
+import { GrowthStrategyModule } from './growth-strategy/growth-strategy.module';
 import { MarketIntelligenceModule } from './market-intelligence/market-intelligence.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { ProductIntelligenceModule } from './product-intelligence/product-intelligence.module';
@@ -34,6 +35,7 @@ import { WebsiteIntelligenceModule } from './website-intelligence/website-intell
     MarketIntelligenceModule,
     AudienceIntelligenceModule,
     KeywordIntelligenceModule,
+    GrowthStrategyModule,
   ],
   controllers: [AppController],
   providers: [AppService],
