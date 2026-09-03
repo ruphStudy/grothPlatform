@@ -8,6 +8,7 @@ import { AudienceIntelligenceModule } from './audience-intelligence/audience-int
 import { MarketIntelligenceModule } from './market-intelligence/market-intelligence.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { ProductIntelligenceModule } from './product-intelligence/product-intelligence.module';
+import { KeywordIntelligenceModule } from './keyword-intelligence/keyword-intelligence.module';
 import { ProductsModule } from './products/products.module';
 import { ResearchModule } from './research/research.module';
 import { UsersModule } from './users/users.module';
@@ -32,6 +33,7 @@ import { WebsiteIntelligenceModule } from './website-intelligence/website-intell
     ResearchModule,
     MarketIntelligenceModule,
     AudienceIntelligenceModule,
+    KeywordIntelligenceModule,
   ],
   controllers: [AppController],
   providers: [AppService],
