@@ -15,4 +15,13 @@ export class KeywordIntelligenceController {
   ) {
     return this.keywordIntelligenceService.buildForProduct(organizationId, productId, req.user.userId);
   }
+
+  @Post('intents-preview')
+  intentsPreview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.keywordIntelligenceService.buildIntentsForProduct(organizationId, productId, req.user.userId);
+  }
 }

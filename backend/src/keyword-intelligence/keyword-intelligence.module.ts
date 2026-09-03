@@ -5,12 +5,13 @@ import { ProductsModule } from '../products/products.module';
 import { WebsiteIntelligenceModule } from '../website-intelligence/website-intelligence.module';
 import { KeywordIntelligenceController } from './keyword-intelligence.controller';
 import { KeywordIntelligenceService } from './keyword-intelligence.service';
+import { KeywordIntentService } from './keyword-intent.service';
 import { KeywordSignalService } from './keyword-signal.service';
 
 @Module({
   imports: [ProductsModule, WebsiteIntelligenceModule, MarketIntelligenceModule, AudienceIntelligenceModule],
   controllers: [KeywordIntelligenceController],
-  providers: [KeywordSignalService, KeywordIntelligenceService],
-  exports: [KeywordSignalService, KeywordIntelligenceService],
+  providers: [KeywordSignalService, KeywordIntentService, KeywordIntelligenceService],
+  exports: [KeywordSignalService, KeywordIntentService, KeywordIntelligenceService],
 })
 export class KeywordIntelligenceModule {}

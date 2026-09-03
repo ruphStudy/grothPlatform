@@ -9,7 +9,9 @@ import { MarketCategoryService } from '../market-intelligence/market-category.se
 import { ProductsService } from '../products/products.service';
 import { ProductWebsiteKnowledgeService } from '../website-intelligence/product-website-knowledge.service';
 import type { ProductWebsiteKnowledge } from '../website-intelligence/product-website-knowledge.types';
+import { KeywordIntentService } from './keyword-intent.service';
 import { KeywordSignalService } from './keyword-signal.service';
+import type { KeywordIntentResult } from './types/keyword-intent.types';
 import type { KeywordSignalResult } from './types/keyword-signal.types';
 
 /**
@@ -33,7 +35,19 @@ export class KeywordIntelligenceService {
     private readonly audiencePainPointService: AudiencePainPointService,
     private readonly audienceJtbdService: AudienceJtbdService,
     private readonly keywordSignalService: KeywordSignalService,
+    private readonly keywordIntentService: KeywordIntentService,
   ) {}
+
+  /**
+   * Runs the 11A keyword-signal orchestration exactly once, then classifies
+   * the result in memory via the pure KeywordIntentService — no repeated
+   * product/website/category/audience work, no internal HTTP call to
+   * signals-preview.
+   */
+  async buildIntentsForProduct(organizationId: string, productId: string, userId: string): Promise<KeywordIntentResult> {
+    const signals = await this.buildForProduct(organizationId, productId, userId);
+    return this.keywordIntentService.classify(signals);
+  }
 
   async buildForProduct(organizationId: string, productId: string, userId: string): Promise<KeywordSignalResult> {
     const product = await this.productsService.findOne(organizationId, productId, userId);
