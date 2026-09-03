@@ -24,4 +24,13 @@ export class GrowthStrategyController {
   ) {
     return this.growthStrategyService.buildObjectivesForProduct(organizationId, productId, req.user.userId);
   }
+
+  @Post('channels-preview')
+  channelsPreview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.growthStrategyService.buildChannelsForProduct(organizationId, productId, req.user.userId);
+  }
 }

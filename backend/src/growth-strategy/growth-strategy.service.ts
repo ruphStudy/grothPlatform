@@ -27,8 +27,10 @@ import { ProductsService } from '../products/products.service';
 import { extractSourceDomain } from '../research/research-url.util';
 import { ProductWebsiteKnowledgeService } from '../website-intelligence/product-website-knowledge.service';
 import type { ProductWebsiteKnowledge } from '../website-intelligence/product-website-knowledge.types';
+import { GrowthChannelFitService } from './growth-channel-fit.service';
 import { GrowthObjectiveService } from './growth-objective.service';
 import { StrategySignalService } from './strategy-signal.service';
+import type { GrowthChannelFitResult } from './types/growth-channel-fit.types';
 import type { GrowthObjectiveResult } from './types/growth-objective.types';
 import type { StrategySignalResult } from './types/strategy-signal.types';
 import type { CompetitorKeywordGapResult } from '../keyword-intelligence/types/competitor-keyword-gap.types';
@@ -79,6 +81,7 @@ export class GrowthStrategyService {
     private readonly competitorKeywordGapService: CompetitorKeywordGapService,
     private readonly strategySignalService: StrategySignalService,
     private readonly growthObjectiveService: GrowthObjectiveService,
+    private readonly growthChannelFitService: GrowthChannelFitService,
   ) {}
 
   /**
@@ -89,6 +92,17 @@ export class GrowthStrategyService {
   async buildObjectivesForProduct(organizationId: string, productId: string, userId: string): Promise<GrowthObjectiveResult> {
     const strategySignals = await this.buildSignalsForProduct(organizationId, productId, userId);
     return this.growthObjectiveService.detect(strategySignals);
+  }
+
+  /**
+   * Sprint 12C: same single 12A pass, then 12B detect() and 12C evaluate()
+   * both purely in memory — no internal HTTP call to objectives-preview, no
+   * repeated orchestration.
+   */
+  async buildChannelsForProduct(organizationId: string, productId: string, userId: string): Promise<GrowthChannelFitResult> {
+    const signals = await this.buildSignalsForProduct(organizationId, productId, userId);
+    const objectives = this.growthObjectiveService.detect(signals);
+    return this.growthChannelFitService.evaluate({ signals, objectives });
   }
 
   async buildSignalsForProduct(organizationId: string, productId: string, userId: string): Promise<StrategySignalResult> {
