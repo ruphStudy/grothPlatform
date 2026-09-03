@@ -2,6 +2,7 @@ import { Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AudienceSegmentService } from './audience-segment.service';
 import { AudienceSignalService } from './audience-signal.service';
+import { BuyerUserMapService } from './buyer-user-map.service';
 import { IcpService } from './icp.service';
 
 @UseGuards(JwtAuthGuard)
@@ -11,6 +12,7 @@ export class AudienceIntelligenceController {
     private readonly audienceSignalService: AudienceSignalService,
     private readonly audienceSegmentService: AudienceSegmentService,
     private readonly icpService: IcpService,
+    private readonly buyerUserMapService: BuyerUserMapService,
   ) {}
 
   @Post('signals-preview')
@@ -52,6 +54,25 @@ export class AudienceIntelligenceController {
         confidenceScore: segments.confidenceScore,
       },
       icp,
+    };
+  }
+
+  @Post('buyer-user-preview')
+  async buyerUserPreview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+  ) {
+    const { signals, segments, icp, buyerUserMap } = await this.buyerUserMapService.mapForProduct(
+      organizationId,
+      productId,
+      req.user.userId,
+    );
+    return {
+      signalsSummary: { confidenceScore: signals.confidenceScore },
+      segmentsSummary: { count: segments.segments.length, confidenceScore: segments.confidenceScore },
+      icpSummary: { count: icp.candidates.length, primaryIcpId: icp.primaryIcpId, confidenceScore: icp.confidenceScore },
+      buyerUserMap,
     };
   }
 }

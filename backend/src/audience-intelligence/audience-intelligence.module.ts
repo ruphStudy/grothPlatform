@@ -5,12 +5,13 @@ import { WebsiteIntelligenceModule } from '../website-intelligence/website-intel
 import { AudienceIntelligenceController } from './audience-intelligence.controller';
 import { AudienceSegmentService } from './audience-segment.service';
 import { AudienceSignalService } from './audience-signal.service';
+import { BuyerUserMapService } from './buyer-user-map.service';
 import { IcpService } from './icp.service';
 
 @Module({
   imports: [ProductsModule, WebsiteIntelligenceModule, MarketIntelligenceModule],
   controllers: [AudienceIntelligenceController],
-  providers: [AudienceSignalService, AudienceSegmentService, IcpService],
-  exports: [AudienceSignalService, AudienceSegmentService, IcpService],
+  providers: [AudienceSignalService, AudienceSegmentService, IcpService, BuyerUserMapService],
+  exports: [AudienceSignalService, AudienceSegmentService, IcpService, BuyerUserMapService],
 })
 export class AudienceIntelligenceModule {}
