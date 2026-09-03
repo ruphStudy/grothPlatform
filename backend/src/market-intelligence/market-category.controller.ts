@@ -2,6 +2,7 @@ import { Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CompetitorDiscoveryService } from './competitor-discovery.service';
 import { CompetitorFeatureComparisonService } from './competitor-feature-comparison.service';
+import { CompetitorPositioningService } from './competitor-positioning.service';
 import { CompetitorWebsiteAnalysisService } from './competitor-website-analysis.service';
 import { MarketCategoryService } from './market-category.service';
 
@@ -13,6 +14,7 @@ export class MarketCategoryController {
     private readonly competitorDiscoveryService: CompetitorDiscoveryService,
     private readonly competitorWebsiteAnalysisService: CompetitorWebsiteAnalysisService,
     private readonly competitorFeatureComparisonService: CompetitorFeatureComparisonService,
+    private readonly competitorPositioningService: CompetitorPositioningService,
   ) {}
 
   @Post('category-preview')
@@ -49,5 +51,14 @@ export class MarketCategoryController {
     @Param('productId') productId: string,
   ) {
     return this.competitorFeatureComparisonService.compareForProduct(organizationId, productId, req.user.userId);
+  }
+
+  @Post('positioning-preview')
+  positioningPreview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.competitorPositioningService.analyzeForProduct(organizationId, productId, req.user.userId);
   }
 }
