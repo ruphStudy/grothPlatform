@@ -15,4 +15,13 @@ export class GrowthStrategyController {
   ) {
     return this.growthStrategyService.buildSignalsForProduct(organizationId, productId, req.user.userId);
   }
+
+  @Post('objectives-preview')
+  objectivesPreview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.growthStrategyService.buildObjectivesForProduct(organizationId, productId, req.user.userId);
+  }
 }

@@ -27,7 +27,9 @@ import { ProductsService } from '../products/products.service';
 import { extractSourceDomain } from '../research/research-url.util';
 import { ProductWebsiteKnowledgeService } from '../website-intelligence/product-website-knowledge.service';
 import type { ProductWebsiteKnowledge } from '../website-intelligence/product-website-knowledge.types';
+import { GrowthObjectiveService } from './growth-objective.service';
 import { StrategySignalService } from './strategy-signal.service';
+import type { GrowthObjectiveResult } from './types/growth-objective.types';
 import type { StrategySignalResult } from './types/strategy-signal.types';
 import type { CompetitorKeywordGapResult } from '../keyword-intelligence/types/competitor-keyword-gap.types';
 
@@ -76,7 +78,18 @@ export class GrowthStrategyService {
     private readonly keywordAudienceMapService: KeywordAudienceMapService,
     private readonly competitorKeywordGapService: CompetitorKeywordGapService,
     private readonly strategySignalService: StrategySignalService,
+    private readonly growthObjectiveService: GrowthObjectiveService,
   ) {}
+
+  /**
+   * Sprint 12B: reuses the exact same single 12A orchestration pass above —
+   * no duplicate product/website/category/audience/keyword/competitor work —
+   * then detects growth objectives purely in memory.
+   */
+  async buildObjectivesForProduct(organizationId: string, productId: string, userId: string): Promise<GrowthObjectiveResult> {
+    const strategySignals = await this.buildSignalsForProduct(organizationId, productId, userId);
+    return this.growthObjectiveService.detect(strategySignals);
+  }
 
   async buildSignalsForProduct(organizationId: string, productId: string, userId: string): Promise<StrategySignalResult> {
     const product = await this.productsService.findOne(organizationId, productId, userId);

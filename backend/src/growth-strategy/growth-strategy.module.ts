@@ -4,6 +4,7 @@ import { KeywordIntelligenceModule } from '../keyword-intelligence/keyword-intel
 import { MarketIntelligenceModule } from '../market-intelligence/market-intelligence.module';
 import { ProductsModule } from '../products/products.module';
 import { WebsiteIntelligenceModule } from '../website-intelligence/website-intelligence.module';
+import { GrowthObjectiveService } from './growth-objective.service';
 import { GrowthStrategyController } from './growth-strategy.controller';
 import { GrowthStrategyService } from './growth-strategy.service';
 import { StrategySignalService } from './strategy-signal.service';
@@ -11,7 +12,7 @@ import { StrategySignalService } from './strategy-signal.service';
 @Module({
   imports: [ProductsModule, WebsiteIntelligenceModule, MarketIntelligenceModule, AudienceIntelligenceModule, KeywordIntelligenceModule],
   controllers: [GrowthStrategyController],
-  providers: [StrategySignalService, GrowthStrategyService],
-  exports: [StrategySignalService, GrowthStrategyService],
+  providers: [StrategySignalService, GrowthObjectiveService, GrowthStrategyService],
+  exports: [StrategySignalService, GrowthObjectiveService, GrowthStrategyService],
 })
 export class GrowthStrategyModule {}
