@@ -24,4 +24,13 @@ export class KeywordIntelligenceController {
   ) {
     return this.keywordIntelligenceService.buildIntentsForProduct(organizationId, productId, req.user.userId);
   }
+
+  @Post('clusters-preview')
+  clustersPreview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.keywordIntelligenceService.buildClustersForProduct(organizationId, productId, req.user.userId);
+  }
 }
