@@ -11,9 +11,11 @@ import { ProductWebsiteKnowledgeService } from '../website-intelligence/product-
 import type { ProductWebsiteKnowledge } from '../website-intelligence/product-website-knowledge.types';
 import { KeywordClusterService } from './keyword-cluster.service';
 import { KeywordIntentService } from './keyword-intent.service';
+import { KeywordOpportunityService } from './keyword-opportunity.service';
 import { KeywordSignalService } from './keyword-signal.service';
 import type { KeywordClusterResult } from './types/keyword-cluster.types';
 import type { KeywordIntentResult } from './types/keyword-intent.types';
+import type { KeywordOpportunityResult } from './types/keyword-opportunity.types';
 import type { KeywordSignalResult } from './types/keyword-signal.types';
 
 /**
@@ -39,6 +41,7 @@ export class KeywordIntelligenceService {
     private readonly keywordSignalService: KeywordSignalService,
     private readonly keywordIntentService: KeywordIntentService,
     private readonly keywordClusterService: KeywordClusterService,
+    private readonly keywordOpportunityService: KeywordOpportunityService,
   ) {}
 
   /**
@@ -60,6 +63,18 @@ export class KeywordIntelligenceService {
     const signals = await this.buildForProduct(organizationId, productId, userId);
     const intents = this.keywordIntentService.classify(signals);
     return this.keywordClusterService.cluster(signals, intents);
+  }
+
+  /**
+   * Same single 11A pass, then 11B classify(), 11C cluster(), and 11D
+   * score() all purely in memory — no internal HTTP calls, no repeated
+   * orchestration.
+   */
+  async buildOpportunitiesForProduct(organizationId: string, productId: string, userId: string): Promise<KeywordOpportunityResult> {
+    const signals = await this.buildForProduct(organizationId, productId, userId);
+    const intents = this.keywordIntentService.classify(signals);
+    const clusters = this.keywordClusterService.cluster(signals, intents);
+    return this.keywordOpportunityService.score({ signals, intents, clusters });
   }
 
   async buildForProduct(organizationId: string, productId: string, userId: string): Promise<KeywordSignalResult> {
