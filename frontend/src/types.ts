@@ -619,6 +619,244 @@ export interface AudienceIntelligencePreview {
   generatedAt: string;
 }
 
+export type KeywordSignalSource =
+  | 'product_name'
+  | 'product_description'
+  | 'product_type'
+  | 'market_category'
+  | 'market_term'
+  | 'website_identity'
+  | 'feature'
+  | 'use_case'
+  | 'audience'
+  | 'pain_point'
+  | 'jtbd'
+  | 'pricing'
+  | 'competitor_gap';
+
+export type KeywordIntent =
+  | 'informational'
+  | 'commercial'
+  | 'transactional'
+  | 'navigational'
+  | 'solution'
+  | 'problem'
+  | 'comparison'
+  | 'audience_specific';
+
+export interface KeywordSignal {
+  keyword: string;
+  normalizedKeyword: string;
+  sources: KeywordSignalSource[];
+  intent: KeywordIntent[];
+  confidenceScore: number;
+  evidence: string[];
+  relatedSegments?: string[];
+  relatedUseCases?: string[];
+  warnings: string[];
+}
+
+export interface KeywordSignalResult {
+  keywords: KeywordSignal[];
+  productKeywords: string[];
+  featureKeywords: string[];
+  audienceKeywords: string[];
+  problemKeywords: string[];
+  commercialKeywords: string[];
+  longTailKeywords: string[];
+  confidenceScore: number;
+  missingSignals: string[];
+  warnings: string[];
+  generatedAt: string;
+}
+
+export type SearchIntentPrimary =
+  | 'informational'
+  | 'commercial'
+  | 'transactional'
+  | 'navigational'
+  | 'comparison'
+  | 'problem'
+  | 'solution'
+  | 'audience_specific';
+
+export type KeywordFunnelStage = 'awareness' | 'consideration' | 'decision' | 'mixed';
+
+export interface KeywordIntentProfile {
+  keyword: string;
+  normalizedKeyword: string;
+  primaryIntent: SearchIntentPrimary;
+  secondaryIntents: SearchIntentPrimary[];
+  funnelStage: KeywordFunnelStage;
+  intentScore: number;
+  confidenceScore: number;
+  reasons: string[];
+  warnings: string[];
+}
+
+export interface KeywordIntentResult {
+  profiles: KeywordIntentProfile[];
+  byPrimaryIntent: Record<string, string[]>;
+  awarenessKeywords: string[];
+  considerationKeywords: string[];
+  decisionKeywords: string[];
+  confidenceScore: number;
+  warnings: string[];
+  generatedAt: string;
+}
+
+export type KeywordClusterType = 'category' | 'feature' | 'use_case' | 'audience' | 'problem' | 'commercial' | 'brand' | 'mixed';
+
+export interface KeywordCluster {
+  id: string;
+  name: string;
+  type: KeywordClusterType;
+  primaryKeyword: string;
+  keywords: string[];
+  primaryIntent: string;
+  intents: string[];
+  funnelStages: string[];
+  relatedSegments: string[];
+  relatedUseCases: string[];
+  coherenceScore: number;
+  confidenceScore: number;
+  reasons: string[];
+  warnings: string[];
+}
+
+export interface KeywordClusterResult {
+  clusters: KeywordCluster[];
+  unclusteredKeywords: string[];
+  confidenceScore: number;
+  warnings: string[];
+  generatedAt: string;
+}
+
+export type KeywordOpportunityTier = 'high' | 'medium' | 'low' | 'insufficient_evidence';
+
+export interface KeywordOpportunity {
+  keyword: string;
+  normalizedKeyword: string;
+  clusterId?: string;
+  opportunityScore: number;
+  confidenceScore: number;
+  tier: KeywordOpportunityTier;
+  primaryIntent: string;
+  funnelStage: string;
+  reasons: string[];
+  strengths: string[];
+  weaknesses: string[];
+  warnings: string[];
+}
+
+export interface KeywordOpportunityResult {
+  opportunities: KeywordOpportunity[];
+  highOpportunityKeywords: string[];
+  mediumOpportunityKeywords: string[];
+  confidenceScore: number;
+  warnings: string[];
+  generatedAt: string;
+}
+
+export type CompetitorKeywordGapType = 'missing' | 'weak_coverage' | 'differentiation' | 'shared';
+
+export interface CompetitorKeywordGap {
+  keyword: string;
+  normalizedKeyword: string;
+  gapType: CompetitorKeywordGapType;
+  competitorCount: number;
+  competitors: string[];
+  relatedFeatures: string[];
+  relatedUseCases: string[];
+  opportunityScore: number;
+  confidenceScore: number;
+  reasons: string[];
+  strengths: string[];
+  weaknesses: string[];
+  warnings: string[];
+}
+
+export interface CompetitorKeywordGapResult {
+  gaps: CompetitorKeywordGap[];
+  strongestGapKeywords: string[];
+  sharedKeywords: string[];
+  differentiationKeywords: string[];
+  confidenceScore: number;
+  warnings: string[];
+  generatedAt: string;
+}
+
+export type LongTailExpansionType = 'audience' | 'use_case' | 'problem' | 'intent' | 'feature' | 'comparison' | 'competitor_gap';
+
+export interface LongTailKeyword {
+  keyword: string;
+  normalizedKeyword: string;
+  baseKeyword: string;
+  expansionType: LongTailExpansionType;
+  primaryIntent: string;
+  funnelStage: string;
+  relatedSegments: string[];
+  relatedUseCases: string[];
+  opportunityScore: number;
+  confidenceScore: number;
+  reasons: string[];
+  warnings: string[];
+}
+
+export interface KeywordLongTailResult {
+  keywords: LongTailKeyword[];
+  strongestKeywords: string[];
+  confidenceScore: number;
+  warnings: string[];
+  generatedAt: string;
+}
+
+export interface KeywordAudienceMatch {
+  keyword: string;
+  normalizedKeyword: string;
+  segmentId: string;
+  segmentName: string;
+  relevanceScore: number;
+  confidenceScore: number;
+  primaryIntent: string;
+  funnelStage: string;
+  relatedUseCases: string[];
+  reasons: string[];
+  warnings: string[];
+}
+
+export interface KeywordAudienceMapResult {
+  matches: KeywordAudienceMatch[];
+  primaryAudienceByKeyword: Record<string, string>;
+  keywordsBySegment: Record<string, string[]>;
+  unmappedKeywords: string[];
+  confidenceScore: number;
+  warnings: string[];
+  generatedAt: string;
+}
+
+export interface KeywordIntelligencePreviewStats {
+  keywordCount: number;
+  clusterCount: number;
+  highOpportunityCount: number;
+  gapCount: number;
+  longTailCount: number;
+  mappedKeywordCount: number;
+}
+
+export interface KeywordIntelligencePreview {
+  signals: KeywordSignalResult;
+  intents: KeywordIntentResult;
+  clusters: KeywordClusterResult;
+  opportunities: KeywordOpportunityResult;
+  competitorGaps?: CompetitorKeywordGapResult;
+  longTail: KeywordLongTailResult;
+  audienceMap: KeywordAudienceMapResult;
+  stats: KeywordIntelligencePreviewStats;
+  warnings: string[];
+  generatedAt: string;
+}
+
 export interface ProductIntelligenceProfile {
   id: string;
   organizationId: string;

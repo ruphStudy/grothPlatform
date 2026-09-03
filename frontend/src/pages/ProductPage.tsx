@@ -10,6 +10,7 @@ import { PageHeader } from '../components/PageHeader';
 import type {
   AudienceIntelligencePreview,
   CompetitiveIntelligencePreview,
+  KeywordIntelligencePreview,
   Product,
   ProductIntelligenceProfile,
   ProductWebsiteKnowledgePreview,
@@ -86,6 +87,9 @@ export default function ProductPage() {
   const [audienceIntelligence, setAudienceIntelligence] = useState<AudienceIntelligencePreview | null>(null);
   const [buildingAudienceIntelligence, setBuildingAudienceIntelligence] = useState(false);
   const [audienceIntelligenceError, setAudienceIntelligenceError] = useState<string | null>(null);
+  const [keywordIntelligence, setKeywordIntelligence] = useState<KeywordIntelligencePreview | null>(null);
+  const [buildingKeywordIntelligence, setBuildingKeywordIntelligence] = useState(false);
+  const [keywordIntelligenceError, setKeywordIntelligenceError] = useState<string | null>(null);
 
   async function loadData() {
     if (!organizationId || !productId) return;
@@ -196,6 +200,22 @@ export default function ProductPage() {
       setAudienceIntelligenceError(err instanceof ApiError ? err.message : 'Building audience intelligence failed');
     } finally {
       setBuildingAudienceIntelligence(false);
+    }
+  }
+
+  async function handleBuildKeywordIntelligence() {
+    setKeywordIntelligenceError(null);
+    setBuildingKeywordIntelligence(true);
+    try {
+      const data = await apiRequest<KeywordIntelligencePreview>(
+        `/organizations/${organizationId}/products/${productId}/keywords/intelligence-preview`,
+        { method: 'POST' },
+      );
+      setKeywordIntelligence(data);
+    } catch (err) {
+      setKeywordIntelligenceError(err instanceof ApiError ? err.message : 'Building keyword intelligence failed');
+    } finally {
+      setBuildingKeywordIntelligence(false);
     }
   }
 
@@ -1534,6 +1554,345 @@ export default function ProductPage() {
                 <span>Pain points: <strong>{ai.stats.painPointCount}</strong></span>
                 <span>Jobs: <strong>{ai.stats.jobCount}</strong></span>
                 <span>Generated: <strong>{new Date(ai.generatedAt).toLocaleString()}</strong></span>
+              </div>
+            </div>
+          );
+        })()}
+      </Card>
+
+      <Card className="analysis-card">
+        <div className="analysis-header">
+          <div>
+            <h2 className="card-title">Keyword Intelligence</h2>
+            <p className="card-subtitle">
+              Discover keyword signals, search intent, clusters, opportunity scores, competitor keyword gaps,
+              long-tail expansions, and keyword-to-audience mapping.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleBuildKeywordIntelligence}
+            className="btn btn-primary"
+            disabled={buildingKeywordIntelligence}
+          >
+            {buildingKeywordIntelligence
+              ? 'Building keyword intelligence...'
+              : keywordIntelligence
+                ? 'Rebuild Keyword Intelligence'
+                : 'Build Keyword Intelligence'}
+          </button>
+        </div>
+
+        <ErrorMessage message={keywordIntelligenceError} />
+        {buildingKeywordIntelligence && (
+          <div className="analyzing-state">
+            <span className="spinner" /> Building keyword intelligence...
+            <p className="muted" style={{ marginTop: 4 }}>
+              Extracting keyword signals, classifying intent, clustering, scoring opportunities, and mapping to audiences.
+            </p>
+          </div>
+        )}
+
+        {keywordIntelligence && (() => {
+          const ki = keywordIntelligence;
+          const opportunityTierClass = (tier: string) => {
+            if (tier === 'high') return 'quality-good';
+            if (tier === 'medium') return 'quality-limited';
+            return 'quality-empty';
+          };
+
+          const topSignals = ki.signals.keywords.slice(0, 15);
+          const remainingSignals = ki.signals.keywords.slice(15);
+
+          const intentOrder: string[] = ['informational', 'commercial', 'transactional', 'comparison', 'problem', 'solution', 'audience_specific', 'navigational'];
+
+          const topOpportunities = ki.opportunities.opportunities.slice(0, 10);
+
+          const gaps = ki.competitorGaps?.gaps ?? [];
+          const topGaps = gaps.slice(0, 10);
+
+          const topLongTail = ki.longTail.keywords.slice(0, 15);
+          const remainingLongTail = ki.longTail.keywords.slice(15);
+
+          const primaryAudienceEntries = Object.entries(ki.audienceMap.primaryAudienceByKeyword).slice(0, 15);
+          const hasAnyAudienceMapping = Object.keys(ki.audienceMap.primaryAudienceByKeyword).length > 0;
+
+          return (
+            <div style={{ marginTop: 16 }}>
+              {/* Overview */}
+              <Card className="profile-section confidence-card">
+                <h3 className="section-title">Overview</h3>
+                <ConfidenceBar label="Keyword Confidence" score={ki.signals.confidenceScore} />
+                <div className="summary-grid" style={{ marginTop: 14 }}>
+                  <div>
+                    <span className="summary-label">Total Keywords</span>
+                    <p>{ki.stats.keywordCount || 'Not determined'}</p>
+                  </div>
+                  <div>
+                    <span className="summary-label">Clusters</span>
+                    <p>{ki.stats.clusterCount}</p>
+                  </div>
+                  <div>
+                    <span className="summary-label">High Opportunities</span>
+                    <p>{ki.stats.highOpportunityCount}</p>
+                  </div>
+                  <div>
+                    <span className="summary-label">Long-tail Keywords</span>
+                    <p>{ki.stats.longTailCount}</p>
+                  </div>
+                  <div>
+                    <span className="summary-label">Mapped Keywords</span>
+                    <p>{ki.stats.mappedKeywordCount}</p>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Keyword Signals */}
+              <div style={{ marginTop: 20 }}>
+                <h3 className="section-title">Keyword Signals</h3>
+                {topSignals.length === 0 ? (
+                  <p className="muted" style={{ marginTop: 8 }}>No meaningful keyword candidates were extracted from current evidence.</p>
+                ) : (
+                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {topSignals.map((k, i) => (
+                      <div key={i} className="audience-card">
+                        <div className="entity-card-header">
+                          <h4 style={{ margin: 0 }}>{k.keyword}</h4>
+                          <span>Confidence {k.confidenceScore}</span>
+                        </div>
+                        <p className="audience-meta">Source(s): {k.sources.map((s) => labelize(s)).join(', ') || 'None'}</p>
+                        <div className="tag-list">
+                          {k.intent.map((intent, j) => <span key={j} className="tag">{labelize(intent)}</span>)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {remainingSignals.length > 0 && (
+                  <details style={{ marginTop: 10 }}>
+                    <summary className="summary-label" style={{ cursor: 'pointer' }}>
+                      Show {remainingSignals.length} more keyword(s)
+                    </summary>
+                    <ul className="bullet-list" style={{ marginTop: 8 }}>
+                      {remainingSignals.map((k, i) => <li key={i}>{k.keyword} — confidence {k.confidenceScore}</li>)}
+                    </ul>
+                  </details>
+                )}
+              </div>
+
+              {/* Search Intent */}
+              <div style={{ marginTop: 20 }}>
+                <h3 className="section-title">Search Intent</h3>
+                <div className="tag-list">
+                  {intentOrder.map((intent) => (
+                    <span key={intent} className="tag">
+                      {labelize(intent)}: {ki.intents.byPrimaryIntent[intent]?.length ?? 0}
+                    </span>
+                  ))}
+                </div>
+                <div className="profile-meta" style={{ marginTop: 10 }}>
+                  <span>Awareness: <strong>{ki.intents.awarenessKeywords.length}</strong></span>
+                  <span>Consideration: <strong>{ki.intents.considerationKeywords.length}</strong></span>
+                  <span>Decision: <strong>{ki.intents.decisionKeywords.length}</strong></span>
+                </div>
+              </div>
+
+              {/* Clusters */}
+              <div style={{ marginTop: 20 }}>
+                <h3 className="section-title">Keyword Clusters</h3>
+                {ki.clusters.clusters.length === 0 ? (
+                  <p className="muted" style={{ marginTop: 8 }}>No coherent keyword clusters were formed from current evidence.</p>
+                ) : (
+                  <div className="grid-cards" style={{ marginTop: 10 }}>
+                    {ki.clusters.clusters.slice(0, 8).map((c) => (
+                      <Card key={c.id} className="entity-card">
+                        <div className="entity-card-header">
+                          <h4 style={{ margin: 0 }}>{c.name}</h4>
+                          <span className="tag">{labelize(c.type)}</span>
+                        </div>
+                        <p className="entity-card-meta">Primary: {c.primaryKeyword}</p>
+                        <div className="tag-list">
+                          {c.keywords.slice(0, 6).map((kw, i) => <span key={i} className="tag">{kw}</span>)}
+                        </div>
+                        <div className="profile-meta" style={{ marginTop: 6 }}>
+                          <span>Coherence: <strong>{c.coherenceScore}</strong></span>
+                          <span>Confidence: <strong>{c.confidenceScore}</strong></span>
+                        </div>
+                        {c.intents.length > 0 && (
+                          <p className="muted" style={{ margin: '6px 0 0' }}>{c.intents.map((i) => labelize(i)).join(', ')}</p>
+                        )}
+                      </Card>
+                    ))}
+                  </div>
+                )}
+                {ki.clusters.clusters.length > 8 && (
+                  <details style={{ marginTop: 10 }}>
+                    <summary className="summary-label" style={{ cursor: 'pointer' }}>
+                      Show {ki.clusters.clusters.length - 8} more cluster(s)
+                    </summary>
+                    <ul className="bullet-list" style={{ marginTop: 8 }}>
+                      {ki.clusters.clusters.slice(8).map((c) => <li key={c.id}>{c.name} ({labelize(c.type)}) — {c.keywords.length} keyword(s)</li>)}
+                    </ul>
+                  </details>
+                )}
+              </div>
+
+              {/* Opportunities */}
+              <div style={{ marginTop: 20 }}>
+                <h3 className="section-title">Keyword Opportunities</h3>
+                <div className="content-warning">
+                  Opportunity scores are evidence-based heuristics and do not include search volume, CPC, SEO difficulty or ranking potential.
+                </div>
+                {topOpportunities.length === 0 ? (
+                  <p className="muted" style={{ marginTop: 8 }}>No ranked keyword opportunities were available.</p>
+                ) : (
+                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {topOpportunities.map((o, i) => (
+                      <Card key={i} className="entity-card">
+                        <div className="entity-card-header">
+                          <h4 style={{ margin: 0 }}>{o.keyword}</h4>
+                          <span className={`quality-badge ${opportunityTierClass(o.tier)}`}>{labelize(o.tier)}</span>
+                        </div>
+                        <div className="profile-meta">
+                          <span>Opportunity: <strong>{o.opportunityScore}</strong></span>
+                          <span>Confidence: <strong>{o.confidenceScore}</strong></span>
+                          <span>Intent: <strong>{labelize(o.primaryIntent)}</strong></span>
+                          <span>Funnel: <strong>{labelize(o.funnelStage)}</strong></span>
+                        </div>
+                        {o.strengths.length > 0 && <p style={{ marginTop: 6 }}>{o.strengths.join(' ')}</p>}
+                        {o.reasons.length > 0 && (
+                          <ul className="bullet-list" style={{ marginTop: 6 }}>{o.reasons.map((r, j) => <li key={j}>{r}</li>)}</ul>
+                        )}
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Competitor Gaps */}
+              <div style={{ marginTop: 20 }}>
+                <h3 className="section-title">Competitor Keyword Gaps</h3>
+                {!ki.competitorGaps ? (
+                  <p className="muted" style={{ marginTop: 8 }}>
+                    Competitor keyword-gap analysis is unavailable because external competitor research is not configured.
+                  </p>
+                ) : (
+                  <>
+                    <div className="content-warning">
+                      Competitor gaps are inferred from public competitor messaging, not verified search rankings or traffic.
+                    </div>
+                    {topGaps.length === 0 ? (
+                      <p className="muted" style={{ marginTop: 8 }}>No competitor keyword gaps were identified.</p>
+                    ) : (
+                      <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {topGaps.map((g, i) => (
+                          <div key={i} className="audience-card">
+                            <div className="entity-card-header">
+                              <h4 style={{ margin: 0 }}>{g.keyword}</h4>
+                              <span className="tag">{labelize(g.gapType)}</span>
+                            </div>
+                            <p className="audience-meta">
+                              Competitors: {g.competitorCount} · Opportunity: {g.opportunityScore} · Confidence: {g.confidenceScore}
+                            </p>
+                            {g.reasons.length > 0 && (
+                              <ul className="bullet-list" style={{ marginTop: 6 }}>{g.reasons.map((r, j) => <li key={j}>{r}</li>)}</ul>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Long-tail */}
+              <div style={{ marginTop: 20 }}>
+                <h3 className="section-title">Long-tail Keyword Candidates</h3>
+                <div className="content-warning">
+                  Long-tail keywords are deterministic candidate expansions and do not include verified search-demand data.
+                </div>
+                {topLongTail.length === 0 ? (
+                  <p className="muted" style={{ marginTop: 8 }}>No long-tail keyword candidates were generated.</p>
+                ) : (
+                  <>
+                    <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {topLongTail.map((k, i) => (
+                        <div key={i} className="audience-card">
+                          <h4>{k.keyword}</h4>
+                          <p className="audience-meta">
+                            Base: {k.baseKeyword} · {labelize(k.expansionType)} · {labelize(k.primaryIntent)} · Opportunity {k.opportunityScore} · Confidence {k.confidenceScore}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                    {remainingLongTail.length > 0 && (
+                      <details style={{ marginTop: 10 }}>
+                        <summary className="summary-label" style={{ cursor: 'pointer' }}>
+                          Show {remainingLongTail.length} more long-tail keyword(s)
+                        </summary>
+                        <ul className="bullet-list" style={{ marginTop: 8 }}>
+                          {remainingLongTail.map((k, i) => <li key={i}>{k.keyword}</li>)}
+                        </ul>
+                      </details>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Audience Mapping */}
+              <div style={{ marginTop: 20 }}>
+                <h3 className="section-title">Keyword-to-Audience Mapping</h3>
+                {!hasAnyAudienceMapping ? (
+                  <p className="muted" style={{ marginTop: 8 }}>No reliable audience mappings were detected from current product evidence.</p>
+                ) : (
+                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {primaryAudienceEntries.map(([keyword, segmentName], i) => {
+                      const match = ki.audienceMap.matches.find((m) => m.keyword === keyword && m.segmentName === segmentName);
+                      return (
+                        <div key={i} className="audience-card">
+                          <p style={{ margin: 0 }}><strong>{keyword}</strong> → {segmentName}</p>
+                          {match && (
+                            <p className="audience-meta">
+                              Relevance: {match.relevanceScore} · Confidence: {match.confidenceScore} · Intent: {labelize(match.primaryIntent)}
+                              {match.relatedUseCases.length > 0 ? ` · ${match.relatedUseCases.join(', ')}` : ''}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {ki.audienceMap.unmappedKeywords.length > 0 && (
+                  <details style={{ marginTop: 10 }}>
+                    <summary className="summary-label" style={{ cursor: 'pointer' }}>
+                      Unmapped keywords ({ki.audienceMap.unmappedKeywords.length})
+                    </summary>
+                    <div className="tag-list" style={{ marginTop: 6 }}>
+                      {ki.audienceMap.unmappedKeywords.map((k, i) => <span key={i} className="tag">{k}</span>)}
+                    </div>
+                  </details>
+                )}
+              </div>
+
+              {/* Important Notes */}
+              {ki.warnings.length > 0 && (
+                <div style={{ marginTop: 20 }}>
+                  <h3 className="section-title">Important Notes</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {ki.warnings.map((w, i) => <div key={i} className="content-warning">{w}</div>)}
+                  </div>
+                </div>
+              )}
+
+              {/* Stats */}
+              <div className="profile-meta" style={{ marginTop: 20 }}>
+                <span>Keywords: <strong>{ki.stats.keywordCount}</strong></span>
+                <span>Clusters: <strong>{ki.stats.clusterCount}</strong></span>
+                <span>High opportunities: <strong>{ki.stats.highOpportunityCount}</strong></span>
+                <span>Competitor gaps: <strong>{ki.stats.gapCount}</strong></span>
+                <span>Long-tail: <strong>{ki.stats.longTailCount}</strong></span>
+                <span>Mapped: <strong>{ki.stats.mappedKeywordCount}</strong></span>
+                <span>Generated: <strong>{new Date(ki.generatedAt).toLocaleString()}</strong></span>
               </div>
             </div>
           );

@@ -69,4 +69,13 @@ export class KeywordIntelligenceController {
   ) {
     return this.keywordIntelligenceService.buildAudienceMapForProduct(organizationId, productId, req.user.userId);
   }
+
+  @Post('intelligence-preview')
+  intelligencePreview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.keywordIntelligenceService.buildFullIntelligenceForProduct(organizationId, productId, req.user.userId);
+  }
 }

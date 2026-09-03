@@ -26,6 +26,7 @@ import { KeywordSignalService } from './keyword-signal.service';
 import type { CompetitorKeywordGapResult } from './types/competitor-keyword-gap.types';
 import type { KeywordAudienceMapResult } from './types/keyword-audience-map.types';
 import type { KeywordClusterResult } from './types/keyword-cluster.types';
+import type { KeywordIntelligencePreview } from './types/keyword-intelligence-preview.types';
 import type { KeywordIntentResult } from './types/keyword-intent.types';
 import type { KeywordLongTailResult } from './types/keyword-long-tail.types';
 import type { KeywordOpportunityResult } from './types/keyword-opportunity.types';
@@ -192,6 +193,85 @@ export class KeywordIntelligenceService {
         prioritization: audienceChain.prioritization,
       },
     });
+  }
+
+  /**
+   * Sprint 11H: the single consolidated endpoint. One product lookup, one
+   * own-website-knowledge build, one category computation, one Sprint 10
+   * audience-chain build (10A-10G), then 11A-11G exactly once each — no
+   * *ForProduct() convenience wrapper is called internally (those would each
+   * redo the fetch/chain above), and competitor discovery (11E, the only
+   * network step beyond the own-website fetch) runs at most once total and
+   * is reused for both the gap result and 11F's long-tail input, rather than
+   * letting long-tail attempt its own separate discovery pass. If the
+   * research provider is unavailable, competitorGaps is simply omitted —
+   * the rest of the pipeline still succeeds.
+   */
+  async buildFullIntelligenceForProduct(organizationId: string, productId: string, userId: string): Promise<KeywordIntelligencePreview> {
+    const { product, productInput, websiteKnowledge, marketCategory } = await this.fetchOwnEvidence(organizationId, productId, userId);
+    const audienceChain = this.buildAudienceChainFromEvidence(productInput, websiteKnowledge, marketCategory);
+
+    const signals = this.keywordSignalService.extract({
+      product: productInput,
+      websiteKnowledge,
+      marketCategory,
+      audienceSignals: audienceChain.audienceSignals,
+      segments: audienceChain.segments,
+      painPoints: audienceChain.painPoints,
+      jtbd: audienceChain.jtbd,
+    });
+    const intents = this.keywordIntentService.classify(signals);
+    const clusters = this.keywordClusterService.cluster(signals, intents);
+    const opportunities = this.keywordOpportunityService.score({ signals, intents, clusters });
+
+    let competitorGaps: CompetitorKeywordGapResult | undefined;
+    try {
+      competitorGaps = await this.buildCompetitorGapsFromEvidence(product, productInput, websiteKnowledge, marketCategory, signals, intents, clusters, opportunities);
+    } catch {
+      competitorGaps = undefined; // research provider unavailable — the rest of the pipeline still succeeds
+    }
+
+    const longTail = this.keywordLongTailService.expand({ signals, intents, clusters, opportunities, competitorGaps });
+    const audienceMap = this.keywordAudienceMapService.map({
+      signals,
+      intents,
+      opportunities,
+      longTail,
+      clusters,
+      audience: { segments: audienceChain.segments, icp: audienceChain.icp, prioritization: audienceChain.prioritization },
+    });
+
+    const warnings = Array.from(
+      new Set([
+        ...signals.warnings,
+        ...intents.warnings,
+        ...clusters.warnings,
+        ...opportunities.warnings,
+        ...(competitorGaps?.warnings ?? []),
+        ...longTail.warnings,
+        ...audienceMap.warnings,
+      ]),
+    );
+
+    return {
+      signals,
+      intents,
+      clusters,
+      opportunities,
+      competitorGaps,
+      longTail,
+      audienceMap,
+      stats: {
+        keywordCount: signals.keywords.length,
+        clusterCount: clusters.clusters.length,
+        highOpportunityCount: opportunities.opportunities.filter((o) => o.tier === 'high').length,
+        gapCount: competitorGaps?.gaps.length ?? 0,
+        longTailCount: longTail.keywords.length,
+        mappedKeywordCount: Object.keys(audienceMap.primaryAudienceByKeyword).length,
+      },
+      warnings,
+      generatedAt: new Date(),
+    };
   }
 
   private async buildLongTailFromEvidence(
