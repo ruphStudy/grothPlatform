@@ -60,4 +60,13 @@ export class KeywordIntelligenceController {
   ) {
     return this.keywordIntelligenceService.buildLongTailForProduct(organizationId, productId, req.user.userId);
   }
+
+  @Post('audience-map-preview')
+  audienceMapPreview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.keywordIntelligenceService.buildAudienceMapForProduct(organizationId, productId, req.user.userId);
+  }
 }

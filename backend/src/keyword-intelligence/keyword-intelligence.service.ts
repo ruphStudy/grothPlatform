@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AudienceJtbdService } from '../audience-intelligence/audience-jtbd.service';
 import { AudiencePainPointService } from '../audience-intelligence/audience-pain-point.service';
+import { AudiencePrioritizationService } from '../audience-intelligence/audience-prioritization.service';
 import { AudienceSegmentService } from '../audience-intelligence/audience-segment.service';
 import { AudienceSignalService } from '../audience-intelligence/audience-signal.service';
 import { BuyerUserMapService } from '../audience-intelligence/buyer-user-map.service';
@@ -16,17 +17,26 @@ import { extractSourceDomain } from '../research/research-url.util';
 import { ProductWebsiteKnowledgeService } from '../website-intelligence/product-website-knowledge.service';
 import type { ProductWebsiteKnowledge } from '../website-intelligence/product-website-knowledge.types';
 import { CompetitorKeywordGapService } from './competitor-keyword-gap.service';
+import { KeywordAudienceMapService } from './keyword-audience-map.service';
 import { KeywordClusterService } from './keyword-cluster.service';
 import { KeywordIntentService } from './keyword-intent.service';
 import { KeywordLongTailService } from './keyword-long-tail.service';
 import { KeywordOpportunityService } from './keyword-opportunity.service';
 import { KeywordSignalService } from './keyword-signal.service';
 import type { CompetitorKeywordGapResult } from './types/competitor-keyword-gap.types';
+import type { KeywordAudienceMapResult } from './types/keyword-audience-map.types';
 import type { KeywordClusterResult } from './types/keyword-cluster.types';
 import type { KeywordIntentResult } from './types/keyword-intent.types';
 import type { KeywordLongTailResult } from './types/keyword-long-tail.types';
 import type { KeywordOpportunityResult } from './types/keyword-opportunity.types';
 import type { KeywordSignalExtractionInput, KeywordSignalProductInput, KeywordSignalResult } from './types/keyword-signal.types';
+import type { AudienceSignalResult } from '../audience-intelligence/types/audience-signal.types';
+import type { AudienceSegmentResult } from '../audience-intelligence/types/audience-segment.types';
+import type { IcpResult } from '../audience-intelligence/types/icp.types';
+import type { BuyerUserMapResult } from '../audience-intelligence/types/buyer-user-map.types';
+import type { AudiencePainPointResult } from '../audience-intelligence/types/audience-pain-point.types';
+import type { AudienceJtbdResult } from '../audience-intelligence/types/audience-jtbd.types';
+import type { AudiencePrioritizationResult } from '../audience-intelligence/types/audience-prioritization.types';
 
 const EMPTY_ANALYSIS_BATCH: CompetitorWebsiteAnalysisBatchResult = {
   competitors: [],
@@ -57,6 +67,7 @@ export class KeywordIntelligenceService {
     private readonly buyerUserMapService: BuyerUserMapService,
     private readonly audiencePainPointService: AudiencePainPointService,
     private readonly audienceJtbdService: AudienceJtbdService,
+    private readonly audiencePrioritizationService: AudiencePrioritizationService,
     private readonly keywordSignalService: KeywordSignalService,
     private readonly keywordIntentService: KeywordIntentService,
     private readonly keywordClusterService: KeywordClusterService,
@@ -66,6 +77,7 @@ export class KeywordIntelligenceService {
     private readonly competitorFeatureComparisonService: CompetitorFeatureComparisonService,
     private readonly competitorKeywordGapService: CompetitorKeywordGapService,
     private readonly keywordLongTailService: KeywordLongTailService,
+    private readonly keywordAudienceMapService: KeywordAudienceMapService,
   ) {}
 
   /**
@@ -139,11 +151,64 @@ export class KeywordIntelligenceService {
     const clusters = this.keywordClusterService.cluster(signals, intents);
     const opportunities = this.keywordOpportunityService.score({ signals, intents, clusters });
 
+    return this.buildLongTailFromEvidence(product, productInput, websiteKnowledge, marketCategory, signals, intents, clusters, opportunities);
+  }
+
+  /**
+   * Sprint 11G: one shared own-evidence build, one Sprint 10 audience-chain
+   * build (including 10G prioritization, computed here since 11G needs it
+   * but 11A does not) — NEVER AudienceIntelligencePreviewService.buildForProduct(),
+   * which would redo the product lookup and website/category work. The 11A-11D
+   * keyword chain and 11F long-tail expansion (competitor gaps optional) reuse
+   * the same evidence, then 11G maps purely in memory.
+   */
+  async buildAudienceMapForProduct(organizationId: string, productId: string, userId: string): Promise<KeywordAudienceMapResult> {
+    const { product, productInput, websiteKnowledge, marketCategory } = await this.fetchOwnEvidence(organizationId, productId, userId);
+    const audienceChain = this.buildAudienceChainFromEvidence(productInput, websiteKnowledge, marketCategory);
+
+    const signals = this.keywordSignalService.extract({
+      product: productInput,
+      websiteKnowledge,
+      marketCategory,
+      audienceSignals: audienceChain.audienceSignals,
+      segments: audienceChain.segments,
+      painPoints: audienceChain.painPoints,
+      jtbd: audienceChain.jtbd,
+    });
+    const intents = this.keywordIntentService.classify(signals);
+    const clusters = this.keywordClusterService.cluster(signals, intents);
+    const opportunities = this.keywordOpportunityService.score({ signals, intents, clusters });
+    const longTail = await this.buildLongTailFromEvidence(product, productInput, websiteKnowledge, marketCategory, signals, intents, clusters, opportunities);
+
+    return this.keywordAudienceMapService.map({
+      signals,
+      intents,
+      opportunities,
+      longTail,
+      clusters,
+      audience: {
+        segments: audienceChain.segments,
+        icp: audienceChain.icp,
+        prioritization: audienceChain.prioritization,
+      },
+    });
+  }
+
+  private async buildLongTailFromEvidence(
+    product: Awaited<ReturnType<ProductsService['findOne']>>,
+    productInput: KeywordSignalProductInput,
+    websiteKnowledge: ProductWebsiteKnowledge | undefined,
+    marketCategory: MarketCategoryResult,
+    signals: KeywordSignalResult,
+    intents: KeywordIntentResult,
+    clusters: KeywordClusterResult,
+    opportunities: KeywordOpportunityResult,
+  ): Promise<KeywordLongTailResult> {
     let competitorGaps: CompetitorKeywordGapResult | undefined;
     try {
       competitorGaps = await this.buildCompetitorGapsFromEvidence(product, productInput, websiteKnowledge, marketCategory, signals, intents, clusters, opportunities);
     } catch {
-      competitorGaps = undefined; // research provider unavailable or competitor discovery failed — long-tail expansion still proceeds
+      competitorGaps = undefined; // research provider unavailable or competitor discovery failed — expansion still proceeds
     }
 
     return this.keywordLongTailService.expand({ signals, intents, clusters, opportunities, competitorGaps });
@@ -228,12 +293,7 @@ export class KeywordIntelligenceService {
     websiteKnowledge: ProductWebsiteKnowledge | undefined,
     marketCategory: MarketCategoryResult,
   ): KeywordSignalResult {
-    const audienceSignals = this.audienceSignalService.extract({ product: productInput, websiteKnowledge, marketCategory });
-    const segments = this.audienceSegmentService.construct(audienceSignals);
-    const icp = this.icpService.detect({ signals: audienceSignals, segments });
-    const buyerUserMap = this.buyerUserMapService.map({ signals: audienceSignals, segments, icp });
-    const painPoints = this.audiencePainPointService.identify({ signals: audienceSignals, segments, icp, buyerUserMap });
-    const jtbd = this.audienceJtbdService.generate({ signals: audienceSignals, segments, icp, buyerUserMap, painPoints });
+    const { audienceSignals, segments, painPoints, jtbd } = this.buildAudienceChainFromEvidence(productInput, websiteKnowledge, marketCategory);
 
     const extractionInput: KeywordSignalExtractionInput = {
       product: productInput,
@@ -245,5 +305,29 @@ export class KeywordIntelligenceService {
       jtbd,
     };
     return this.keywordSignalService.extract(extractionInput);
+  }
+
+  private buildAudienceChainFromEvidence(
+    productInput: KeywordSignalProductInput,
+    websiteKnowledge: ProductWebsiteKnowledge | undefined,
+    marketCategory: MarketCategoryResult,
+  ): {
+    audienceSignals: AudienceSignalResult;
+    segments: AudienceSegmentResult;
+    icp: IcpResult;
+    buyerUserMap: BuyerUserMapResult;
+    painPoints: AudiencePainPointResult;
+    jtbd: AudienceJtbdResult;
+    prioritization: AudiencePrioritizationResult;
+  } {
+    const audienceSignals = this.audienceSignalService.extract({ product: productInput, websiteKnowledge, marketCategory });
+    const segments = this.audienceSegmentService.construct(audienceSignals);
+    const icp = this.icpService.detect({ signals: audienceSignals, segments });
+    const buyerUserMap = this.buyerUserMapService.map({ signals: audienceSignals, segments, icp });
+    const painPoints = this.audiencePainPointService.identify({ signals: audienceSignals, segments, icp, buyerUserMap });
+    const jtbd = this.audienceJtbdService.generate({ signals: audienceSignals, segments, icp, buyerUserMap, painPoints });
+    const prioritization = this.audiencePrioritizationService.prioritize({ signals: audienceSignals, segments, icp, buyerUserMap, painPoints, jtbd });
+
+    return { audienceSignals, segments, icp, buyerUserMap, painPoints, jtbd, prioritization };
   }
 }

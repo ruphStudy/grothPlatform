@@ -4,6 +4,7 @@ import { MarketIntelligenceModule } from '../market-intelligence/market-intellig
 import { ProductsModule } from '../products/products.module';
 import { WebsiteIntelligenceModule } from '../website-intelligence/website-intelligence.module';
 import { CompetitorKeywordGapService } from './competitor-keyword-gap.service';
+import { KeywordAudienceMapService } from './keyword-audience-map.service';
 import { KeywordClusterService } from './keyword-cluster.service';
 import { KeywordIntelligenceController } from './keyword-intelligence.controller';
 import { KeywordIntelligenceService } from './keyword-intelligence.service';
@@ -22,6 +23,7 @@ import { KeywordSignalService } from './keyword-signal.service';
     KeywordOpportunityService,
     CompetitorKeywordGapService,
     KeywordLongTailService,
+    KeywordAudienceMapService,
     KeywordIntelligenceService,
   ],
   exports: [
@@ -31,6 +33,7 @@ import { KeywordSignalService } from './keyword-signal.service';
     KeywordOpportunityService,
     CompetitorKeywordGapService,
     KeywordLongTailService,
+    KeywordAudienceMapService,
     KeywordIntelligenceService,
   ],
 })
