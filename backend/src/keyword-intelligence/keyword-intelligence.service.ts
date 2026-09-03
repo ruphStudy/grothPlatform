@@ -18,11 +18,13 @@ import type { ProductWebsiteKnowledge } from '../website-intelligence/product-we
 import { CompetitorKeywordGapService } from './competitor-keyword-gap.service';
 import { KeywordClusterService } from './keyword-cluster.service';
 import { KeywordIntentService } from './keyword-intent.service';
+import { KeywordLongTailService } from './keyword-long-tail.service';
 import { KeywordOpportunityService } from './keyword-opportunity.service';
 import { KeywordSignalService } from './keyword-signal.service';
 import type { CompetitorKeywordGapResult } from './types/competitor-keyword-gap.types';
 import type { KeywordClusterResult } from './types/keyword-cluster.types';
 import type { KeywordIntentResult } from './types/keyword-intent.types';
+import type { KeywordLongTailResult } from './types/keyword-long-tail.types';
 import type { KeywordOpportunityResult } from './types/keyword-opportunity.types';
 import type { KeywordSignalExtractionInput, KeywordSignalProductInput, KeywordSignalResult } from './types/keyword-signal.types';
 
@@ -63,6 +65,7 @@ export class KeywordIntelligenceService {
     private readonly competitorWebsiteAnalysisService: CompetitorWebsiteAnalysisService,
     private readonly competitorFeatureComparisonService: CompetitorFeatureComparisonService,
     private readonly competitorKeywordGapService: CompetitorKeywordGapService,
+    private readonly keywordLongTailService: KeywordLongTailService,
   ) {}
 
   /**
@@ -114,12 +117,48 @@ export class KeywordIntelligenceService {
    */
   async buildCompetitorGapsForProduct(organizationId: string, productId: string, userId: string): Promise<CompetitorKeywordGapResult> {
     const { product, productInput, websiteKnowledge, marketCategory } = await this.fetchOwnEvidence(organizationId, productId, userId);
-
     const signals = this.buildSignalsFromEvidence(productInput, websiteKnowledge, marketCategory);
     const intents = this.keywordIntentService.classify(signals);
     const clusters = this.keywordClusterService.cluster(signals, intents);
     const opportunities = this.keywordOpportunityService.score({ signals, intents, clusters });
 
+    return this.buildCompetitorGapsFromEvidence(product, productInput, websiteKnowledge, marketCategory, signals, intents, clusters, opportunities);
+  }
+
+  /**
+   * Sprint 11F: same single own-evidence build + 11A-11D pass as above.
+   * Competitor gaps (11E) are optional — Tavily/the research provider may be
+   * unavailable, so any failure there is swallowed and expansion proceeds
+   * without competitor-gap-derived candidates rather than failing the whole
+   * request with a 503.
+   */
+  async buildLongTailForProduct(organizationId: string, productId: string, userId: string): Promise<KeywordLongTailResult> {
+    const { product, productInput, websiteKnowledge, marketCategory } = await this.fetchOwnEvidence(organizationId, productId, userId);
+    const signals = this.buildSignalsFromEvidence(productInput, websiteKnowledge, marketCategory);
+    const intents = this.keywordIntentService.classify(signals);
+    const clusters = this.keywordClusterService.cluster(signals, intents);
+    const opportunities = this.keywordOpportunityService.score({ signals, intents, clusters });
+
+    let competitorGaps: CompetitorKeywordGapResult | undefined;
+    try {
+      competitorGaps = await this.buildCompetitorGapsFromEvidence(product, productInput, websiteKnowledge, marketCategory, signals, intents, clusters, opportunities);
+    } catch {
+      competitorGaps = undefined; // research provider unavailable or competitor discovery failed — long-tail expansion still proceeds
+    }
+
+    return this.keywordLongTailService.expand({ signals, intents, clusters, opportunities, competitorGaps });
+  }
+
+  private async buildCompetitorGapsFromEvidence(
+    product: Awaited<ReturnType<ProductsService['findOne']>>,
+    productInput: KeywordSignalProductInput,
+    websiteKnowledge: ProductWebsiteKnowledge | undefined,
+    marketCategory: MarketCategoryResult,
+    signals: KeywordSignalResult,
+    intents: KeywordIntentResult,
+    clusters: KeywordClusterResult,
+    opportunities: KeywordOpportunityResult,
+  ): Promise<CompetitorKeywordGapResult> {
     const discovery = await this.competitorDiscoveryService.discover({
       productName: product.name,
       productWebsiteUrl: product.websiteUrl,

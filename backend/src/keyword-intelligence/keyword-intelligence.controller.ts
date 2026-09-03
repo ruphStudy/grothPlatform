@@ -51,4 +51,13 @@ export class KeywordIntelligenceController {
   ) {
     return this.keywordIntelligenceService.buildCompetitorGapsForProduct(organizationId, productId, req.user.userId);
   }
+
+  @Post('long-tail-preview')
+  longTailPreview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.keywordIntelligenceService.buildLongTailForProduct(organizationId, productId, req.user.userId);
+  }
 }

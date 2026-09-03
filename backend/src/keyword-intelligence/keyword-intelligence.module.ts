@@ -8,6 +8,7 @@ import { KeywordClusterService } from './keyword-cluster.service';
 import { KeywordIntelligenceController } from './keyword-intelligence.controller';
 import { KeywordIntelligenceService } from './keyword-intelligence.service';
 import { KeywordIntentService } from './keyword-intent.service';
+import { KeywordLongTailService } from './keyword-long-tail.service';
 import { KeywordOpportunityService } from './keyword-opportunity.service';
 import { KeywordSignalService } from './keyword-signal.service';
 
@@ -20,6 +21,7 @@ import { KeywordSignalService } from './keyword-signal.service';
     KeywordClusterService,
     KeywordOpportunityService,
     CompetitorKeywordGapService,
+    KeywordLongTailService,
     KeywordIntelligenceService,
   ],
   exports: [
@@ -28,6 +30,7 @@ import { KeywordSignalService } from './keyword-signal.service';
     KeywordClusterService,
     KeywordOpportunityService,
     CompetitorKeywordGapService,
+    KeywordLongTailService,
     KeywordIntelligenceService,
   ],
 })
