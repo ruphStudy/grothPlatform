@@ -3,6 +3,7 @@ import { AudienceIntelligenceModule } from '../audience-intelligence/audience-in
 import { MarketIntelligenceModule } from '../market-intelligence/market-intelligence.module';
 import { ProductsModule } from '../products/products.module';
 import { WebsiteIntelligenceModule } from '../website-intelligence/website-intelligence.module';
+import { CompetitorKeywordGapService } from './competitor-keyword-gap.service';
 import { KeywordClusterService } from './keyword-cluster.service';
 import { KeywordIntelligenceController } from './keyword-intelligence.controller';
 import { KeywordIntelligenceService } from './keyword-intelligence.service';
@@ -13,7 +14,21 @@ import { KeywordSignalService } from './keyword-signal.service';
 @Module({
   imports: [ProductsModule, WebsiteIntelligenceModule, MarketIntelligenceModule, AudienceIntelligenceModule],
   controllers: [KeywordIntelligenceController],
-  providers: [KeywordSignalService, KeywordIntentService, KeywordClusterService, KeywordOpportunityService, KeywordIntelligenceService],
-  exports: [KeywordSignalService, KeywordIntentService, KeywordClusterService, KeywordOpportunityService, KeywordIntelligenceService],
+  providers: [
+    KeywordSignalService,
+    KeywordIntentService,
+    KeywordClusterService,
+    KeywordOpportunityService,
+    CompetitorKeywordGapService,
+    KeywordIntelligenceService,
+  ],
+  exports: [
+    KeywordSignalService,
+    KeywordIntentService,
+    KeywordClusterService,
+    KeywordOpportunityService,
+    CompetitorKeywordGapService,
+    KeywordIntelligenceService,
+  ],
 })
 export class KeywordIntelligenceModule {}

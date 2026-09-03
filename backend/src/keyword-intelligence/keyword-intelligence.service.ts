@@ -5,18 +5,35 @@ import { AudienceSegmentService } from '../audience-intelligence/audience-segmen
 import { AudienceSignalService } from '../audience-intelligence/audience-signal.service';
 import { BuyerUserMapService } from '../audience-intelligence/buyer-user-map.service';
 import { IcpService } from '../audience-intelligence/icp.service';
+import { CompetitorDiscoveryService } from '../market-intelligence/competitor-discovery.service';
+import { CompetitorFeatureComparisonService } from '../market-intelligence/competitor-feature-comparison.service';
+import { CompetitorWebsiteAnalysisService } from '../market-intelligence/competitor-website-analysis.service';
 import { MarketCategoryService } from '../market-intelligence/market-category.service';
+import type { CompetitorWebsiteAnalysisBatchResult } from '../market-intelligence/types/competitor-analysis.types';
+import type { MarketCategoryResult } from '../market-intelligence/types/market-category.types';
 import { ProductsService } from '../products/products.service';
+import { extractSourceDomain } from '../research/research-url.util';
 import { ProductWebsiteKnowledgeService } from '../website-intelligence/product-website-knowledge.service';
 import type { ProductWebsiteKnowledge } from '../website-intelligence/product-website-knowledge.types';
+import { CompetitorKeywordGapService } from './competitor-keyword-gap.service';
 import { KeywordClusterService } from './keyword-cluster.service';
 import { KeywordIntentService } from './keyword-intent.service';
 import { KeywordOpportunityService } from './keyword-opportunity.service';
 import { KeywordSignalService } from './keyword-signal.service';
+import type { CompetitorKeywordGapResult } from './types/competitor-keyword-gap.types';
 import type { KeywordClusterResult } from './types/keyword-cluster.types';
 import type { KeywordIntentResult } from './types/keyword-intent.types';
 import type { KeywordOpportunityResult } from './types/keyword-opportunity.types';
-import type { KeywordSignalResult } from './types/keyword-signal.types';
+import type { KeywordSignalExtractionInput, KeywordSignalProductInput, KeywordSignalResult } from './types/keyword-signal.types';
+
+const EMPTY_ANALYSIS_BATCH: CompetitorWebsiteAnalysisBatchResult = {
+  competitors: [],
+  failures: [],
+  attemptedCount: 0,
+  analyzedCount: 0,
+  failedCount: 0,
+  analyzedAt: new Date(0),
+};
 
 /**
  * Single tenant-safe orchestration for keyword signal extraction. Runs one
@@ -42,6 +59,10 @@ export class KeywordIntelligenceService {
     private readonly keywordIntentService: KeywordIntentService,
     private readonly keywordClusterService: KeywordClusterService,
     private readonly keywordOpportunityService: KeywordOpportunityService,
+    private readonly competitorDiscoveryService: CompetitorDiscoveryService,
+    private readonly competitorWebsiteAnalysisService: CompetitorWebsiteAnalysisService,
+    private readonly competitorFeatureComparisonService: CompetitorFeatureComparisonService,
+    private readonly competitorKeywordGapService: CompetitorKeywordGapService,
   ) {}
 
   /**
@@ -78,6 +99,66 @@ export class KeywordIntelligenceService {
   }
 
   async buildForProduct(organizationId: string, productId: string, userId: string): Promise<KeywordSignalResult> {
+    const { productInput, websiteKnowledge, marketCategory } = await this.fetchOwnEvidence(organizationId, productId, userId);
+    return this.buildSignalsFromEvidence(productInput, websiteKnowledge, marketCategory);
+  }
+
+  /**
+   * Sprint 11E: one Product lookup, one own-website-knowledge build, one
+   * market-category computation — shared by BOTH the own keyword pipeline
+   * (11A-11D, entirely pure from here) AND competitor discovery/analysis
+   * (Sprint 9), so neither the product lookup nor the own website fetch runs
+   * twice. Competitor discovery (Tavily) and competitor website analysis are
+   * each invoked exactly once; feature comparison and 11E's own analyze()
+   * are pure.
+   */
+  async buildCompetitorGapsForProduct(organizationId: string, productId: string, userId: string): Promise<CompetitorKeywordGapResult> {
+    const { product, productInput, websiteKnowledge, marketCategory } = await this.fetchOwnEvidence(organizationId, productId, userId);
+
+    const signals = this.buildSignalsFromEvidence(productInput, websiteKnowledge, marketCategory);
+    const intents = this.keywordIntentService.classify(signals);
+    const clusters = this.keywordClusterService.cluster(signals, intents);
+    const opportunities = this.keywordOpportunityService.score({ signals, intents, clusters });
+
+    const discovery = await this.competitorDiscoveryService.discover({
+      productName: product.name,
+      productWebsiteUrl: product.websiteUrl,
+      marketCategory,
+    });
+
+    const ownDomain = product.websiteUrl ? extractSourceDomain(product.websiteUrl) : undefined;
+    const analysisBatch =
+      discovery.competitors.length > 0
+        ? await this.competitorWebsiteAnalysisService.analyzeCompetitors(discovery.competitors, { excludeDomain: ownDomain })
+        : EMPTY_ANALYSIS_BATCH;
+
+    const productFeatures = websiteKnowledge?.features.length ? websiteKnowledge.features : productInput.shortDescription ? [productInput.shortDescription] : [];
+    const featureComparison = this.competitorFeatureComparisonService.compare({
+      productFeatures,
+      competitors: analysisBatch.competitors.map((c) => ({ name: c.name, domain: c.domain, confidenceScore: c.confidenceScore, features: c.features })),
+      marketCategory: marketCategory.primaryCategory,
+    });
+
+    return this.competitorKeywordGapService.analyze({
+      ownSignals: signals,
+      ownIntents: intents,
+      ownClusters: clusters,
+      ownOpportunities: opportunities,
+      competitorAnalysis: analysisBatch,
+      featureComparison,
+    });
+  }
+
+  private async fetchOwnEvidence(
+    organizationId: string,
+    productId: string,
+    userId: string,
+  ): Promise<{
+    product: Awaited<ReturnType<ProductsService['findOne']>>;
+    productInput: KeywordSignalProductInput;
+    websiteKnowledge?: ProductWebsiteKnowledge;
+    marketCategory: MarketCategoryResult;
+  }> {
     const product = await this.productsService.findOne(organizationId, productId, userId);
 
     let websiteKnowledge: ProductWebsiteKnowledge | undefined;
@@ -90,7 +171,7 @@ export class KeywordIntelligenceService {
       }
     }
 
-    const productInput = {
+    const productInput: KeywordSignalProductInput = {
       name: product.name,
       shortDescription: product.shortDescription,
       productType: product.productType,
@@ -99,6 +180,15 @@ export class KeywordIntelligenceService {
     };
 
     const marketCategory = this.marketCategoryService.discoverCategory({ product: productInput, websiteKnowledge });
+
+    return { product, productInput, websiteKnowledge, marketCategory };
+  }
+
+  private buildSignalsFromEvidence(
+    productInput: KeywordSignalProductInput,
+    websiteKnowledge: ProductWebsiteKnowledge | undefined,
+    marketCategory: MarketCategoryResult,
+  ): KeywordSignalResult {
     const audienceSignals = this.audienceSignalService.extract({ product: productInput, websiteKnowledge, marketCategory });
     const segments = this.audienceSegmentService.construct(audienceSignals);
     const icp = this.icpService.detect({ signals: audienceSignals, segments });
@@ -106,7 +196,7 @@ export class KeywordIntelligenceService {
     const painPoints = this.audiencePainPointService.identify({ signals: audienceSignals, segments, icp, buyerUserMap });
     const jtbd = this.audienceJtbdService.generate({ signals: audienceSignals, segments, icp, buyerUserMap, painPoints });
 
-    return this.keywordSignalService.extract({
+    const extractionInput: KeywordSignalExtractionInput = {
       product: productInput,
       websiteKnowledge,
       marketCategory,
@@ -114,6 +204,7 @@ export class KeywordIntelligenceService {
       segments,
       painPoints,
       jtbd,
-    });
+    };
+    return this.keywordSignalService.extract(extractionInput);
   }
 }
