@@ -85,7 +85,7 @@ export class AudiencePrioritizationService {
     const icpBySegmentId = new Map(icp.candidates.map((c) => [c.segmentId, c]));
     const entityBySegmentId = new Map(buyerUserMap.entities.map((e) => [e.segmentId, e]));
 
-    const priorities = segments.segments
+    const rawPriorities = segments.segments
       .map((segment) =>
         this.buildPriority(
           segment,
@@ -98,14 +98,26 @@ export class AudiencePrioritizationService {
       .sort((a, b) => b.priorityScore - a.priorityScore || b.confidenceScore - a.confidenceScore)
       .slice(0, this.getMaxSegments());
 
-    const primaryCandidates = priorities.filter((p) => p.tier === 'primary');
+    // Select the single primary winner from segments that qualified for the
+    // 'primary' tier (scoring/thresholds untouched above this point).
+    const primaryCandidates = rawPriorities.filter((p) => p.tier === 'primary');
     const primary = primaryCandidates.sort(
       (a, b) => b.priorityScore - a.priorityScore || b.confidenceScore - a.confidenceScore || (b.icpFitScore ?? 0) - (a.icpFitScore ?? 0) || a.segmentId.localeCompare(b.segmentId),
     )[0];
     const primarySegmentId = primary?.segmentId;
 
+    // Normalize: only the chosen winner keeps tier 'primary'. Any other
+    // segment that independently qualified as 'primary' is downgraded to
+    // 'secondary' so a segment's own tier field never disagrees with which
+    // bucket (primarySegmentId / secondarySegmentIds) it actually lands in.
+    // This is response-shape cleanup only — priorityScore/confidenceScore
+    // are copied through unchanged.
+    const priorities = rawPriorities.map((p) =>
+      p.tier === 'primary' && p.segmentId !== primarySegmentId ? { ...p, tier: 'secondary' as const } : p,
+    );
+
     const secondarySegmentIds = priorities
-      .filter((p) => p.segmentId !== primarySegmentId && (p.tier === 'secondary' || p.tier === 'primary'))
+      .filter((p) => p.tier === 'secondary')
       .sort((a, b) => b.priorityScore - a.priorityScore)
       .map((p) => p.segmentId);
 
