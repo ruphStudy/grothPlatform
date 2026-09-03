@@ -1,5 +1,6 @@
 import { Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CompetitiveIntelligenceService } from './competitive-intelligence.service';
 import { CompetitorDiscoveryService } from './competitor-discovery.service';
 import { CompetitorFeatureComparisonService } from './competitor-feature-comparison.service';
 import { CompetitorPositioningService } from './competitor-positioning.service';
@@ -17,6 +18,7 @@ export class MarketCategoryController {
     private readonly competitorFeatureComparisonService: CompetitorFeatureComparisonService,
     private readonly competitorPositioningService: CompetitorPositioningService,
     private readonly marketGapService: MarketGapService,
+    private readonly competitiveIntelligenceService: CompetitiveIntelligenceService,
   ) {}
 
   @Post('category-preview')
@@ -71,5 +73,14 @@ export class MarketCategoryController {
     @Param('productId') productId: string,
   ) {
     return this.marketGapService.analyzeForProduct(organizationId, productId, req.user.userId);
+  }
+
+  @Post('competitive-intelligence-preview')
+  competitiveIntelligencePreview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.competitiveIntelligenceService.buildForProduct(organizationId, productId, req.user.userId);
   }
 }

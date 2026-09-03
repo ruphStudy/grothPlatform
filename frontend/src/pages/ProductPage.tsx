@@ -7,12 +7,39 @@ import { Card } from '../components/Card';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { Loading } from '../components/Loading';
 import { PageHeader } from '../components/PageHeader';
-import type { Product, ProductIntelligenceProfile, ProductWebsiteKnowledgePreview, WebsitePreview } from '../types';
+import type {
+  CompetitiveIntelligencePreview,
+  Product,
+  ProductIntelligenceProfile,
+  ProductWebsiteKnowledgePreview,
+  WebsitePreview,
+} from '../types';
 
 function qualityBadgeClass(quality: 'high' | 'medium' | 'low'): string {
   if (quality === 'high') return 'quality-good';
   if (quality === 'medium') return 'quality-limited';
   return 'quality-empty';
+}
+
+function scoreQuality(score: number): 'high' | 'medium' | 'low' {
+  if (score >= 80) return 'high';
+  if (score >= 50) return 'medium';
+  return 'low';
+}
+
+function ConfidenceBar({ label, score }: { label: string; score: number }) {
+  return (
+    <div className="confidence-row">
+      <span className="summary-label" style={{ minWidth: 140, marginBottom: 0 }}>
+        {label}
+      </span>
+      <div className="confidence-track">
+        <div className="confidence-fill" style={{ width: `${score}%` }} />
+      </div>
+      <span className="confidence-value">{score}</span>
+      <span className={`quality-badge ${qualityBadgeClass(scoreQuality(score))}`}>{scoreQuality(score)}</span>
+    </div>
+  );
 }
 
 const COVERAGE_LABELS: { key: keyof ProductWebsiteKnowledgePreview['assessment']['coverage']; label: string }[] = [
@@ -37,6 +64,9 @@ export default function ProductPage() {
   const [productKnowledge, setProductKnowledge] = useState<ProductWebsiteKnowledgePreview | null>(null);
   const [buildingKnowledge, setBuildingKnowledge] = useState(false);
   const [knowledgeError, setKnowledgeError] = useState<string | null>(null);
+  const [competitiveIntelligence, setCompetitiveIntelligence] = useState<CompetitiveIntelligencePreview | null>(null);
+  const [buildingCI, setBuildingCI] = useState(false);
+  const [ciError, setCiError] = useState<string | null>(null);
 
   async function loadData() {
     if (!organizationId || !productId) return;
@@ -115,6 +145,22 @@ export default function ProductPage() {
       setKnowledgeError(err instanceof ApiError ? err.message : 'Building product knowledge failed');
     } finally {
       setBuildingKnowledge(false);
+    }
+  }
+
+  async function handleBuildCompetitiveIntelligence() {
+    setCiError(null);
+    setBuildingCI(true);
+    try {
+      const data = await apiRequest<CompetitiveIntelligencePreview>(
+        `/organizations/${organizationId}/products/${productId}/market/competitive-intelligence-preview`,
+        { method: 'POST' },
+      );
+      setCompetitiveIntelligence(data);
+    } catch (err) {
+      setCiError(err instanceof ApiError ? err.message : 'Building competitive intelligence failed');
+    } finally {
+      setBuildingCI(false);
     }
   }
 
@@ -580,6 +626,438 @@ export default function ProductPage() {
                 Length: {productKnowledge.combinedTextLength} chars
                 {productKnowledge.combinedTextTruncated ? ' (truncated)' : ''}
               </p>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      <Card className="analysis-card">
+        <div className="analysis-header">
+          <div>
+            <h2 className="card-title">Competitive Intelligence</h2>
+            <p className="card-subtitle">
+              Discover market category, analyze competitor websites, and compare features and positioning.
+            </p>
+          </div>
+          {product?.websiteUrl && (
+            <button
+              type="button"
+              onClick={handleBuildCompetitiveIntelligence}
+              className="btn btn-primary"
+              disabled={buildingCI}
+            >
+              {buildingCI
+                ? 'Building competitive intelligence...'
+                : competitiveIntelligence
+                  ? 'Rebuild Competitive Intelligence'
+                  : 'Build Competitive Intelligence'}
+            </button>
+          )}
+        </div>
+
+        {!product?.websiteUrl && (
+          <p className="muted" style={{ marginTop: 10 }}>
+            Add a website URL to enable Competitive Intelligence.
+          </p>
+        )}
+
+        <ErrorMessage message={ciError} />
+        {buildingCI && (
+          <div className="analyzing-state">
+            <span className="spinner" /> Building competitive intelligence...
+            <p className="muted" style={{ marginTop: 4 }}>
+              This may analyze multiple competitor websites and can take a while.
+            </p>
+          </div>
+        )}
+        {!buildingCI && !competitiveIntelligence && !ciError && product?.websiteUrl && (
+          <p className="muted" style={{ marginTop: 10 }}>
+            Uses external market research when a research provider is configured.
+          </p>
+        )}
+
+        {competitiveIntelligence && (
+          <div style={{ marginTop: 16 }}>
+            {competitiveIntelligence.warnings.length > 0 && (
+              <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {competitiveIntelligence.warnings.map((warning, i) => (
+                  <div key={i} className="content-warning">
+                    {warning}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Market Category */}
+            <Card className="profile-section confidence-card">
+              <h3 className="section-title">Market Category</h3>
+              <p>
+                <strong>{competitiveIntelligence.marketCategory.primaryCategory || 'Not determined'}</strong>
+              </p>
+              <div style={{ marginTop: 10 }}>
+                <ConfidenceBar label="Category Confidence" score={competitiveIntelligence.marketCategory.confidenceScore} />
+              </div>
+              {competitiveIntelligence.marketCategory.subcategories.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <span className="summary-label">Subcategories</span>
+                  <div className="tag-list">
+                    {competitiveIntelligence.marketCategory.subcategories.map((s, i) => (
+                      <span key={i} className="tag">{s}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {competitiveIntelligence.marketCategory.descriptors.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <span className="summary-label">Descriptors</span>
+                  <div className="tag-list">
+                    {competitiveIntelligence.marketCategory.descriptors.map((d, i) => (
+                      <span key={i} className="tag">{d}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {competitiveIntelligence.marketCategory.categoryTerms.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <span className="summary-label">Category Terms</span>
+                  <div className="tag-list">
+                    {competitiveIntelligence.marketCategory.categoryTerms.map((t, i) => (
+                      <span key={i} className="tag">{t}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            {/* Competitors */}
+            <div style={{ marginTop: 20 }}>
+              <h3 className="section-title">Competitors</h3>
+              <div className="profile-meta">
+                <span>Discovered: <strong>{competitiveIntelligence.stats.discoveredCompetitors}</strong></span>
+                <span>Analyzed: <strong>{competitiveIntelligence.stats.analyzedCompetitors}</strong></span>
+                <span>Failed: <strong>{competitiveIntelligence.stats.failedCompetitorAnalyses}</strong></span>
+              </div>
+
+              {competitiveIntelligence.competitorAnalysis.competitors.length === 0 ? (
+                <p className="muted" style={{ marginTop: 10 }}>
+                  No reliable competitor candidates were identified from the current market evidence.
+                </p>
+              ) : (
+                <div className="grid-cards" style={{ marginTop: 12 }}>
+                  {competitiveIntelligence.competitorAnalysis.competitors.map((c, i) => (
+                    <Card key={i} className="entity-card">
+                      <div className="entity-card-header">
+                        <h4 style={{ margin: 0 }}>{c.name}</h4>
+                        <span className={`quality-badge ${qualityBadgeClass(c.quality)}`}>{c.quality}</span>
+                      </div>
+                      <p className="entity-card-meta">{c.domain}</p>
+                      <p className="muted" style={{ margin: 0 }}>{c.title || 'No title found'}</p>
+                      <div className="profile-meta">
+                        <span>Relevance: <strong>{c.relevanceScore}</strong></span>
+                        <span>Confidence: <strong>{c.confidenceScore}</strong></span>
+                        <span>Features: <strong>{c.features.length}</strong></span>
+                        <span>Pricing signals: <strong>{c.pricingSignals.length}</strong></span>
+                      </div>
+
+                      <details style={{ marginTop: 8 }}>
+                        <summary className="summary-label" style={{ cursor: 'pointer' }}>
+                          Details
+                        </summary>
+                        <div style={{ marginTop: 8 }}>
+                          {c.keyStatements.length > 0 && (
+                            <>
+                              <span className="summary-label">Identity Statements</span>
+                              <ul className="bullet-list">
+                                {c.keyStatements.slice(0, 5).map((s, j) => (
+                                  <li key={j}>{s}</li>
+                                ))}
+                              </ul>
+                            </>
+                          )}
+                          {c.features.length > 0 && (
+                            <>
+                              <span className="summary-label" style={{ marginTop: 8 }}>Top Features</span>
+                              <ul className="bullet-list">
+                                {c.features.slice(0, 10).map((f, j) => (
+                                  <li key={j}>{f}</li>
+                                ))}
+                              </ul>
+                            </>
+                          )}
+                          {c.pricingSignals.length > 0 && (
+                            <>
+                              <span className="summary-label" style={{ marginTop: 8 }}>Pricing Signals</span>
+                              <div className="tag-list">
+                                {c.pricingSignals.map((p, j) => (
+                                  <span key={j} className="tag">{p}</span>
+                                ))}
+                              </div>
+                            </>
+                          )}
+                          <p className="muted" style={{ marginTop: 8 }}>Source pages: {c.pagesAnalyzed.length}</p>
+                          {c.missingInformation.length > 0 && (
+                            <>
+                              <span className="summary-label" style={{ marginTop: 8 }}>Missing Information</span>
+                              <ul className="bullet-list">
+                                {c.missingInformation.map((m, j) => (
+                                  <li key={j}>{m}</li>
+                                ))}
+                              </ul>
+                            </>
+                          )}
+                          {c.warnings.map((w, j) => (
+                            <div key={j} className="content-warning" style={{ marginTop: 8 }}>{w}</div>
+                          ))}
+                        </div>
+                      </details>
+                    </Card>
+                  ))}
+                </div>
+              )}
+
+              {competitiveIntelligence.competitorAnalysis.failures.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <div className="content-warning">
+                    Some competitor websites could not be analyzed:
+                    <ul className="bullet-list" style={{ marginTop: 6 }}>
+                      {competitiveIntelligence.competitorAnalysis.failures.map((f, i) => (
+                        <li key={i}><strong>{f.name}</strong> ({f.domain}): {f.reason}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Feature Comparison */}
+            <div style={{ marginTop: 20 }}>
+              <h3 className="section-title">Feature Comparison</h3>
+              <ConfidenceBar label="Comparison Confidence" score={competitiveIntelligence.featureComparison.confidenceScore} />
+
+              {competitiveIntelligence.featureComparison.competitors.length > 0 && (
+                <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {competitiveIntelligence.featureComparison.competitors.map((fc, i) => (
+                    <div key={i} className="audience-card">
+                      <h4>{fc.competitorName}</h4>
+                      <p className="audience-meta">
+                        Similarity: <strong>{fc.similarityScore}</strong> · Shared: <strong>{fc.sharedCapabilities.length}</strong> · Competitor-only: <strong>{fc.competitorOnlyCapabilities.length}</strong> · Product-only: <strong>{fc.productOnlyCapabilities.length}</strong>
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ marginTop: 16 }}>
+                <span className="summary-label">Common Capabilities</span>
+                {competitiveIntelligence.featureComparison.commonCapabilities.length > 0 ? (
+                  <ul className="bullet-list">
+                    {competitiveIntelligence.featureComparison.commonCapabilities.slice(0, 15).map((c, i) => (
+                      <li key={i}>{c}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="muted">None detected.</p>
+                )}
+              </div>
+
+              <div style={{ marginTop: 16 }}>
+                <span className="summary-label">Potential Differentiators</span>
+                {competitiveIntelligence.featureComparison.productDifferentiators.length > 0 ? (
+                  <ul className="bullet-list">
+                    {competitiveIntelligence.featureComparison.productDifferentiators.slice(0, 15).map((d, i) => (
+                      <li key={i}>{d}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="muted">None detected.</p>
+                )}
+              </div>
+
+              <div style={{ marginTop: 16 }}>
+                <span className="summary-label">Possible Feature Gaps</span>
+                <p className="muted" style={{ marginTop: 2 }}>
+                  Not detected in current product evidence; validate before treating as a real gap.
+                </p>
+                {competitiveIntelligence.featureComparison.possibleFeatureGaps.length > 0 ? (
+                  <ul className="bullet-list">
+                    {competitiveIntelligence.featureComparison.possibleFeatureGaps.slice(0, 12).map((g, i) => (
+                      <li key={i}>
+                        <strong>{g.capability}</strong> — seen at {g.competitorCount} competitor(s) ({g.competitors.join(', ')}), importance {g.importanceScore}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="muted">None detected.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Positioning */}
+            <div style={{ marginTop: 20 }}>
+              <h3 className="section-title">Competitive Positioning</h3>
+              <ConfidenceBar label="Positioning Confidence" score={competitiveIntelligence.positioning.confidenceScore} />
+
+              <div style={{ marginTop: 12 }}>
+                <span className="summary-label">Product Value Themes</span>
+                <div className="tag-list">
+                  {competitiveIntelligence.positioning.productPositioning.valueThemes.length > 0 ? (
+                    competitiveIntelligence.positioning.productPositioning.valueThemes.map((t, i) => (
+                      <span key={i} className="tag">{t}</span>
+                    ))
+                  ) : (
+                    <p className="muted">None detected.</p>
+                  )}
+                </div>
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <span className="summary-label">Product Audience Signals</span>
+                <div className="tag-list">
+                  {competitiveIntelligence.positioning.productPositioning.audienceSignals.map((a, i) => (
+                    <span key={i} className="tag">{a}</span>
+                  ))}
+                </div>
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <span className="summary-label">Product Pricing Position</span>
+                <div className="tag-list">
+                  {competitiveIntelligence.positioning.productPositioning.pricingPosition.map((p, i) => (
+                    <span key={i} className="tag">{p}</span>
+                  ))}
+                </div>
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <span className="summary-label">Product CTA Themes</span>
+                <div className="tag-list">
+                  {competitiveIntelligence.positioning.productPositioning.ctaThemes.map((c, i) => (
+                    <span key={i} className="tag">{c}</span>
+                  ))}
+                </div>
+              </div>
+
+              {competitiveIntelligence.positioning.competitorPositioning.length > 0 && (
+                <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <span className="summary-label">Competitor Positioning</span>
+                  {competitiveIntelligence.positioning.competitorPositioning.map((cp, i) => (
+                    <div key={i} className="audience-card">
+                      <h4>{cp.competitorName}</h4>
+                      <p className="audience-meta">
+                        <strong>Themes:</strong> {cp.valueThemes.join(', ') || '-'}
+                      </p>
+                      <p className="audience-meta">
+                        <strong>Audience:</strong> {cp.audienceSignals.join(', ') || '-'}
+                      </p>
+                      <p className="audience-meta">
+                        <strong>Pricing:</strong> {cp.pricingPosition.join(', ') || '-'} · <strong>CTAs:</strong> {cp.ctaThemes.join(', ') || '-'}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ marginTop: 16 }}>
+                <span className="summary-label">Common Positioning Themes</span>
+                <p className="muted" style={{ marginTop: 2 }}>Observations of market-standard messaging, not recommendations.</p>
+                <div className="tag-list">
+                  {competitiveIntelligence.positioning.commonPositioningThemes.length > 0 ? (
+                    competitiveIntelligence.positioning.commonPositioningThemes.map((t, i) => (
+                      <span key={i} className="tag">{t}</span>
+                    ))
+                  ) : (
+                    <p className="muted">None detected.</p>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ marginTop: 16 }}>
+                <span className="summary-label">Potential Positioning Opportunities</span>
+                {competitiveIntelligence.positioning.opportunities.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
+                    {competitiveIntelligence.positioning.opportunities.slice(0, 10).map((o, i) => (
+                      <div key={i} className="audience-card">
+                        <h4>{o.theme}</h4>
+                        <p className="audience-meta">{o.reason}</p>
+                        <p className="audience-meta">
+                          Supporting competitors: {o.supportingCompetitors.join(', ') || 'none'} · Confidence: {o.confidenceScore}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="muted">None detected.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Market Gaps */}
+            <div style={{ marginTop: 20 }}>
+              <h3 className="section-title">Market Opportunities</h3>
+              <ConfidenceBar label="Market-Gap Confidence" score={competitiveIntelligence.marketGaps.confidenceScore} />
+
+              {competitiveIntelligence.marketGaps.strongestOpportunities.length > 0 ? (
+                <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {competitiveIntelligence.marketGaps.strongestOpportunities.map((o, i) => (
+                    <Card key={i} className="entity-card">
+                      <div className="entity-card-header">
+                        <h4 style={{ margin: 0 }}>{o.title}</h4>
+                        <span className="tag">{o.category}</span>
+                      </div>
+                      <p className="entity-card-meta">{o.opportunityType.replace(/_/g, ' ')}</p>
+                      <p>{o.description}</p>
+                      <div className="profile-meta">
+                        <span>Priority: <strong>{o.priorityScore}</strong></span>
+                        <span>Confidence: <strong>{o.confidenceScore}</strong></span>
+                      </div>
+                      <div className="content-warning" style={{ marginTop: 8 }}>{o.caution}</div>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted" style={{ marginTop: 10 }}>No strong opportunities identified yet.</p>
+              )}
+
+              {competitiveIntelligence.marketGaps.opportunities.length > competitiveIntelligence.marketGaps.strongestOpportunities.length && (
+                <details style={{ marginTop: 12 }}>
+                  <summary className="summary-label" style={{ cursor: 'pointer' }}>
+                    Show all opportunities ({competitiveIntelligence.marketGaps.opportunities.length})
+                  </summary>
+                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {competitiveIntelligence.marketGaps.opportunities.map((o, i) => (
+                      <div key={i} className="audience-card">
+                        <h4>{o.title}</h4>
+                        <p className="audience-meta">{o.description}</p>
+                        <p className="audience-meta">Priority: {o.priorityScore} · Confidence: {o.confidenceScore}</p>
+                        <div className="content-warning" style={{ marginTop: 6 }}>{o.caution}</div>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+
+              <div style={{ marginTop: 16 }}>
+                <span className="summary-label">Common Market Patterns</span>
+                <p className="muted" style={{ marginTop: 2 }}>Observations, not recommended actions.</p>
+                {competitiveIntelligence.marketGaps.commonMarketPatterns.length > 0 ? (
+                  <ul className="bullet-list">
+                    {competitiveIntelligence.marketGaps.commonMarketPatterns.map((p, i) => (
+                      <li key={i}>
+                        {p.competitorCount}/{p.totalCompetitors} competitors — <strong>{p.label}</strong> ({p.prevalencePercent}%): {p.interpretation}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="muted">None detected.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Stats */}
+            <div className="profile-meta" style={{ marginTop: 20 }}>
+              <span>Discovered: <strong>{competitiveIntelligence.stats.discoveredCompetitors}</strong></span>
+              <span>Analyzed: <strong>{competitiveIntelligence.stats.analyzedCompetitors}</strong></span>
+              <span>Failed: <strong>{competitiveIntelligence.stats.failedCompetitorAnalyses}</strong></span>
+              <span>Product features compared: <strong>{competitiveIntelligence.stats.productFeatureCount}</strong></span>
+              <span>Total opportunities: <strong>{competitiveIntelligence.stats.totalOpportunities}</strong></span>
+              <span>Generated: <strong>{new Date(competitiveIntelligence.generatedAt).toLocaleString()}</strong></span>
             </div>
           </div>
         )}

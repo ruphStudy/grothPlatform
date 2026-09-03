@@ -153,6 +153,202 @@ export interface ProductWebsiteKnowledgePreview {
   combinedTextTruncated: boolean;
 }
 
+// --- Sprint 9: Competitive Intelligence ---
+
+export interface MarketCategoryResult {
+  primaryCategory?: string;
+  subcategories: string[];
+  categoryTerms: string[];
+  descriptors: string[];
+  confidenceScore: number;
+  evidence: { productMetadata: string[]; websiteKnowledge: string[] };
+  missingSignals: string[];
+  warnings: string[];
+}
+
+export interface CompetitorWebsiteAnalysis {
+  name: string;
+  url: string;
+  domain: string;
+  relevanceScore: number;
+  reasons: string[];
+  sourceQueries: string[];
+  finalUrl?: string;
+  confidenceScore: number;
+  quality: 'high' | 'medium' | 'low';
+  title?: string;
+  metaDescription?: string;
+  keyStatements: string[];
+  features: string[];
+  pricingSignals: string[];
+  faqs: ProductKnowledgeFaqItem[];
+  documentation: { topics: string[]; technicalFacts: string[] };
+  callsToAction: string[];
+  pagesAnalyzed: ProductKnowledgePageRef[];
+  missingInformation: string[];
+  warnings: string[];
+  failures: ProductKnowledgeFailure[];
+  analyzedAt: string;
+}
+
+export interface CompetitorAnalysisFailure {
+  name: string;
+  domain: string;
+  url: string;
+  reason: string;
+}
+
+export interface SharedCapability {
+  productFeature: string;
+  competitorFeature: string;
+  similarityScore: number;
+}
+
+export interface CompetitorFeatureComparison {
+  competitorName: string;
+  competitorDomain: string;
+  competitorConfidenceScore: number;
+  sharedCapabilities: SharedCapability[];
+  competitorOnlyCapabilities: string[];
+  productOnlyCapabilities: string[];
+  similarityScore: number;
+}
+
+export interface PossibleFeatureGap {
+  capability: string;
+  competitorCount: number;
+  competitors: string[];
+  importanceScore: number;
+}
+
+export interface CompetitorFeatureComparisonResult {
+  marketCategory?: string;
+  productFeatures: string[];
+  competitors: CompetitorFeatureComparison[];
+  commonCapabilities: string[];
+  productDifferentiators: string[];
+  possibleFeatureGaps: PossibleFeatureGap[];
+  confidenceScore: number;
+  warnings: string[];
+  stats: { discoveredCompetitors: number; analyzedCompetitors: number; competitorsUsed: number; productFeatureCount: number };
+  comparedAt: string;
+}
+
+export interface ProductPositioningProfile {
+  positioningStatements: string[];
+  valueThemes: string[];
+  audienceSignals: string[];
+  pricingPosition: string[];
+  ctaThemes: string[];
+}
+
+export interface CompetitorPositioningProfile extends ProductPositioningProfile {
+  competitorName: string;
+  competitorDomain: string;
+  confidenceScore: number;
+}
+
+export interface PositioningOverlap {
+  theme: string;
+  productEvidence: string[];
+  competitorCount: number;
+  competitors: string[];
+}
+
+export interface PositioningOpportunity {
+  theme: string;
+  reason: string;
+  supportingCompetitors: string[];
+  confidenceScore: number;
+}
+
+export interface CompetitorPositioningAnalysisResult {
+  marketCategory?: string;
+  productPositioning: ProductPositioningProfile;
+  competitorPositioning: CompetitorPositioningProfile[];
+  commonPositioningThemes: string[];
+  overlap: PositioningOverlap[];
+  opportunities: PositioningOpportunity[];
+  confidenceScore: number;
+  warnings: string[];
+  stats: { discoveredCompetitors: number; analyzedCompetitors: number; competitorsUsed: number; positioningThemesDetected: number };
+  analyzedAt: string;
+}
+
+export type MarketGapCategory = 'capability' | 'positioning' | 'audience' | 'pricing' | 'go-to-market' | 'differentiation';
+
+export type MarketGapOpportunityType =
+  | 'possible_product_gap'
+  | 'differentiation_opportunity'
+  | 'positioning_gap'
+  | 'audience_opportunity'
+  | 'pricing_opportunity'
+  | 'go_to_market_opportunity';
+
+export interface MarketGapEvidence {
+  type: string;
+  description: string;
+  competitors: string[];
+  supportingCount: number;
+}
+
+export interface MarketGapOpportunity {
+  id: string;
+  category: MarketGapCategory;
+  title: string;
+  description: string;
+  opportunityType: MarketGapOpportunityType;
+  priorityScore: number;
+  confidenceScore: number;
+  evidence: MarketGapEvidence[];
+  caution: string;
+}
+
+export interface CommonMarketPattern {
+  category: MarketGapCategory;
+  label: string;
+  competitorCount: number;
+  totalCompetitors: number;
+  prevalencePercent: number;
+  interpretation: string;
+}
+
+export interface MarketGapAnalysisResult {
+  marketCategory?: string;
+  opportunities: MarketGapOpportunity[];
+  strongestOpportunities: MarketGapOpportunity[];
+  commonMarketPatterns: CommonMarketPattern[];
+  confidenceScore: number;
+  warnings: string[];
+  stats: {
+    discoveredCompetitors: number;
+    analyzedCompetitors: number;
+    competitorsUsed: number;
+    featureGapCount: number;
+    positioningOpportunityCount: number;
+    totalOpportunities: number;
+  };
+  analyzedAt: string;
+}
+
+export interface CompetitiveIntelligencePreview {
+  marketCategory: MarketCategoryResult;
+  discovery: { discoveredCompetitors: number; warnings: string[] };
+  competitorAnalysis: { competitors: CompetitorWebsiteAnalysis[]; failures: CompetitorAnalysisFailure[] };
+  featureComparison: CompetitorFeatureComparisonResult;
+  positioning: CompetitorPositioningAnalysisResult;
+  marketGaps: MarketGapAnalysisResult;
+  stats: {
+    discoveredCompetitors: number;
+    analyzedCompetitors: number;
+    failedCompetitorAnalyses: number;
+    productFeatureCount: number;
+    totalOpportunities: number;
+  };
+  warnings: string[];
+  generatedAt: string;
+}
+
 export interface ProductIntelligenceProfile {
   id: string;
   organizationId: string;
