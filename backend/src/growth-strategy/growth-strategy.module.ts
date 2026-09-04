@@ -4,6 +4,7 @@ import { KeywordIntelligenceModule } from '../keyword-intelligence/keyword-intel
 import { MarketIntelligenceModule } from '../market-intelligence/market-intelligence.module';
 import { ProductsModule } from '../products/products.module';
 import { WebsiteIntelligenceModule } from '../website-intelligence/website-intelligence.module';
+import { AcquisitionStrategyService } from './acquisition-strategy.service';
 import { ContentStrategyService } from './content-strategy.service';
 import { FunnelStrategyService } from './funnel-strategy.service';
 import { GrowthChannelFitService } from './growth-channel-fit.service';
@@ -25,6 +26,7 @@ import { StrategySignalService } from './strategy-signal.service';
     FunnelStrategyService,
     MessagingStrategyService,
     ContentStrategyService,
+    AcquisitionStrategyService,
     GrowthStrategyService,
   ],
   exports: [
@@ -35,6 +37,7 @@ import { StrategySignalService } from './strategy-signal.service';
     FunnelStrategyService,
     MessagingStrategyService,
     ContentStrategyService,
+    AcquisitionStrategyService,
     GrowthStrategyService,
   ],
 })

@@ -2473,6 +2473,135 @@ export default function ProductPage() {
                 );
               })()}
 
+              {/* Acquisition Strategy */}
+              {(() => {
+                const acq = gs.acquisitionStrategy;
+                const primaryMotion = acq.primaryMotionId ? acq.motions.find((m) => m.id === acq.primaryMotionId) : undefined;
+                const primaryPath = acq.primaryPathId ? acq.paths.find((p) => p.id === acq.primaryPathId) : undefined;
+                const topPaths = acq.paths.slice(0, 6);
+                const remainingPaths = acq.paths.slice(6);
+                const acquisitionNotes = Array.from(new Set([...acq.missingEvidence, ...acq.warnings]));
+
+                return (
+                  <div style={{ marginTop: 24 }}>
+                    <h3 className="section-title">Acquisition Strategy</h3>
+                    <div className="content-warning">
+                      Acquisition recommendations are strategy heuristics and do not predict CAC, ROAS, traffic, lead volume, conversion rate, or revenue.
+                    </div>
+
+                    {/* A. Acquisition Overview */}
+                    <Card className="profile-section confidence-card">
+                      <ConfidenceBar label="Acquisition Confidence" score={acq.confidenceScore} />
+                      <div className="summary-grid" style={{ marginTop: 14 }}>
+                        <div>
+                          <span className="summary-label">Primary Motion</span>
+                          <p>{primaryMotion?.title ?? 'Not determined'}</p>
+                        </div>
+                        <div>
+                          <span className="summary-label">Primary Path</span>
+                          <p>{primaryPath ? primaryPath.title : 'Not determined'}</p>
+                        </div>
+                        <div>
+                          <span className="summary-label">Motions</span>
+                          <p>{acq.motions.length}</p>
+                        </div>
+                        <div>
+                          <span className="summary-label">Paths</span>
+                          <p>{acq.paths.length}</p>
+                        </div>
+                      </div>
+                    </Card>
+
+                    {/* B. Acquisition Motions */}
+                    <div style={{ marginTop: 16 }}>
+                      <h4 className="section-title">Acquisition Motions</h4>
+                      {acq.motions.length === 0 ? (
+                        <p className="muted" style={{ marginTop: 8 }}>No reliable acquisition motions were detected from current evidence.</p>
+                      ) : (
+                        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {acq.motions.map((m) => (
+                            <Card key={m.id} className="entity-card">
+                              <div className="entity-card-header">
+                                <h4 style={{ margin: 0 }}>{m.title}</h4>
+                                {m.id === acq.primaryMotionId && <span className="tag">Primary Motion</span>}
+                              </div>
+                              <div className="profile-meta">
+                                <span>Priority: <strong>{m.priorityScore}</strong></span>
+                                <span>Confidence: <strong>{m.confidenceScore}</strong></span>
+                              </div>
+                              {m.relatedChannels.length > 0 && (
+                                <div className="tag-list" style={{ marginTop: 6 }}>
+                                  {m.relatedChannels.map((c, i) => <span key={i} className="tag">{labelize(c)}</span>)}
+                                </div>
+                              )}
+                              {m.relatedFunnelStages.length > 0 && (
+                                <p className="muted" style={{ margin: '6px 0 0' }}>Funnel: {m.relatedFunnelStages.map((s) => labelize(s)).join(', ')}</p>
+                              )}
+                              {m.supportingKeywords.length > 0 && (
+                                <p className="muted" style={{ margin: '4px 0 0' }}>Keywords: {m.supportingKeywords.join(', ')}</p>
+                              )}
+                              {m.targetAudienceSegmentIds.length > 0 && (
+                                <p className="muted" style={{ margin: '4px 0 0' }}>{m.targetAudienceSegmentIds.length} target audience segment(s).</p>
+                              )}
+                              {m.recommendedActions.length > 0 && (
+                                <ul className="bullet-list" style={{ marginTop: 6 }}>{m.recommendedActions.map((a, i) => <li key={i}>{a}</li>)}</ul>
+                              )}
+                              {m.reasons.length > 0 && <p className="muted" style={{ margin: '4px 0 0' }}>{m.reasons.join(' ')}</p>}
+                              {m.weaknesses.length > 0 && (
+                                <ul className="bullet-list" style={{ marginTop: 6 }}>{m.weaknesses.map((w, i) => <li key={i}>{w}</li>)}</ul>
+                              )}
+                            </Card>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* C. Acquisition Paths */}
+                    <div style={{ marginTop: 16 }}>
+                      <h4 className="section-title">Acquisition Paths</h4>
+                      {topPaths.length === 0 ? (
+                        <p className="muted" style={{ marginTop: 8 }}>No reliable acquisition paths were detected from current evidence.</p>
+                      ) : (
+                        <>
+                          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {topPaths.map((p) => (
+                              <div key={p.id} className="audience-card">
+                                <div className="entity-card-header">
+                                  <h4 style={{ margin: 0 }}>{p.title}</h4>
+                                  {p.id === acq.primaryPathId && <span className="tag">Primary Path</span>}
+                                </div>
+                                <p className="audience-meta">Priority: {p.priorityScore} · Confidence: {p.confidenceScore}</p>
+                                {p.reasons.length > 0 && <p className="muted" style={{ margin: '4px 0 0' }}>{p.reasons.join(' ')}</p>}
+                              </div>
+                            ))}
+                          </div>
+                          {remainingPaths.length > 0 && (
+                            <details style={{ marginTop: 10 }}>
+                              <summary className="summary-label" style={{ cursor: 'pointer' }}>
+                                Show {remainingPaths.length} more path(s)
+                              </summary>
+                              <ul className="bullet-list" style={{ marginTop: 8 }}>
+                                {remainingPaths.map((p) => <li key={p.id}>{p.title}</li>)}
+                              </ul>
+                            </details>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    {/* D. Acquisition Evidence Gaps / Notes */}
+                    {acquisitionNotes.length > 0 && (
+                      <div style={{ marginTop: 16 }}>
+                        <h4 className="section-title">Acquisition Evidence Gaps / Notes</h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {acquisitionNotes.map((w, i) => <div key={i} className="content-warning">{w}</div>)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* F. Evidence Gaps / Notes */}
               {evidenceNotes.length > 0 && (
                 <div style={{ marginTop: 20 }}>
