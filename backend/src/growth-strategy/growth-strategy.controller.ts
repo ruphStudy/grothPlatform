@@ -69,4 +69,13 @@ export class GrowthStrategyController {
   ) {
     return this.growthStrategyService.buildMessagingForProduct(organizationId, productId, req.user.userId);
   }
+
+  @Post('content-preview')
+  contentPreview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.growthStrategyService.buildContentForProduct(organizationId, productId, req.user.userId);
+  }
 }

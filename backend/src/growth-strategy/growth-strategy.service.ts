@@ -27,12 +27,14 @@ import { ProductsService } from '../products/products.service';
 import { extractSourceDomain } from '../research/research-url.util';
 import { ProductWebsiteKnowledgeService } from '../website-intelligence/product-website-knowledge.service';
 import type { ProductWebsiteKnowledge } from '../website-intelligence/product-website-knowledge.types';
+import { ContentStrategyService } from './content-strategy.service';
 import { FunnelStrategyService } from './funnel-strategy.service';
 import { GrowthChannelFitService } from './growth-channel-fit.service';
 import { GrowthMotionService } from './growth-motion.service';
 import { GrowthObjectiveService } from './growth-objective.service';
 import { MessagingStrategyService } from './messaging-strategy.service';
 import { StrategySignalService } from './strategy-signal.service';
+import type { ContentStrategyResult } from './types/content-strategy.types';
 import type { FunnelStrategyResult } from './types/funnel-strategy.types';
 import type { GrowthChannelFitResult } from './types/growth-channel-fit.types';
 import type { GrowthMotionResult } from './types/growth-motion.types';
@@ -92,6 +94,7 @@ export class GrowthStrategyService {
     private readonly growthMotionService: GrowthMotionService,
     private readonly funnelStrategyService: FunnelStrategyService,
     private readonly messagingStrategyService: MessagingStrategyService,
+    private readonly contentStrategyService: ContentStrategyService,
   ) {}
 
   /**
@@ -154,8 +157,9 @@ export class GrowthStrategyService {
     const channels = this.growthChannelFitService.evaluate({ signals, objectives });
     const funnel = this.funnelStrategyService.build({ signals, objectives, channels });
     const messaging = this.messagingStrategyService.build({ signals, objectives, channels, funnel });
+    const contentStrategy = this.contentStrategyService.build({ signals, objectives, channels, funnel, messaging });
 
-    return { signals, objectives, channels, funnel, messaging, generatedAt: new Date() };
+    return { signals, objectives, channels, funnel, messaging, contentStrategy, generatedAt: new Date() };
   }
 
   /**
@@ -169,6 +173,20 @@ export class GrowthStrategyService {
     const channels = this.growthChannelFitService.evaluate({ signals, objectives });
     const funnel = this.funnelStrategyService.build({ signals, objectives, channels });
     return this.messagingStrategyService.build({ signals, objectives, channels, funnel });
+  }
+
+  /**
+   * Sprint 12E: same single 12A pass, then 12B/12C/funnel/messaging (all
+   * pure) feed the pure content-strategy build — no internal HTTP calls, no
+   * repeated orchestration.
+   */
+  async buildContentForProduct(organizationId: string, productId: string, userId: string): Promise<ContentStrategyResult> {
+    const signals = await this.buildSignalsForProduct(organizationId, productId, userId);
+    const objectives = this.growthObjectiveService.detect(signals);
+    const channels = this.growthChannelFitService.evaluate({ signals, objectives });
+    const funnel = this.funnelStrategyService.build({ signals, objectives, channels });
+    const messaging = this.messagingStrategyService.build({ signals, objectives, channels, funnel });
+    return this.contentStrategyService.build({ signals, objectives, channels, funnel, messaging });
   }
 
   async buildSignalsForProduct(organizationId: string, productId: string, userId: string): Promise<StrategySignalResult> {

@@ -1,3 +1,4 @@
+import type { ContentStrategyResult } from './content-strategy.types';
 import type { FunnelStrategyResult } from './funnel-strategy.types';
 import type { GrowthChannelFitResult } from './growth-channel-fit.types';
 import type { GrowthObjectiveResult } from './growth-objective.types';
@@ -10,5 +11,6 @@ export interface GrowthStrategyOverview {
   channels: GrowthChannelFitResult;
   funnel: FunnelStrategyResult;
   messaging: MessagingStrategyResult;
+  contentStrategy: ContentStrategyResult;
   generatedAt: Date;
 }

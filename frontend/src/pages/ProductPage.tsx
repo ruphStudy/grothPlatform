@@ -2318,6 +2318,161 @@ export default function ProductPage() {
                 );
               })()}
 
+              {/* Content Strategy */}
+              {(() => {
+                const cs = gs.contentStrategy;
+                const primaryPillar = cs.primaryPillarId ? cs.pillars.find((p) => p.id === cs.primaryPillarId) : undefined;
+                const sortedTopics = [...cs.topicDirections].sort((a, b) => b.priorityScore - a.priorityScore);
+                const topTopics = sortedTopics.slice(0, 12);
+                const remainingTopics = sortedTopics.slice(12);
+                const contentNotes = Array.from(new Set([...cs.missingEvidence, ...cs.warnings]));
+
+                return (
+                  <div style={{ marginTop: 24 }}>
+                    <h3 className="section-title">Content Strategy</h3>
+                    <div className="content-warning">
+                      Content strategy recommendations are evidence-based planning directions, not verified search-demand or performance predictions.
+                    </div>
+
+                    {/* A. Content Overview */}
+                    <Card className="profile-section confidence-card">
+                      <ConfidenceBar label="Content Strategy Confidence" score={cs.confidenceScore} />
+                      <div className="summary-grid" style={{ marginTop: 14 }}>
+                        <div>
+                          <span className="summary-label">Primary Pillar</span>
+                          <p>{primaryPillar?.title ?? 'Not determined'}</p>
+                        </div>
+                        <div>
+                          <span className="summary-label">Pillars</span>
+                          <p>{cs.pillars.length}</p>
+                        </div>
+                        <div>
+                          <span className="summary-label">Recommended Formats</span>
+                          <p>{cs.formats.length}</p>
+                        </div>
+                        <div>
+                          <span className="summary-label">Topic Directions</span>
+                          <p>{cs.topicDirections.length}</p>
+                        </div>
+                      </div>
+                    </Card>
+
+                    {/* B. Content Pillars */}
+                    <div style={{ marginTop: 16 }}>
+                      <h4 className="section-title">Content Pillars</h4>
+                      {cs.pillars.length === 0 ? (
+                        <p className="muted" style={{ marginTop: 8 }}>No reliable content pillars were detected from current evidence.</p>
+                      ) : (
+                        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {cs.pillars.map((p) => (
+                            <Card key={p.id} className="entity-card">
+                              <div className="entity-card-header">
+                                <h4 style={{ margin: 0 }}>{p.title}</h4>
+                                {p.id === cs.primaryPillarId && <span className="tag">Primary</span>}
+                              </div>
+                              <p className="entity-card-meta">{labelize(p.theme)}</p>
+                              <div className="profile-meta">
+                                <span>Priority: <strong>{p.priorityScore}</strong></span>
+                                <span>Confidence: <strong>{p.confidenceScore}</strong></span>
+                              </div>
+                              {p.relatedFunnelStages.length > 0 && (
+                                <div className="tag-list" style={{ marginTop: 6 }}>
+                                  {p.relatedFunnelStages.map((stg, i) => <span key={i} className="tag">{labelize(stg)}</span>)}
+                                </div>
+                              )}
+                              {p.supportingKeywords.length > 0 && (
+                                <p className="muted" style={{ margin: '6px 0 0' }}>Keywords: {p.supportingKeywords.join(', ')}</p>
+                              )}
+                              {p.targetAudienceSegmentIds.length > 0 && (
+                                <p className="muted" style={{ margin: '4px 0 0' }}>{p.targetAudienceSegmentIds.length} target audience segment(s).</p>
+                              )}
+                              {p.relatedMessagingPillarIds.length > 0 && (
+                                <p className="muted" style={{ margin: '4px 0 0' }}>Related messaging pillar(s): {p.relatedMessagingPillarIds.join(', ')}</p>
+                              )}
+                              {p.reasons.length > 0 && (
+                                <ul className="bullet-list" style={{ marginTop: 6 }}>{p.reasons.map((r, i) => <li key={i}>{r}</li>)}</ul>
+                              )}
+                            </Card>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* C. Recommended Formats */}
+                    <div style={{ marginTop: 16 }}>
+                      <h4 className="section-title">Recommended Formats</h4>
+                      {cs.formats.length === 0 ? (
+                        <p className="muted" style={{ marginTop: 8 }}>No reliable content-format recommendations were detected.</p>
+                      ) : (
+                        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {cs.formats.map((f, i) => (
+                            <div key={i} className="audience-card">
+                              <h4 style={{ margin: 0 }}>{labelize(f.format)}</h4>
+                              <p className="audience-meta">Priority: {f.priorityScore} · Confidence: {f.confidenceScore}</p>
+                              {f.targetFunnelStages.length > 0 && (
+                                <p className="muted" style={{ margin: '4px 0 0' }}>Funnel stages: {f.targetFunnelStages.map((s) => labelize(s)).join(', ')}</p>
+                              )}
+                              {f.targetAudienceSegmentIds.length > 0 && (
+                                <p className="muted" style={{ margin: '4px 0 0' }}>{f.targetAudienceSegmentIds.length} target audience segment(s).</p>
+                              )}
+                              {f.reasons.length > 0 && (
+                                <ul className="bullet-list" style={{ marginTop: 6 }}>{f.reasons.map((r, j) => <li key={j}>{r}</li>)}</ul>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* D. Topic Directions */}
+                    <div style={{ marginTop: 16 }}>
+                      <h4 className="section-title">Topic Directions</h4>
+                      {topTopics.length === 0 ? (
+                        <p className="muted" style={{ marginTop: 8 }}>No reliable content topic directions were detected.</p>
+                      ) : (
+                        <>
+                          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {topTopics.map((t) => (
+                              <div key={t.id} className="audience-card">
+                                <h4 style={{ margin: 0 }}>{t.title}</h4>
+                                <p className="audience-meta">
+                                  {labelize(t.intent)} · {labelize(t.funnelStage)} · Priority {t.priorityScore} · Confidence {t.confidenceScore}
+                                </p>
+                                {t.keywords.length > 0 && <p className="muted" style={{ margin: '4px 0 0' }}>Keywords: {t.keywords.join(', ')}</p>}
+                                {t.audienceSegmentIds.length > 0 && (
+                                  <p className="muted" style={{ margin: '4px 0 0' }}>{t.audienceSegmentIds.length} related audience segment(s).</p>
+                                )}
+                                {t.reasons.length > 0 && <p className="muted" style={{ margin: '4px 0 0' }}>{t.reasons.join(' ')}</p>}
+                              </div>
+                            ))}
+                          </div>
+                          {remainingTopics.length > 0 && (
+                            <details style={{ marginTop: 10 }}>
+                              <summary className="summary-label" style={{ cursor: 'pointer' }}>
+                                Show {remainingTopics.length} more topic direction(s)
+                              </summary>
+                              <ul className="bullet-list" style={{ marginTop: 8 }}>
+                                {remainingTopics.map((t) => <li key={t.id}>{t.title}</li>)}
+                              </ul>
+                            </details>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    {/* E. Missing Evidence / Notes */}
+                    {contentNotes.length > 0 && (
+                      <div style={{ marginTop: 16 }}>
+                        <h4 className="section-title">Content Strategy Evidence Gaps / Notes</h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {contentNotes.map((w, i) => <div key={i} className="content-warning">{w}</div>)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* F. Evidence Gaps / Notes */}
               {evidenceNotes.length > 0 && (
                 <div style={{ marginTop: 20 }}>
