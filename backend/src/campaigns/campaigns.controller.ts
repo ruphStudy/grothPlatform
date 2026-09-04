@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CampaignAudienceChannelService } from './campaign-audience-channel.service';
 import { CampaignGoalService } from './campaign-goal.service';
+import { CampaignPlanService } from './campaign-plan.service';
 import { CampaignsService } from './campaigns.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { DeriveCampaignGoalDto } from './dto/derive-campaign-goal.dto';
@@ -16,6 +17,7 @@ export class CampaignsController {
     private readonly campaignsService: CampaignsService,
     private readonly campaignGoalService: CampaignGoalService,
     private readonly campaignAudienceChannelService: CampaignAudienceChannelService,
+    private readonly campaignPlanService: CampaignPlanService,
   ) {}
 
   @Post()
@@ -101,5 +103,15 @@ export class CampaignsController {
     @Param('campaignId') campaignId: string,
   ) {
     return this.campaignAudienceChannelService.deriveMappingForCampaign(organizationId, productId, campaignId, req.user.userId);
+  }
+
+  @Post(':campaignId/plan/generate')
+  generatePlan(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+  ) {
+    return this.campaignPlanService.generatePlanForCampaign(organizationId, productId, campaignId, req.user.userId);
   }
 }

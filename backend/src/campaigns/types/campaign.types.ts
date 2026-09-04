@@ -1,5 +1,6 @@
 import type { CampaignGoal } from './campaign-goal.types';
 import type { CampaignAudienceChannelMapping } from './campaign-audience-channel.types';
+import type { CampaignPlanResult } from './campaign-plan.types';
 
 export type { CampaignGoal, CampaignGoalType, CampaignGoalSource } from './campaign-goal.types';
 export type {
@@ -8,6 +9,7 @@ export type {
   CampaignChannelRecommendation,
   CampaignAudienceChannelSource,
 } from './campaign-audience-channel.types';
+export type { CampaignPlanResult, CampaignActivity, CampaignWeekPlan, CampaignActivityType, CampaignActivityStatus } from './campaign-plan.types';
 
 export type CampaignStatus = 'draft' | 'planned' | 'approved' | 'active' | 'paused' | 'completed' | 'archived';
 
@@ -64,6 +66,7 @@ export interface CampaignResponse {
   planningMetadata: CampaignPlanningMetadataResponse;
   goal?: CampaignGoal;
   audienceChannelMapping?: CampaignAudienceChannelMapping;
+  plan?: CampaignPlanResult;
 
   createdBy: string;
   updatedBy?: string;

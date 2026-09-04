@@ -197,6 +197,152 @@ export class CampaignAudienceChannelMappingRecord {
 }
 export const CampaignAudienceChannelMappingRecordSchema = SchemaFactory.createForClass(CampaignAudienceChannelMappingRecord);
 
+export const CAMPAIGN_ACTIVITY_TYPES = [
+  'seo',
+  'blog',
+  'landing_page',
+  'social',
+  'video',
+  'email',
+  'outbound',
+  'community',
+  'partnership',
+  'paid_search',
+  'paid_social',
+  'conversion',
+  'activation',
+  'proof',
+  'measurement',
+] as const;
+
+export const CAMPAIGN_ACTIVITY_STATUSES = ['planned', 'approved', 'completed', 'skipped'] as const;
+
+// One scheduled campaign activity — an execution-planning primitive specific
+// to this campaign, distinct from the reusable Growth Strategy evidence it
+// was derived from.
+@Schema({ _id: false })
+export class CampaignActivityRecord {
+  @Prop({ required: true })
+  id: string;
+
+  @Prop({ type: Number, required: true })
+  day: number;
+
+  @Prop({ type: Number, required: true })
+  week: number;
+
+  @Prop({ type: String, enum: CAMPAIGN_ACTIVITY_TYPES, required: true })
+  type: (typeof CAMPAIGN_ACTIVITY_TYPES)[number];
+
+  @Prop({ required: true })
+  title: string;
+
+  @Prop({ required: true })
+  objective: string;
+
+  @Prop({ required: true })
+  channel: string;
+
+  @Prop({ type: [String], default: [] })
+  audienceSegmentIds: string[];
+
+  @Prop({ required: true })
+  funnelStage: string;
+
+  @Prop({ type: [String], default: [] })
+  messagingPillarIds: string[];
+
+  @Prop({ type: [String], default: [] })
+  contentPillarIds: string[];
+
+  @Prop({ type: [String], default: [] })
+  keywordDirections: string[];
+
+  @Prop()
+  contentFormat?: string;
+
+  @Prop({ type: [String], default: [] })
+  recommendedActions: string[];
+
+  @Prop()
+  conversionDirection?: string;
+
+  @Prop({ type: Number, required: true })
+  priorityScore: number;
+
+  @Prop({ type: Number, required: true })
+  confidenceScore: number;
+
+  @Prop({ type: [String], default: [] })
+  dependencies: string[];
+
+  @Prop({ type: [String], default: [] })
+  successSignals: string[];
+
+  @Prop({ type: String, enum: CAMPAIGN_ACTIVITY_STATUSES, required: true, default: 'planned' })
+  status: (typeof CAMPAIGN_ACTIVITY_STATUSES)[number];
+
+  @Prop({ type: [String], default: [] })
+  reasons: string[];
+
+  @Prop({ type: [String], default: [] })
+  warnings: string[];
+}
+export const CampaignActivityRecordSchema = SchemaFactory.createForClass(CampaignActivityRecord);
+
+@Schema({ _id: false })
+export class CampaignWeekPlanRecord {
+  @Prop({ type: Number, required: true })
+  week: number;
+
+  @Prop({ type: [Number], default: [] })
+  days: number[];
+
+  @Prop({ required: true })
+  theme: string;
+
+  @Prop({ required: true })
+  objective: string;
+
+  @Prop({ type: [String], default: [] })
+  activityIds: string[];
+
+  @Prop({ type: Number, required: true })
+  confidenceScore: number;
+}
+export const CampaignWeekPlanRecordSchema = SchemaFactory.createForClass(CampaignWeekPlanRecord);
+
+// The campaign's own generated 30-day execution plan — campaign-specific
+// planning output, not the Growth Strategy itself, so persisting it in full
+// is appropriate.
+@Schema({ _id: false })
+export class CampaignPlanRecord {
+  @Prop({ type: Number, required: true, default: 30 })
+  durationDays: number;
+
+  @Prop({ type: [CampaignWeekPlanRecordSchema], default: [] })
+  weeks: CampaignWeekPlanRecord[];
+
+  @Prop({ type: [CampaignActivityRecordSchema], default: [] })
+  activities: CampaignActivityRecord[];
+
+  @Prop({ type: [String], default: [] })
+  topPriorityActivityIds: string[];
+
+  @Prop({ type: Number, required: true })
+  confidenceScore: number;
+
+  @Prop({ type: [String], default: [] })
+  missingEvidence: string[];
+
+  @Prop({ type: [String], default: [] })
+  warnings: string[];
+
+  @Prop({ type: Date, required: true })
+  generatedAt: Date;
+}
+export const CampaignPlanRecordSchema = SchemaFactory.createForClass(CampaignPlanRecord);
+
 @Schema({ timestamps: true })
 export class Campaign {
   @Prop({ type: Types.ObjectId, ref: 'Organization', required: true })
@@ -263,6 +409,9 @@ export class Campaign {
 
   @Prop({ type: CampaignAudienceChannelMappingRecordSchema })
   audienceChannelMapping?: CampaignAudienceChannelMappingRecord;
+
+  @Prop({ type: CampaignPlanRecordSchema })
+  plan?: CampaignPlanRecord;
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   createdBy: Types.ObjectId;
