@@ -857,6 +857,152 @@ export interface KeywordIntelligencePreview {
   generatedAt: string;
 }
 
+export type StrategySignalCategory =
+  | 'product'
+  | 'positioning'
+  | 'audience'
+  | 'pain'
+  | 'jtbd'
+  | 'keyword'
+  | 'market'
+  | 'competitor'
+  | 'commercial'
+  | 'differentiation'
+  | 'evidence_gap';
+
+export interface StrategySignal {
+  id: string;
+  category: StrategySignalCategory;
+  title: string;
+  value: string;
+  strengthScore: number;
+  confidenceScore: number;
+  source: string;
+  evidence: string[];
+  relatedSegmentIds?: string[];
+  relatedKeywords?: string[];
+  relatedUseCases?: string[];
+  warnings: string[];
+}
+
+export interface StrategySignalResult {
+  signals: StrategySignal[];
+  strongestSignalIds: string[];
+  productSignals: string[];
+  audienceSignals: string[];
+  marketSignals: string[];
+  keywordSignals: string[];
+  differentiationSignals: string[];
+  confidenceScore: number;
+  missingEvidence: string[];
+  warnings: string[];
+  generatedAt: string;
+}
+
+export type GrowthObjectiveType =
+  | 'awareness'
+  | 'education'
+  | 'consideration'
+  | 'lead_generation'
+  | 'conversion'
+  | 'positioning'
+  | 'differentiation'
+  | 'buyer_enablement'
+  | 'retention'
+  | 'activation';
+
+export interface GrowthObjective {
+  id: string;
+  type: GrowthObjectiveType;
+  title: string;
+  priorityScore: number;
+  confidenceScore: number;
+  relatedSignalIds: string[];
+  relatedAudienceSegmentIds: string[];
+  relatedKeywords: string[];
+  reasons: string[];
+  missingEvidence: string[];
+  warnings: string[];
+}
+
+export interface GrowthObjectiveResult {
+  objectives: GrowthObjective[];
+  primaryObjectiveId?: string;
+  secondaryObjectiveIds: string[];
+  confidenceScore: number;
+  warnings: string[];
+  generatedAt: string;
+}
+
+export type GrowthChannel =
+  | 'seo'
+  | 'content'
+  | 'organic_social'
+  | 'paid_search'
+  | 'paid_social'
+  | 'email'
+  | 'community'
+  | 'partnerships'
+  | 'outbound'
+  | 'product_led';
+
+export interface ChannelFit {
+  channel: GrowthChannel;
+  fitScore: number;
+  confidenceScore: number;
+  relatedObjectiveIds: string[];
+  relatedAudienceSegmentIds: string[];
+  relatedKeywords: string[];
+  reasons: string[];
+  weaknesses: string[];
+  warnings: string[];
+}
+
+export interface GrowthChannelFitResult {
+  channels: ChannelFit[];
+  primaryChannel?: GrowthChannel;
+  secondaryChannels: GrowthChannel[];
+  confidenceScore: number;
+  warnings: string[];
+  generatedAt: string;
+}
+
+export type FunnelStage = 'awareness' | 'consideration' | 'conversion' | 'activation' | 'retention';
+
+export interface FunnelStageStrategy {
+  stage: FunnelStage;
+  objective: string;
+  priorityScore: number;
+  confidenceScore: number;
+  audienceSegmentIds: string[];
+  channels: string[];
+  keywordIntents: string[];
+  keywords: string[];
+  recommendedActions: string[];
+  entrySignals: string[];
+  successSignals: string[];
+  reasons: string[];
+  warnings: string[];
+}
+
+export interface FunnelStrategyResult {
+  stages: FunnelStageStrategy[];
+  primaryEntryStage?: FunnelStage;
+  primaryConversionPath: FunnelStage[];
+  confidenceScore: number;
+  missingEvidence: string[];
+  warnings: string[];
+  generatedAt: string;
+}
+
+export interface GrowthStrategyOverview {
+  signals: StrategySignalResult;
+  objectives: GrowthObjectiveResult;
+  channels: GrowthChannelFitResult;
+  funnel: FunnelStrategyResult;
+  generatedAt: string;
+}
+
 export interface ProductIntelligenceProfile {
   id: string;
   organizationId: string;

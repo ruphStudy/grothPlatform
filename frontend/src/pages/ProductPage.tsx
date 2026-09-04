@@ -10,6 +10,8 @@ import { PageHeader } from '../components/PageHeader';
 import type {
   AudienceIntelligencePreview,
   CompetitiveIntelligencePreview,
+  FunnelStage,
+  GrowthStrategyOverview,
   KeywordIntelligencePreview,
   Product,
   ProductIntelligenceProfile,
@@ -90,6 +92,9 @@ export default function ProductPage() {
   const [keywordIntelligence, setKeywordIntelligence] = useState<KeywordIntelligencePreview | null>(null);
   const [buildingKeywordIntelligence, setBuildingKeywordIntelligence] = useState(false);
   const [keywordIntelligenceError, setKeywordIntelligenceError] = useState<string | null>(null);
+  const [growthStrategy, setGrowthStrategy] = useState<GrowthStrategyOverview | null>(null);
+  const [buildingGrowthStrategy, setBuildingGrowthStrategy] = useState(false);
+  const [growthStrategyError, setGrowthStrategyError] = useState<string | null>(null);
 
   async function loadData() {
     if (!organizationId || !productId) return;
@@ -216,6 +221,22 @@ export default function ProductPage() {
       setKeywordIntelligenceError(err instanceof ApiError ? err.message : 'Building keyword intelligence failed');
     } finally {
       setBuildingKeywordIntelligence(false);
+    }
+  }
+
+  async function handleBuildGrowthStrategy() {
+    setGrowthStrategyError(null);
+    setBuildingGrowthStrategy(true);
+    try {
+      const data = await apiRequest<GrowthStrategyOverview>(
+        `/organizations/${organizationId}/products/${productId}/growth-strategy/overview-preview`,
+        { method: 'POST' },
+      );
+      setGrowthStrategy(data);
+    } catch (err) {
+      setGrowthStrategyError(err instanceof ApiError ? err.message : 'Building growth strategy failed');
+    } finally {
+      setBuildingGrowthStrategy(false);
     }
   }
 
@@ -1893,6 +1914,276 @@ export default function ProductPage() {
                 <span>Long-tail: <strong>{ki.stats.longTailCount}</strong></span>
                 <span>Mapped: <strong>{ki.stats.mappedKeywordCount}</strong></span>
                 <span>Generated: <strong>{new Date(ki.generatedAt).toLocaleString()}</strong></span>
+              </div>
+            </div>
+          );
+        })()}
+      </Card>
+
+      <Card className="analysis-card">
+        <div className="analysis-header">
+          <div>
+            <h2 className="card-title">Growth Strategy</h2>
+            <p className="card-subtitle">
+              Synthesize strategy signals, growth objectives, recommended channels, and funnel strategy from existing
+              product, market, audience, and keyword evidence.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleBuildGrowthStrategy}
+            className="btn btn-primary"
+            disabled={buildingGrowthStrategy}
+          >
+            {buildingGrowthStrategy
+              ? 'Building growth strategy...'
+              : growthStrategy
+                ? 'Rebuild Growth Strategy'
+                : 'Build Growth Strategy'}
+          </button>
+        </div>
+
+        <ErrorMessage message={growthStrategyError} />
+        {buildingGrowthStrategy && (
+          <div className="analyzing-state">
+            <span className="spinner" /> Building growth strategy...
+            <p className="muted" style={{ marginTop: 4 }}>
+              Synthesizing strategy signals, objectives, channel fit, and funnel strategy.
+            </p>
+          </div>
+        )}
+
+        {growthStrategy && (() => {
+          const gs = growthStrategy;
+          const objectiveById = new Map(gs.objectives.objectives.map((o) => [o.id, o]));
+          const overallConfidence = Math.round(
+            (gs.signals.confidenceScore + gs.objectives.confidenceScore + gs.channels.confidenceScore + gs.funnel.confidenceScore) / 4,
+          );
+          const primaryObjective = gs.objectives.primaryObjectiveId ? objectiveById.get(gs.objectives.primaryObjectiveId) : undefined;
+          const sortedSignals = [...gs.signals.signals].sort((a, b) => b.strengthScore - a.strengthScore);
+          const topSignals = sortedSignals.slice(0, 12);
+          const remainingSignals = sortedSignals.slice(12);
+          const sortedObjectives = [...gs.objectives.objectives].sort((a, b) => b.priorityScore - a.priorityScore);
+          const sortedChannels = [...gs.channels.channels].sort((a, b) => b.fitScore - a.fitScore);
+          const funnelStageOrder: FunnelStage[] = ['awareness', 'consideration', 'conversion', 'activation', 'retention'];
+          const stageByName = new Map(gs.funnel.stages.map((s) => [s.stage, s]));
+
+          const evidenceNotes = Array.from(
+            new Set([
+              ...gs.signals.missingEvidence,
+              ...gs.funnel.missingEvidence,
+              ...gs.signals.warnings,
+              ...gs.objectives.warnings,
+              ...gs.channels.warnings,
+              ...gs.funnel.warnings,
+            ]),
+          );
+
+          return (
+            <div style={{ marginTop: 16 }}>
+              {/* A. Strategy Overview */}
+              <Card className="profile-section confidence-card">
+                <h3 className="section-title">Strategy Overview</h3>
+                <ConfidenceBar label="Overall Confidence" score={overallConfidence} />
+                <div className="summary-grid" style={{ marginTop: 14 }}>
+                  <div>
+                    <span className="summary-label">Primary Objective</span>
+                    <p>{primaryObjective?.title ?? 'Not determined'}</p>
+                  </div>
+                  <div>
+                    <span className="summary-label">Primary Channel</span>
+                    <p>{gs.channels.primaryChannel ? labelize(gs.channels.primaryChannel) : 'Not determined'}</p>
+                  </div>
+                  <div>
+                    <span className="summary-label">Primary Funnel Entry</span>
+                    <p>{gs.funnel.primaryEntryStage ? labelize(gs.funnel.primaryEntryStage) : 'Not determined'}</p>
+                  </div>
+                  <div>
+                    <span className="summary-label">Funnel Path</span>
+                    <p>{gs.funnel.primaryConversionPath.length > 0 ? gs.funnel.primaryConversionPath.map((s) => labelize(s)).join(' → ') : 'Not determined'}</p>
+                  </div>
+                  <div>
+                    <span className="summary-label">Strongest Signals</span>
+                    <p>{gs.signals.strongestSignalIds.length}</p>
+                  </div>
+                </div>
+              </Card>
+
+              {/* B. Strategic Signals */}
+              <div style={{ marginTop: 20 }}>
+                <h3 className="section-title">Strategic Signals</h3>
+                {topSignals.length === 0 ? (
+                  <p className="muted" style={{ marginTop: 8 }}>Current product evidence is insufficient to build strong strategy signals.</p>
+                ) : (
+                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {topSignals.map((s) => (
+                      <div key={s.id} className="audience-card">
+                        <div className="entity-card-header">
+                          <h4 style={{ margin: 0 }}>{s.title}</h4>
+                          <span className="tag">{labelize(s.category)}</span>
+                        </div>
+                        <p>{s.value}</p>
+                        <p className="audience-meta">
+                          Strength: {s.strengthScore} · Confidence: {s.confidenceScore} · Source: {s.source}
+                        </p>
+                        {(s.relatedSegmentIds?.length || s.relatedKeywords?.length) ? (
+                          <p className="muted" style={{ margin: '4px 0 0' }}>
+                            {s.relatedSegmentIds?.length ? `${s.relatedSegmentIds.length} related audience segment(s). ` : ''}
+                            {s.relatedKeywords?.length ? `Keywords: ${s.relatedKeywords.slice(0, 5).join(', ')}` : ''}
+                          </p>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {remainingSignals.length > 0 && (
+                  <details style={{ marginTop: 10 }}>
+                    <summary className="summary-label" style={{ cursor: 'pointer' }}>
+                      Show {remainingSignals.length} more signal(s)
+                    </summary>
+                    <ul className="bullet-list" style={{ marginTop: 8 }}>
+                      {remainingSignals.map((s) => <li key={s.id}>{s.title}: {s.value} (strength {s.strengthScore})</li>)}
+                    </ul>
+                  </details>
+                )}
+              </div>
+
+              {/* C. Growth Objectives */}
+              <div style={{ marginTop: 20 }}>
+                <h3 className="section-title">Growth Objectives</h3>
+                {sortedObjectives.length === 0 ? (
+                  <p className="muted" style={{ marginTop: 8 }}>No reliable growth objectives were detected from current evidence.</p>
+                ) : (
+                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {sortedObjectives.map((o) => (
+                      <Card key={o.id} className="entity-card">
+                        <div className="entity-card-header">
+                          <h4 style={{ margin: 0 }}>{o.title}</h4>
+                          {o.id === gs.objectives.primaryObjectiveId && <span className="tag">Primary</span>}
+                        </div>
+                        <div className="profile-meta">
+                          <span>Priority: <strong>{o.priorityScore}</strong></span>
+                          <span>Confidence: <strong>{o.confidenceScore}</strong></span>
+                        </div>
+                        {o.reasons.length > 0 && <p style={{ marginTop: 6 }}>{o.reasons.join(' ')}</p>}
+                        {o.relatedKeywords.length > 0 && (
+                          <p className="muted" style={{ margin: '6px 0 0' }}>Keywords: {o.relatedKeywords.slice(0, 6).join(', ')}</p>
+                        )}
+                        {o.relatedAudienceSegmentIds.length > 0 && (
+                          <p className="muted" style={{ margin: '4px 0 0' }}>{o.relatedAudienceSegmentIds.length} related audience segment(s).</p>
+                        )}
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* D. Recommended Channels */}
+              <div style={{ marginTop: 20 }}>
+                <h3 className="section-title">Recommended Channels</h3>
+                <div className="content-warning">
+                  Channel-fit scores are strategy heuristics and do not predict CAC, ROI, reach, or conversion performance.
+                </div>
+                {sortedChannels.length === 0 ? (
+                  <p className="muted" style={{ marginTop: 8 }}>No reliable channel recommendations were detected.</p>
+                ) : (
+                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {sortedChannels.map((c) => (
+                      <Card key={c.channel} className="entity-card">
+                        <div className="entity-card-header">
+                          <h4 style={{ margin: 0 }}>{labelize(c.channel)}</h4>
+                          {c.channel === gs.channels.primaryChannel && <span className="tag">Primary Channel</span>}
+                        </div>
+                        <div className="profile-meta">
+                          <span>Fit: <strong>{c.fitScore}</strong></span>
+                          <span>Confidence: <strong>{c.confidenceScore}</strong></span>
+                        </div>
+                        {c.relatedObjectiveIds.length > 0 && (
+                          <p className="muted" style={{ margin: '6px 0 0' }}>
+                            Objectives: {c.relatedObjectiveIds.map((id) => objectiveById.get(id)?.title ?? id).join(', ')}
+                          </p>
+                        )}
+                        {c.relatedKeywords.length > 0 && (
+                          <p className="muted" style={{ margin: '4px 0 0' }}>Keywords: {c.relatedKeywords.slice(0, 6).join(', ')}</p>
+                        )}
+                        {c.reasons.length > 0 && (
+                          <ul className="bullet-list" style={{ marginTop: 6 }}>{c.reasons.map((r, i) => <li key={i}>{r}</li>)}</ul>
+                        )}
+                        {c.weaknesses.length > 0 && (
+                          <ul className="bullet-list" style={{ marginTop: 6 }}>{c.weaknesses.map((w, i) => <li key={i}>{w}</li>)}</ul>
+                        )}
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* E. Funnel Strategy */}
+              <div style={{ marginTop: 20 }}>
+                <h3 className="section-title">Funnel Strategy</h3>
+                {gs.funnel.stages.length === 0 ? (
+                  <p className="muted" style={{ marginTop: 8 }}>No reliable funnel stages were detected from current evidence.</p>
+                ) : (
+                  <>
+                    <p className="audience-meta">
+                      Conversion path: <strong>{gs.funnel.primaryConversionPath.map((s) => labelize(s)).join(' → ')}</strong>
+                    </p>
+                    <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {funnelStageOrder
+                        .filter((stageName) => stageByName.has(stageName))
+                        .map((stageName) => {
+                          const s = stageByName.get(stageName)!;
+                          return (
+                            <Card key={s.stage} className="entity-card">
+                              <div className="entity-card-header">
+                                <h4 style={{ margin: 0 }}>{labelize(s.stage)}</h4>
+                                {s.stage === gs.funnel.primaryEntryStage && <span className="tag">Primary Entry</span>}
+                              </div>
+                              <div className="profile-meta">
+                                <span>Priority: <strong>{s.priorityScore}</strong></span>
+                                <span>Confidence: <strong>{s.confidenceScore}</strong></span>
+                                {s.objective && <span>Objective: <strong>{s.objective}</strong></span>}
+                              </div>
+                              {s.channels.length > 0 && (
+                                <div className="tag-list" style={{ marginTop: 6 }}>
+                                  {s.channels.map((c, i) => <span key={i} className="tag">{labelize(c)}</span>)}
+                                </div>
+                              )}
+                              {s.keywordIntents.length > 0 && (
+                                <p className="muted" style={{ margin: '6px 0 0' }}>Intents: {s.keywordIntents.map((i) => labelize(i)).join(', ')}</p>
+                              )}
+                              {s.recommendedActions.length > 0 && (
+                                <ul className="bullet-list" style={{ marginTop: 6 }}>{s.recommendedActions.map((a, i) => <li key={i}>{a}</li>)}</ul>
+                              )}
+                              <div className="profile-meta" style={{ marginTop: 6 }}>
+                                {s.entrySignals.length > 0 && <span>Entry: {s.entrySignals.join(', ')}</span>}
+                              </div>
+                              {s.successSignals.length > 0 && (
+                                <p className="muted" style={{ margin: '4px 0 0' }}>Success signals: {s.successSignals.join(', ')}</p>
+                              )}
+                              {s.audienceSegmentIds.length > 0 && (
+                                <p className="muted" style={{ margin: '4px 0 0' }}>{s.audienceSegmentIds.length} related audience segment(s).</p>
+                              )}
+                            </Card>
+                          );
+                        })}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* F. Evidence Gaps / Notes */}
+              {evidenceNotes.length > 0 && (
+                <div style={{ marginTop: 20 }}>
+                  <h3 className="section-title">Evidence Gaps / Important Notes</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {evidenceNotes.map((w, i) => <div key={i} className="content-warning">{w}</div>)}
+                  </div>
+                </div>
+              )}
+
+              <div className="profile-meta" style={{ marginTop: 20 }}>
+                <span>Generated: <strong>{new Date(gs.generatedAt).toLocaleString()}</strong></span>
               </div>
             </div>
           );

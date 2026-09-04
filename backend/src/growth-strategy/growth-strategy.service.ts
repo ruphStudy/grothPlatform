@@ -36,6 +36,7 @@ import type { FunnelStrategyResult } from './types/funnel-strategy.types';
 import type { GrowthChannelFitResult } from './types/growth-channel-fit.types';
 import type { GrowthMotionResult } from './types/growth-motion.types';
 import type { GrowthObjectiveResult } from './types/growth-objective.types';
+import type { GrowthStrategyOverview } from './types/growth-strategy-overview.types';
 import type { StrategySignalResult } from './types/strategy-signal.types';
 import type { CompetitorKeywordGapResult } from '../keyword-intelligence/types/competitor-keyword-gap.types';
 
@@ -134,6 +135,23 @@ export class GrowthStrategyService {
     const objectives = this.growthObjectiveService.detect(signals);
     const channels = this.growthChannelFitService.evaluate({ signals, objectives });
     return this.funnelStrategyService.build({ signals, objectives, channels });
+  }
+
+  /**
+   * Sprint 12 UI Catch-up: a single consolidated read for the Growth
+   * Strategy UI card. One 12A pass, then 12B/12C/funnel all pure — avoids
+   * the frontend having to call four separate preview endpoints, each of
+   * which would independently rebuild the full 12A pipeline (product
+   * lookup, website knowledge, category, Sprint 10 audience chain, Sprint
+   * 11 keyword chain, and the optional Sprint 9 competitor pass).
+   */
+  async buildOverviewForProduct(organizationId: string, productId: string, userId: string): Promise<GrowthStrategyOverview> {
+    const signals = await this.buildSignalsForProduct(organizationId, productId, userId);
+    const objectives = this.growthObjectiveService.detect(signals);
+    const channels = this.growthChannelFitService.evaluate({ signals, objectives });
+    const funnel = this.funnelStrategyService.build({ signals, objectives, channels });
+
+    return { signals, objectives, channels, funnel, generatedAt: new Date() };
   }
 
   async buildSignalsForProduct(organizationId: string, productId: string, userId: string): Promise<StrategySignalResult> {

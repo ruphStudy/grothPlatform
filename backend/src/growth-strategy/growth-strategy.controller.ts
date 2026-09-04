@@ -51,4 +51,13 @@ export class GrowthStrategyController {
   ) {
     return this.growthStrategyService.buildFunnelForProduct(organizationId, productId, req.user.userId);
   }
+
+  @Post('overview-preview')
+  overviewPreview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.growthStrategyService.buildOverviewForProduct(organizationId, productId, req.user.userId);
+  }
 }
