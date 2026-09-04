@@ -2172,6 +2172,152 @@ export default function ProductPage() {
                 )}
               </div>
 
+              {/* Messaging Strategy */}
+              {(() => {
+                const msg = gs.messaging;
+                const signalById = new Map(gs.signals.signals.map((s) => [s.id, s]));
+                const primaryPillar = msg.primaryPillarId ? msg.pillars.find((p) => p.id === msg.primaryPillarId) : undefined;
+                const messagingNotes = Array.from(new Set([...msg.missingEvidence, ...msg.warnings]));
+                const audienceLabel = (am: (typeof msg.audienceMessages)[number]) => {
+                  const audienceSignal = am.supportingSignalIds.map((id) => signalById.get(id)).find((s) => s?.category === 'audience');
+                  return audienceSignal?.value ?? am.audienceSegmentId;
+                };
+
+                return (
+                  <div style={{ marginTop: 24 }}>
+                    <h3 className="section-title">Messaging Strategy</h3>
+
+                    {/* A. Messaging Overview */}
+                    <Card className="profile-section confidence-card">
+                      <ConfidenceBar label="Messaging Confidence" score={msg.confidenceScore} />
+                      <div className="summary-grid" style={{ marginTop: 14 }}>
+                        <div>
+                          <span className="summary-label">Primary Pillar</span>
+                          <p>{primaryPillar?.title ?? 'Not determined'}</p>
+                        </div>
+                        <div>
+                          <span className="summary-label">Pillars</span>
+                          <p>{msg.pillars.length}</p>
+                        </div>
+                        <div>
+                          <span className="summary-label">Audience Messages</span>
+                          <p>{msg.audienceMessages.length}</p>
+                        </div>
+                      </div>
+                    </Card>
+
+                    {/* B. Messaging Pillars */}
+                    <div style={{ marginTop: 16 }}>
+                      <h4 className="section-title">Messaging Pillars</h4>
+                      {msg.pillars.length === 0 ? (
+                        <p className="muted" style={{ marginTop: 8 }}>No reliable messaging pillars were detected from current evidence.</p>
+                      ) : (
+                        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {msg.pillars.slice(0, 6).map((p) => (
+                            <Card key={p.id} className="entity-card">
+                              <div className="entity-card-header">
+                                <h4 style={{ margin: 0 }}>{p.title}</h4>
+                                {p.id === msg.primaryPillarId && <span className="tag">Primary</span>}
+                              </div>
+                              <p className="entity-card-meta">{labelize(p.theme)}</p>
+                              <div className="profile-meta">
+                                <span>Priority: <strong>{p.priorityScore}</strong></span>
+                                <span>Confidence: <strong>{p.confidenceScore}</strong></span>
+                              </div>
+                              {p.relatedFunnelStages.length > 0 && (
+                                <div className="tag-list" style={{ marginTop: 6 }}>
+                                  {p.relatedFunnelStages.map((stg, i) => <span key={i} className="tag">{labelize(stg)}</span>)}
+                                </div>
+                              )}
+                              {p.supportingKeywords.length > 0 && (
+                                <p className="muted" style={{ margin: '6px 0 0' }}>Keywords: {p.supportingKeywords.join(', ')}</p>
+                              )}
+                              {p.targetAudienceSegmentIds.length > 0 && (
+                                <p className="muted" style={{ margin: '4px 0 0' }}>{p.targetAudienceSegmentIds.length} target audience segment(s).</p>
+                              )}
+                              {p.reasons.length > 0 && (
+                                <ul className="bullet-list" style={{ marginTop: 6 }}>{p.reasons.map((r, i) => <li key={i}>{r}</li>)}</ul>
+                              )}
+                            </Card>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* C. Audience Messaging */}
+                    <div style={{ marginTop: 16 }}>
+                      <h4 className="section-title">Audience Messaging</h4>
+                      {msg.audienceMessages.length === 0 ? (
+                        <p className="muted" style={{ marginTop: 8 }}>No audience-specific messaging could be derived reliably.</p>
+                      ) : (
+                        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {msg.audienceMessages.map((am, i) => (
+                            <div key={i} className="audience-card">
+                              <h4 style={{ margin: 0 }}>{audienceLabel(am)}</h4>
+                              <p className="audience-meta">Need: {am.primaryNeed}</p>
+                              <p className="audience-meta">Value message: {am.valueMessage}</p>
+                              {am.proofFocus.length > 0 && <p className="muted" style={{ margin: '4px 0 0' }}>Proof focus: {am.proofFocus.join(', ')}</p>}
+                              {am.objectionFocus.length > 0 && <p className="muted" style={{ margin: '4px 0 0' }}>Address: {am.objectionFocus.join(', ')}</p>}
+                              <p className="audience-meta" style={{ marginTop: 4 }}>Confidence: {am.confidenceScore}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* D. Funnel Messaging */}
+                    <div style={{ marginTop: 16 }}>
+                      <h4 className="section-title">Funnel Messaging</h4>
+                      {msg.funnelMessages.length === 0 ? (
+                        <p className="muted" style={{ marginTop: 8 }}>No funnel-specific messaging is available from the current strategy.</p>
+                      ) : (
+                        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {msg.funnelMessages.map((fm, i) => (
+                            <div key={i} className="audience-card">
+                              <h4 style={{ margin: 0 }}>{labelize(fm.stage)}</h4>
+                              <p className="audience-meta">Goal: {fm.messageGoal}</p>
+                              {fm.messageThemes.length > 0 && <p className="muted" style={{ margin: '4px 0 0' }}>Themes: {fm.messageThemes.join(', ')}</p>}
+                              {fm.proofFocus.length > 0 && <p className="muted" style={{ margin: '4px 0 0' }}>Proof focus: {fm.proofFocus.join(', ')}</p>}
+                              {fm.ctaDirection.length > 0 && <p className="muted" style={{ margin: '4px 0 0' }}>CTA direction: {fm.ctaDirection.join(', ')}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* E. Tone Guidance */}
+                    {msg.toneGuidance.length > 0 && (
+                      <div style={{ marginTop: 16 }}>
+                        <h4 className="section-title">Tone Guidance</h4>
+                        <div className="tag-list" style={{ marginTop: 8 }}>
+                          {msg.toneGuidance.map((t, i) => <span key={i} className="tag">{labelize(t)}</span>)}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* F. Claims to Avoid */}
+                    {msg.avoidClaims.length > 0 && (
+                      <div style={{ marginTop: 16 }}>
+                        <h4 className="section-title">Claims to Avoid</h4>
+                        <ul className="bullet-list" style={{ marginTop: 8 }}>
+                          {msg.avoidClaims.map((c, i) => <li key={i}>{c}</li>)}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* G. Messaging Evidence Gaps / Notes */}
+                    {messagingNotes.length > 0 && (
+                      <div style={{ marginTop: 16 }}>
+                        <h4 className="section-title">Messaging Evidence Gaps / Notes</h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {messagingNotes.map((w, i) => <div key={i} className="content-warning">{w}</div>)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* F. Evidence Gaps / Notes */}
               {evidenceNotes.length > 0 && (
                 <div style={{ marginTop: 20 }}>

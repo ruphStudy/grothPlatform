@@ -10,12 +10,29 @@ import { GrowthMotionService } from './growth-motion.service';
 import { GrowthObjectiveService } from './growth-objective.service';
 import { GrowthStrategyController } from './growth-strategy.controller';
 import { GrowthStrategyService } from './growth-strategy.service';
+import { MessagingStrategyService } from './messaging-strategy.service';
 import { StrategySignalService } from './strategy-signal.service';
 
 @Module({
   imports: [ProductsModule, WebsiteIntelligenceModule, MarketIntelligenceModule, AudienceIntelligenceModule, KeywordIntelligenceModule],
   controllers: [GrowthStrategyController],
-  providers: [StrategySignalService, GrowthObjectiveService, GrowthChannelFitService, GrowthMotionService, FunnelStrategyService, GrowthStrategyService],
-  exports: [StrategySignalService, GrowthObjectiveService, GrowthChannelFitService, GrowthMotionService, FunnelStrategyService, GrowthStrategyService],
+  providers: [
+    StrategySignalService,
+    GrowthObjectiveService,
+    GrowthChannelFitService,
+    GrowthMotionService,
+    FunnelStrategyService,
+    MessagingStrategyService,
+    GrowthStrategyService,
+  ],
+  exports: [
+    StrategySignalService,
+    GrowthObjectiveService,
+    GrowthChannelFitService,
+    GrowthMotionService,
+    FunnelStrategyService,
+    MessagingStrategyService,
+    GrowthStrategyService,
+  ],
 })
 export class GrowthStrategyModule {}

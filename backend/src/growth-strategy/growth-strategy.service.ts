@@ -31,12 +31,14 @@ import { FunnelStrategyService } from './funnel-strategy.service';
 import { GrowthChannelFitService } from './growth-channel-fit.service';
 import { GrowthMotionService } from './growth-motion.service';
 import { GrowthObjectiveService } from './growth-objective.service';
+import { MessagingStrategyService } from './messaging-strategy.service';
 import { StrategySignalService } from './strategy-signal.service';
 import type { FunnelStrategyResult } from './types/funnel-strategy.types';
 import type { GrowthChannelFitResult } from './types/growth-channel-fit.types';
 import type { GrowthMotionResult } from './types/growth-motion.types';
 import type { GrowthObjectiveResult } from './types/growth-objective.types';
 import type { GrowthStrategyOverview } from './types/growth-strategy-overview.types';
+import type { MessagingStrategyResult } from './types/messaging-strategy.types';
 import type { StrategySignalResult } from './types/strategy-signal.types';
 import type { CompetitorKeywordGapResult } from '../keyword-intelligence/types/competitor-keyword-gap.types';
 
@@ -89,6 +91,7 @@ export class GrowthStrategyService {
     private readonly growthChannelFitService: GrowthChannelFitService,
     private readonly growthMotionService: GrowthMotionService,
     private readonly funnelStrategyService: FunnelStrategyService,
+    private readonly messagingStrategyService: MessagingStrategyService,
   ) {}
 
   /**
@@ -150,8 +153,22 @@ export class GrowthStrategyService {
     const objectives = this.growthObjectiveService.detect(signals);
     const channels = this.growthChannelFitService.evaluate({ signals, objectives });
     const funnel = this.funnelStrategyService.build({ signals, objectives, channels });
+    const messaging = this.messagingStrategyService.build({ signals, objectives, channels, funnel });
 
-    return { signals, objectives, channels, funnel, generatedAt: new Date() };
+    return { signals, objectives, channels, funnel, messaging, generatedAt: new Date() };
+  }
+
+  /**
+   * Sprint 12D: reuses the same single 12A pass and the same pure 12B/12C/
+   * funnel chain as overview-preview — no repeated orchestration, no
+   * internal HTTP calls.
+   */
+  async buildMessagingForProduct(organizationId: string, productId: string, userId: string): Promise<MessagingStrategyResult> {
+    const signals = await this.buildSignalsForProduct(organizationId, productId, userId);
+    const objectives = this.growthObjectiveService.detect(signals);
+    const channels = this.growthChannelFitService.evaluate({ signals, objectives });
+    const funnel = this.funnelStrategyService.build({ signals, objectives, channels });
+    return this.messagingStrategyService.build({ signals, objectives, channels, funnel });
   }
 
   async buildSignalsForProduct(organizationId: string, productId: string, userId: string): Promise<StrategySignalResult> {
