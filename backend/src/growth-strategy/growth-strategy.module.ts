@@ -6,6 +6,7 @@ import { ProductsModule } from '../products/products.module';
 import { WebsiteIntelligenceModule } from '../website-intelligence/website-intelligence.module';
 import { AcquisitionStrategyService } from './acquisition-strategy.service';
 import { ContentStrategyService } from './content-strategy.service';
+import { ConversionStrategyService } from './conversion-strategy.service';
 import { FunnelStrategyService } from './funnel-strategy.service';
 import { GrowthChannelFitService } from './growth-channel-fit.service';
 import { GrowthMotionService } from './growth-motion.service';
@@ -27,6 +28,7 @@ import { StrategySignalService } from './strategy-signal.service';
     MessagingStrategyService,
     ContentStrategyService,
     AcquisitionStrategyService,
+    ConversionStrategyService,
     GrowthStrategyService,
   ],
   exports: [
@@ -38,6 +40,7 @@ import { StrategySignalService } from './strategy-signal.service';
     MessagingStrategyService,
     ContentStrategyService,
     AcquisitionStrategyService,
+    ConversionStrategyService,
     GrowthStrategyService,
   ],
 })

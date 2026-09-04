@@ -29,6 +29,7 @@ import { ProductWebsiteKnowledgeService } from '../website-intelligence/product-
 import type { ProductWebsiteKnowledge } from '../website-intelligence/product-website-knowledge.types';
 import { AcquisitionStrategyService } from './acquisition-strategy.service';
 import { ContentStrategyService } from './content-strategy.service';
+import { ConversionStrategyService } from './conversion-strategy.service';
 import { FunnelStrategyService } from './funnel-strategy.service';
 import { GrowthChannelFitService } from './growth-channel-fit.service';
 import { GrowthMotionService } from './growth-motion.service';
@@ -37,6 +38,7 @@ import { MessagingStrategyService } from './messaging-strategy.service';
 import { StrategySignalService } from './strategy-signal.service';
 import type { AcquisitionStrategyResult } from './types/acquisition-strategy.types';
 import type { ContentStrategyResult } from './types/content-strategy.types';
+import type { ConversionStrategyResult } from './types/conversion-strategy.types';
 import type { FunnelStrategyResult } from './types/funnel-strategy.types';
 import type { GrowthChannelFitResult } from './types/growth-channel-fit.types';
 import type { GrowthMotionResult } from './types/growth-motion.types';
@@ -98,6 +100,7 @@ export class GrowthStrategyService {
     private readonly messagingStrategyService: MessagingStrategyService,
     private readonly contentStrategyService: ContentStrategyService,
     private readonly acquisitionStrategyService: AcquisitionStrategyService,
+    private readonly conversionStrategyService: ConversionStrategyService,
   ) {}
 
   /**
@@ -162,8 +165,9 @@ export class GrowthStrategyService {
     const messaging = this.messagingStrategyService.build({ signals, objectives, channels, funnel });
     const contentStrategy = this.contentStrategyService.build({ signals, objectives, channels, funnel, messaging });
     const acquisitionStrategy = this.acquisitionStrategyService.build({ signals, objectives, channels, funnel, messaging, contentStrategy });
+    const conversionStrategy = this.conversionStrategyService.build({ signals, objectives, channels, funnel, messaging, contentStrategy, acquisitionStrategy });
 
-    return { signals, objectives, channels, funnel, messaging, contentStrategy, acquisitionStrategy, generatedAt: new Date() };
+    return { signals, objectives, channels, funnel, messaging, contentStrategy, acquisitionStrategy, conversionStrategy, generatedAt: new Date() };
   }
 
   /**
@@ -206,6 +210,22 @@ export class GrowthStrategyService {
     const messaging = this.messagingStrategyService.build({ signals, objectives, channels, funnel });
     const contentStrategy = this.contentStrategyService.build({ signals, objectives, channels, funnel, messaging });
     return this.acquisitionStrategyService.build({ signals, objectives, channels, funnel, messaging, contentStrategy });
+  }
+
+  /**
+   * Sprint 12G: same single 12A pass, then 12B/12C/funnel/messaging/content/
+   * acquisition (all pure) feed the pure conversion-strategy build — no
+   * internal HTTP calls, no repeated orchestration.
+   */
+  async buildConversionForProduct(organizationId: string, productId: string, userId: string): Promise<ConversionStrategyResult> {
+    const signals = await this.buildSignalsForProduct(organizationId, productId, userId);
+    const objectives = this.growthObjectiveService.detect(signals);
+    const channels = this.growthChannelFitService.evaluate({ signals, objectives });
+    const funnel = this.funnelStrategyService.build({ signals, objectives, channels });
+    const messaging = this.messagingStrategyService.build({ signals, objectives, channels, funnel });
+    const contentStrategy = this.contentStrategyService.build({ signals, objectives, channels, funnel, messaging });
+    const acquisitionStrategy = this.acquisitionStrategyService.build({ signals, objectives, channels, funnel, messaging, contentStrategy });
+    return this.conversionStrategyService.build({ signals, objectives, channels, funnel, messaging, contentStrategy, acquisitionStrategy });
   }
 
   async buildSignalsForProduct(organizationId: string, productId: string, userId: string): Promise<StrategySignalResult> {

@@ -1,5 +1,6 @@
 import type { AcquisitionStrategyResult } from './acquisition-strategy.types';
 import type { ContentStrategyResult } from './content-strategy.types';
+import type { ConversionStrategyResult } from './conversion-strategy.types';
 import type { FunnelStrategyResult } from './funnel-strategy.types';
 import type { GrowthChannelFitResult } from './growth-channel-fit.types';
 import type { GrowthObjectiveResult } from './growth-objective.types';
@@ -14,5 +15,6 @@ export interface GrowthStrategyOverview {
   messaging: MessagingStrategyResult;
   contentStrategy: ContentStrategyResult;
   acquisitionStrategy: AcquisitionStrategyResult;
+  conversionStrategy: ConversionStrategyResult;
   generatedAt: Date;
 }

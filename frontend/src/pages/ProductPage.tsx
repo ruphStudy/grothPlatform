@@ -2602,6 +2602,169 @@ export default function ProductPage() {
                 );
               })()}
 
+              {/* Conversion Strategy */}
+              {(() => {
+                const conv = gs.conversionStrategy;
+                const primaryAction = conv.primaryActionId ? conv.actions.find((a) => a.id === conv.primaryActionId) : undefined;
+                const primaryPath = conv.primaryPathId ? conv.paths.find((p) => p.id === conv.primaryPathId) : undefined;
+                const topPaths = conv.paths.slice(0, 6);
+                const remainingPaths = conv.paths.slice(6);
+                const conversionNotes = Array.from(new Set([...conv.missingEvidence, ...conv.warnings]));
+
+                return (
+                  <div style={{ marginTop: 24 }}>
+                    <h3 className="section-title">Conversion Strategy</h3>
+                    <div className="content-warning">
+                      Conversion recommendations are strategy hypotheses and do not predict conversion-rate lift, customer behavior, or revenue impact.
+                    </div>
+
+                    {/* A. Conversion Overview */}
+                    <Card className="profile-section confidence-card">
+                      <ConfidenceBar label="Conversion Confidence" score={conv.confidenceScore} />
+                      <div className="summary-grid" style={{ marginTop: 14 }}>
+                        <div>
+                          <span className="summary-label">Primary Action</span>
+                          <p>{primaryAction?.label ?? 'Not determined'}</p>
+                        </div>
+                        <div>
+                          <span className="summary-label">Primary Path</span>
+                          <p>{primaryPath ? primaryPath.title : 'Not determined'}</p>
+                        </div>
+                        <div>
+                          <span className="summary-label">Actions</span>
+                          <p>{conv.actions.length}</p>
+                        </div>
+                        <div>
+                          <span className="summary-label">Frictions</span>
+                          <p>{conv.frictions.length}</p>
+                        </div>
+                        <div>
+                          <span className="summary-label">Proof Needs</span>
+                          <p>{conv.proofNeeds.length}</p>
+                        </div>
+                      </div>
+                    </Card>
+
+                    {/* B. Recommended Conversion Actions */}
+                    <div style={{ marginTop: 16 }}>
+                      <h4 className="section-title">Recommended Conversion Actions</h4>
+                      {conv.actions.length === 0 ? (
+                        <p className="muted" style={{ marginTop: 8 }}>No reliable conversion actions were detected from current evidence.</p>
+                      ) : (
+                        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {conv.actions.map((a) => (
+                            <Card key={a.id} className="entity-card">
+                              <div className="entity-card-header">
+                                <h4 style={{ margin: 0 }}>{a.label}</h4>
+                                {a.id === conv.primaryActionId && <span className="tag">Primary Action</span>}
+                              </div>
+                              <div className="profile-meta">
+                                <span>Priority: <strong>{a.priorityScore}</strong></span>
+                                <span>Confidence: <strong>{a.confidenceScore}</strong></span>
+                                <span>Funnel: <strong>{labelize(a.funnelStage)}</strong></span>
+                              </div>
+                              {a.targetAudienceSegmentIds.length > 0 && (
+                                <p className="muted" style={{ margin: '6px 0 0' }}>{a.targetAudienceSegmentIds.length} target audience segment(s).</p>
+                              )}
+                              {a.supportingKeywords.length > 0 && (
+                                <p className="muted" style={{ margin: '4px 0 0' }}>Keywords: {a.supportingKeywords.join(', ')}</p>
+                              )}
+                              {a.reasons.length > 0 && <p className="muted" style={{ margin: '4px 0 0' }}>{a.reasons.join(' ')}</p>}
+                            </Card>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* C. Conversion Friction Hypotheses */}
+                    <div style={{ marginTop: 16 }}>
+                      <h4 className="section-title">Conversion Friction Hypotheses</h4>
+                      {conv.frictions.length === 0 ? (
+                        <p className="muted" style={{ marginTop: 8 }}>No significant conversion-friction hypotheses were detected.</p>
+                      ) : (
+                        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {conv.frictions.map((f) => (
+                            <div key={f.id} className="audience-card">
+                              <h4 style={{ margin: 0 }}>{f.title}</h4>
+                              <p className="content-warning" style={{ marginTop: 4 }}>Hypothesis — not confirmed customer behavior.</p>
+                              <p className="audience-meta">Severity: {f.severityScore} · Confidence: {f.confidenceScore} · Stage: {labelize(f.funnelStage)}</p>
+                              <p style={{ margin: '4px 0 0' }}>{f.hypothesis}</p>
+                              {f.evidence.length > 0 && <p className="muted" style={{ margin: '4px 0 0' }}>Evidence: {f.evidence.join(' ')}</p>}
+                              {f.recommendedResponses.length > 0 && (
+                                <ul className="bullet-list" style={{ marginTop: 6 }}>{f.recommendedResponses.map((r, i) => <li key={i}>{r}</li>)}</ul>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* D. Proof Needs */}
+                    <div style={{ marginTop: 16 }}>
+                      <h4 className="section-title">Proof Needs</h4>
+                      {conv.proofNeeds.length === 0 ? (
+                        <p className="muted" style={{ marginTop: 8 }}>No specific proof needs were detected from current evidence.</p>
+                      ) : (
+                        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {conv.proofNeeds.map((p) => (
+                            <div key={p.id} className="audience-card">
+                              <h4 style={{ margin: 0 }}>{p.title}</h4>
+                              <p className="audience-meta">Priority: {p.priorityScore} · Confidence: {p.confidenceScore} · Stage: {labelize(p.funnelStage)}</p>
+                              {p.recommendedProofDirection.length > 0 && (
+                                <ul className="bullet-list" style={{ marginTop: 6 }}>{p.recommendedProofDirection.map((d, i) => <li key={i}>{d}</li>)}</ul>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* E. Conversion Paths */}
+                    <div style={{ marginTop: 16 }}>
+                      <h4 className="section-title">Conversion Paths</h4>
+                      {topPaths.length === 0 ? (
+                        <p className="muted" style={{ marginTop: 8 }}>No reliable conversion paths were detected.</p>
+                      ) : (
+                        <>
+                          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {topPaths.map((p) => (
+                              <div key={p.id} className="audience-card">
+                                <div className="entity-card-header">
+                                  <h4 style={{ margin: 0 }}>{p.title}</h4>
+                                  {p.id === conv.primaryPathId && <span className="tag">Primary Path</span>}
+                                </div>
+                                <p className="audience-meta">Priority: {p.priorityScore} · Confidence: {p.confidenceScore}</p>
+                                {p.reasons.length > 0 && <p className="muted" style={{ margin: '4px 0 0' }}>{p.reasons.join(' ')}</p>}
+                              </div>
+                            ))}
+                          </div>
+                          {remainingPaths.length > 0 && (
+                            <details style={{ marginTop: 10 }}>
+                              <summary className="summary-label" style={{ cursor: 'pointer' }}>
+                                Show {remainingPaths.length} more path(s)
+                              </summary>
+                              <ul className="bullet-list" style={{ marginTop: 8 }}>
+                                {remainingPaths.map((p) => <li key={p.id}>{p.title}</li>)}
+                              </ul>
+                            </details>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    {/* F. Conversion Evidence Gaps / Notes */}
+                    {conversionNotes.length > 0 && (
+                      <div style={{ marginTop: 16 }}>
+                        <h4 className="section-title">Conversion Evidence Gaps / Notes</h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {conversionNotes.map((w, i) => <div key={i} className="content-warning">{w}</div>)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* F. Evidence Gaps / Notes */}
               {evidenceNotes.length > 0 && (
                 <div style={{ marginTop: 20 }}>
