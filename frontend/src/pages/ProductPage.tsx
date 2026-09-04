@@ -13,6 +13,9 @@ import type {
   FunnelStage,
   GrowthPlanPhase,
   GrowthStrategyOverview,
+  GrowthStrategyReviewResponse,
+  GrowthStrategySection,
+  GrowthStrategySectionStatus,
   KeywordIntelligencePreview,
   Product,
   ProductIntelligenceProfile,
@@ -34,6 +37,21 @@ function relationshipLabel(value: string): string {
 function tierLabel(tier: string): string {
   return labelize(tier);
 }
+
+const GROWTH_STRATEGY_SECTION_LIST: { key: GrowthStrategySection; label: string }[] = [
+  { key: 'overview', label: 'Strategy Overview' },
+  { key: 'signals', label: 'Strategic Signals' },
+  { key: 'objectives', label: 'Growth Objectives' },
+  { key: 'channels', label: 'Recommended Channels' },
+  { key: 'funnel', label: 'Funnel Strategy' },
+  { key: 'messaging', label: 'Messaging Strategy' },
+  { key: 'content', label: 'Content Strategy' },
+  { key: 'acquisition', label: 'Acquisition Strategy' },
+  { key: 'conversion', label: 'Conversion Strategy' },
+  { key: 'growth_plan', label: '30/60/90 Growth Plan' },
+];
+
+type SectionDraft = { status: GrowthStrategySectionStatus; note: string };
 
 function qualityBadgeClass(quality: 'high' | 'medium' | 'low'): string {
   if (quality === 'high') return 'quality-good';
@@ -96,6 +114,17 @@ export default function ProductPage() {
   const [growthStrategy, setGrowthStrategy] = useState<GrowthStrategyOverview | null>(null);
   const [buildingGrowthStrategy, setBuildingGrowthStrategy] = useState(false);
   const [growthStrategyError, setGrowthStrategyError] = useState<string | null>(null);
+  const [growthStrategyReview, setGrowthStrategyReview] = useState<GrowthStrategyReviewResponse | null>(null);
+  const [loadingReview, setLoadingReview] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [savingReview, setSavingReview] = useState(false);
+  const [reviewSavedMessage, setReviewSavedMessage] = useState<string | null>(null);
+  const [approvingStrategy, setApprovingStrategy] = useState(false);
+  const [requestingChanges, setRequestingChanges] = useState(false);
+  const [sectionDrafts, setSectionDrafts] = useState<Record<GrowthStrategySection, SectionDraft>>(
+    () => Object.fromEntries(GROWTH_STRATEGY_SECTION_LIST.map((s) => [s.key, { status: 'pending', note: '' }])) as Record<GrowthStrategySection, SectionDraft>,
+  );
+  const [overallNoteDraft, setOverallNoteDraft] = useState('');
 
   async function loadData() {
     if (!organizationId || !productId) return;
@@ -128,6 +157,104 @@ export default function ProductPage() {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId, productId]);
+
+  function applyReviewToDrafts(data: GrowthStrategyReviewResponse) {
+    setOverallNoteDraft(data.overallNote ?? '');
+    setSectionDrafts(
+      Object.fromEntries(
+        GROWTH_STRATEGY_SECTION_LIST.map((s) => {
+          const existing = data.sectionReviews.find((sr) => sr.section === s.key);
+          return [s.key, { status: existing?.status ?? 'pending', note: existing?.note ?? '' }];
+        }),
+      ) as Record<GrowthStrategySection, SectionDraft>,
+    );
+  }
+
+  async function loadReview() {
+    if (!organizationId || !productId) return;
+    setLoadingReview(true);
+    setReviewError(null);
+    try {
+      const data = await apiRequest<GrowthStrategyReviewResponse>(
+        `/organizations/${organizationId}/products/${productId}/growth-strategy/review`,
+      );
+      setGrowthStrategyReview(data);
+      applyReviewToDrafts(data);
+    } catch (err) {
+      // A review-metadata failure must never hide the generated strategy itself.
+      setReviewError(err instanceof ApiError ? err.message : 'Failed to load strategy review');
+    } finally {
+      setLoadingReview(false);
+    }
+  }
+
+  useEffect(() => {
+    loadReview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [organizationId, productId]);
+
+  async function handleSaveReview() {
+    if (!organizationId || !productId) return;
+    setSavingReview(true);
+    setReviewError(null);
+    setReviewSavedMessage(null);
+    try {
+      const sectionReviews = GROWTH_STRATEGY_SECTION_LIST.map((s) => ({
+        section: s.key,
+        status: sectionDrafts[s.key].status,
+        note: sectionDrafts[s.key].note || undefined,
+      }));
+      const data = await apiRequest<GrowthStrategyReviewResponse>(
+        `/organizations/${organizationId}/products/${productId}/growth-strategy/review`,
+        { method: 'POST', body: { overallNote: overallNoteDraft || undefined, sectionReviews } },
+      );
+      setGrowthStrategyReview(data);
+      applyReviewToDrafts(data);
+      setReviewSavedMessage('Review saved.');
+    } catch (err) {
+      setReviewError(err instanceof ApiError ? err.message : 'Failed to save strategy review');
+    } finally {
+      setSavingReview(false);
+    }
+  }
+
+  async function handleApproveStrategy() {
+    if (!organizationId || !productId || !growthStrategy) return;
+    setApprovingStrategy(true);
+    setReviewError(null);
+    setReviewSavedMessage(null);
+    try {
+      const data = await apiRequest<GrowthStrategyReviewResponse>(
+        `/organizations/${organizationId}/products/${productId}/growth-strategy/review/approve`,
+        { method: 'POST', body: { strategyGeneratedAt: growthStrategy.generatedAt } },
+      );
+      setGrowthStrategyReview(data);
+      applyReviewToDrafts(data);
+    } catch (err) {
+      setReviewError(err instanceof ApiError ? err.message : 'Failed to approve strategy');
+    } finally {
+      setApprovingStrategy(false);
+    }
+  }
+
+  async function handleRequestChanges() {
+    if (!organizationId || !productId) return;
+    setRequestingChanges(true);
+    setReviewError(null);
+    setReviewSavedMessage(null);
+    try {
+      const data = await apiRequest<GrowthStrategyReviewResponse>(
+        `/organizations/${organizationId}/products/${productId}/growth-strategy/review/request-changes`,
+        { method: 'POST', body: { note: overallNoteDraft || undefined } },
+      );
+      setGrowthStrategyReview(data);
+      applyReviewToDrafts(data);
+    } catch (err) {
+      setReviewError(err instanceof ApiError ? err.message : 'Failed to request changes');
+    } finally {
+      setRequestingChanges(false);
+    }
+  }
 
   async function handleAnalyze() {
     setAnalyzeError(null);
@@ -1953,6 +2080,112 @@ export default function ProductPage() {
             </p>
           </div>
         )}
+
+        {/* Strategy Review & Approval */}
+        <div style={{ marginTop: 16 }}>
+          <Card className="profile-section confidence-card">
+            <div className="entity-card-header">
+              <h3 className="section-title" style={{ margin: 0 }}>Strategy Review &amp; Approval</h3>
+            </div>
+
+            {!growthStrategy ? (
+              <p className="muted" style={{ marginTop: 8 }}>Build the Growth Strategy before reviewing or approving it.</p>
+            ) : (() => {
+              const review = growthStrategyReview;
+              const isStale = !!(
+                review &&
+                review.status === 'approved' &&
+                review.reviewedStrategyGeneratedAt &&
+                new Date(growthStrategy.generatedAt).getTime() > new Date(review.reviewedStrategyGeneratedAt).getTime()
+              );
+              const effectiveStatusLabel = isStale ? 'Review Required (Stale)' : review ? labelize(review.status) : 'Draft';
+              const anySectionChangesRequested = Object.values(sectionDrafts).some((d) => d.status === 'changes_requested');
+
+              return (
+                <div>
+                  <ErrorMessage message={reviewError} />
+                  {loadingReview && <p className="muted" style={{ marginTop: 8 }}>Loading review...</p>}
+
+                  <div className="profile-meta" style={{ marginTop: 10 }}>
+                    <span>Review Status: <strong>{effectiveStatusLabel}</strong></span>
+                    {review?.approvedAt && <span>Approved: <strong>{new Date(review.approvedAt).toLocaleString()}</strong></span>}
+                    {review?.changesRequestedAt && !review?.approvedAt && (
+                      <span>Changes Requested: <strong>{new Date(review.changesRequestedAt).toLocaleString()}</strong></span>
+                    )}
+                  </div>
+                  {isStale && (
+                    <div className="content-warning" style={{ marginTop: 8 }}>
+                      Strategy changed after the last approval. Please review the updated strategy before campaign planning.
+                    </div>
+                  )}
+                  {review?.overallNote && (
+                    <p className="muted" style={{ marginTop: 8 }}>Overall note: {review.overallNote}</p>
+                  )}
+
+                  <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {GROWTH_STRATEGY_SECTION_LIST.map((s) => (
+                      <div key={s.key} className="audience-card">
+                        <div className="entity-card-header">
+                          <strong>{s.label}</strong>
+                          <select
+                            value={sectionDrafts[s.key].status}
+                            onChange={(e) =>
+                              setSectionDrafts((prev) => ({ ...prev, [s.key]: { ...prev[s.key], status: e.target.value as GrowthStrategySectionStatus } }))
+                            }
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="approved">Approved</option>
+                            <option value="changes_requested">Changes Requested</option>
+                          </select>
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Optional note for this section"
+                          value={sectionDrafts[s.key].note}
+                          onChange={(e) => setSectionDrafts((prev) => ({ ...prev, [s.key]: { ...prev[s.key], note: e.target.value } }))}
+                          style={{ width: '100%', marginTop: 6 }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ marginTop: 12 }}>
+                    <span className="summary-label">Overall Note</span>
+                    <textarea
+                      value={overallNoteDraft}
+                      onChange={(e) => setOverallNoteDraft(e.target.value)}
+                      placeholder="Optional overall note for this review"
+                      style={{ width: '100%', marginTop: 4 }}
+                      rows={2}
+                    />
+                  </div>
+
+                  {reviewSavedMessage && <p className="muted" style={{ marginTop: 8 }}>{reviewSavedMessage}</p>}
+
+                  <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button type="button" className="btn btn-primary" onClick={handleSaveReview} disabled={savingReview}>
+                      {savingReview ? 'Saving review...' : 'Save Review'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={handleApproveStrategy}
+                      disabled={approvingStrategy || anySectionChangesRequested}
+                    >
+                      {approvingStrategy ? 'Approving...' : 'Approve Strategy'}
+                    </button>
+                    <button type="button" className="btn btn-primary" onClick={handleRequestChanges} disabled={requestingChanges}>
+                      {requestingChanges ? 'Requesting changes...' : 'Request Changes'}
+                    </button>
+                  </div>
+                  {anySectionChangesRequested && (
+                    <p className="muted" style={{ marginTop: 6 }}>Resolve section(s) marked "Changes Requested" before approving.</p>
+                  )}
+                </div>
+              );
+            })()}
+          </Card>
+        </div>
 
         {growthStrategy && (() => {
           const gs = growthStrategy;

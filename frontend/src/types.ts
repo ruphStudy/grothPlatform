@@ -1340,6 +1340,42 @@ export interface GrowthStrategyOverview {
   generatedAt: string;
 }
 
+export type GrowthStrategyReviewStatus = 'draft' | 'approved' | 'changes_requested';
+
+export type GrowthStrategySection =
+  | 'overview'
+  | 'signals'
+  | 'objectives'
+  | 'channels'
+  | 'funnel'
+  | 'messaging'
+  | 'content'
+  | 'acquisition'
+  | 'conversion'
+  | 'growth_plan';
+
+export type GrowthStrategySectionStatus = 'pending' | 'approved' | 'changes_requested';
+
+export interface GrowthStrategySectionReviewResponse {
+  section: GrowthStrategySection;
+  status: GrowthStrategySectionStatus;
+  note?: string;
+  reviewedAt?: string;
+}
+
+export interface GrowthStrategyReviewResponse {
+  organizationId: string;
+  productId: string;
+  status: GrowthStrategyReviewStatus;
+  sectionReviews: GrowthStrategySectionReviewResponse[];
+  overallNote?: string;
+  approvedAt?: string;
+  changesRequestedAt?: string;
+  reviewedStrategyGeneratedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface ProductIntelligenceProfile {
   id: string;
   organizationId: string;

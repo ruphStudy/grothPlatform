@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MongooseModule } from '@nestjs/mongoose';
 import { AudienceIntelligenceModule } from '../audience-intelligence/audience-intelligence.module';
 import { KeywordIntelligenceModule } from '../keyword-intelligence/keyword-intelligence.module';
 import { MarketIntelligenceModule } from '../market-intelligence/market-intelligence.module';
@@ -13,12 +14,21 @@ import { GrowthMotionService } from './growth-motion.service';
 import { GrowthObjectiveService } from './growth-objective.service';
 import { GrowthPlanService } from './growth-plan.service';
 import { GrowthStrategyController } from './growth-strategy.controller';
+import { GrowthStrategyReviewService } from './growth-strategy-review.service';
 import { GrowthStrategyService } from './growth-strategy.service';
 import { MessagingStrategyService } from './messaging-strategy.service';
+import { GrowthStrategyReview, GrowthStrategyReviewSchema } from './schemas/growth-strategy-review.schema';
 import { StrategySignalService } from './strategy-signal.service';
 
 @Module({
-  imports: [ProductsModule, WebsiteIntelligenceModule, MarketIntelligenceModule, AudienceIntelligenceModule, KeywordIntelligenceModule],
+  imports: [
+    ProductsModule,
+    WebsiteIntelligenceModule,
+    MarketIntelligenceModule,
+    AudienceIntelligenceModule,
+    KeywordIntelligenceModule,
+    MongooseModule.forFeature([{ name: GrowthStrategyReview.name, schema: GrowthStrategyReviewSchema }]),
+  ],
   controllers: [GrowthStrategyController],
   providers: [
     StrategySignalService,
@@ -31,6 +41,7 @@ import { StrategySignalService } from './strategy-signal.service';
     AcquisitionStrategyService,
     ConversionStrategyService,
     GrowthPlanService,
+    GrowthStrategyReviewService,
     GrowthStrategyService,
   ],
   exports: [
@@ -44,6 +55,7 @@ import { StrategySignalService } from './strategy-signal.service';
     AcquisitionStrategyService,
     ConversionStrategyService,
     GrowthPlanService,
+    GrowthStrategyReviewService,
     GrowthStrategyService,
   ],
 })

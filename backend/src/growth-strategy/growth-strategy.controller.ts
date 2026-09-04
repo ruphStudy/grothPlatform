@@ -1,11 +1,18 @@
-import { Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ApproveGrowthStrategyDto } from './dto/approve-growth-strategy.dto';
+import { RequestGrowthStrategyChangesDto } from './dto/request-growth-strategy-changes.dto';
+import { UpdateGrowthStrategyReviewDto } from './dto/update-growth-strategy-review.dto';
+import { GrowthStrategyReviewService } from './growth-strategy-review.service';
 import { GrowthStrategyService } from './growth-strategy.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('organizations/:organizationId/products/:productId/growth-strategy')
 export class GrowthStrategyController {
-  constructor(private readonly growthStrategyService: GrowthStrategyService) {}
+  constructor(
+    private readonly growthStrategyService: GrowthStrategyService,
+    private readonly growthStrategyReviewService: GrowthStrategyReviewService,
+  ) {}
 
   @Post('signals-preview')
   signalsPreview(
@@ -104,5 +111,44 @@ export class GrowthStrategyController {
     @Param('productId') productId: string,
   ) {
     return this.growthStrategyService.buildPlanForProduct(organizationId, productId, req.user.userId);
+  }
+
+  @Get('review')
+  getReview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.growthStrategyReviewService.getReview(organizationId, productId, req.user.userId);
+  }
+
+  @Post('review')
+  saveReview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Body() dto: UpdateGrowthStrategyReviewDto,
+  ) {
+    return this.growthStrategyReviewService.saveReview(organizationId, productId, req.user.userId, dto);
+  }
+
+  @Post('review/approve')
+  approveReview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Body() dto: ApproveGrowthStrategyDto,
+  ) {
+    return this.growthStrategyReviewService.approve(organizationId, productId, req.user.userId, dto.strategyGeneratedAt);
+  }
+
+  @Post('review/request-changes')
+  requestReviewChanges(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Body() dto: RequestGrowthStrategyChangesDto,
+  ) {
+    return this.growthStrategyReviewService.requestChanges(organizationId, productId, req.user.userId, dto.note);
   }
 }
