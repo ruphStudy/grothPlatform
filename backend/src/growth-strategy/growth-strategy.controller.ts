@@ -42,4 +42,13 @@ export class GrowthStrategyController {
   ) {
     return this.growthStrategyService.buildMotionsForProduct(organizationId, productId, req.user.userId);
   }
+
+  @Post('funnel-preview')
+  funnelPreview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.growthStrategyService.buildFunnelForProduct(organizationId, productId, req.user.userId);
+  }
 }

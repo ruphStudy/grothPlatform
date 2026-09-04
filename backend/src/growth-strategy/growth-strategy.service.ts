@@ -27,10 +27,12 @@ import { ProductsService } from '../products/products.service';
 import { extractSourceDomain } from '../research/research-url.util';
 import { ProductWebsiteKnowledgeService } from '../website-intelligence/product-website-knowledge.service';
 import type { ProductWebsiteKnowledge } from '../website-intelligence/product-website-knowledge.types';
+import { FunnelStrategyService } from './funnel-strategy.service';
 import { GrowthChannelFitService } from './growth-channel-fit.service';
 import { GrowthMotionService } from './growth-motion.service';
 import { GrowthObjectiveService } from './growth-objective.service';
 import { StrategySignalService } from './strategy-signal.service';
+import type { FunnelStrategyResult } from './types/funnel-strategy.types';
 import type { GrowthChannelFitResult } from './types/growth-channel-fit.types';
 import type { GrowthMotionResult } from './types/growth-motion.types';
 import type { GrowthObjectiveResult } from './types/growth-objective.types';
@@ -85,6 +87,7 @@ export class GrowthStrategyService {
     private readonly growthObjectiveService: GrowthObjectiveService,
     private readonly growthChannelFitService: GrowthChannelFitService,
     private readonly growthMotionService: GrowthMotionService,
+    private readonly funnelStrategyService: FunnelStrategyService,
   ) {}
 
   /**
@@ -118,6 +121,19 @@ export class GrowthStrategyService {
     const objectives = this.growthObjectiveService.detect(signals);
     const channels = this.growthChannelFitService.evaluate({ signals, objectives });
     return this.growthMotionService.detect({ signals, objectives, channels });
+  }
+
+  /**
+   * Funnel Strategy: same single 12A pass, then objective detection and
+   * channel-fit evaluation (both pure) feed the pure funnel build — no
+   * internal HTTP calls to earlier preview endpoints, no repeated
+   * orchestration.
+   */
+  async buildFunnelForProduct(organizationId: string, productId: string, userId: string): Promise<FunnelStrategyResult> {
+    const signals = await this.buildSignalsForProduct(organizationId, productId, userId);
+    const objectives = this.growthObjectiveService.detect(signals);
+    const channels = this.growthChannelFitService.evaluate({ signals, objectives });
+    return this.funnelStrategyService.build({ signals, objectives, channels });
   }
 
   async buildSignalsForProduct(organizationId: string, productId: string, userId: string): Promise<StrategySignalResult> {
