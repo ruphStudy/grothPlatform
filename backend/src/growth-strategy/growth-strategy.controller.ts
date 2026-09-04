@@ -96,4 +96,13 @@ export class GrowthStrategyController {
   ) {
     return this.growthStrategyService.buildConversionForProduct(organizationId, productId, req.user.userId);
   }
+
+  @Post('plan-preview')
+  planPreview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.growthStrategyService.buildPlanForProduct(organizationId, productId, req.user.userId);
+  }
 }

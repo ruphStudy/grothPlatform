@@ -11,6 +11,7 @@ import { FunnelStrategyService } from './funnel-strategy.service';
 import { GrowthChannelFitService } from './growth-channel-fit.service';
 import { GrowthMotionService } from './growth-motion.service';
 import { GrowthObjectiveService } from './growth-objective.service';
+import { GrowthPlanService } from './growth-plan.service';
 import { GrowthStrategyController } from './growth-strategy.controller';
 import { GrowthStrategyService } from './growth-strategy.service';
 import { MessagingStrategyService } from './messaging-strategy.service';
@@ -29,6 +30,7 @@ import { StrategySignalService } from './strategy-signal.service';
     ContentStrategyService,
     AcquisitionStrategyService,
     ConversionStrategyService,
+    GrowthPlanService,
     GrowthStrategyService,
   ],
   exports: [
@@ -41,6 +43,7 @@ import { StrategySignalService } from './strategy-signal.service';
     ContentStrategyService,
     AcquisitionStrategyService,
     ConversionStrategyService,
+    GrowthPlanService,
     GrowthStrategyService,
   ],
 })

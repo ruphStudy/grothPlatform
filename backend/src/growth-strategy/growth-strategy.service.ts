@@ -34,6 +34,7 @@ import { FunnelStrategyService } from './funnel-strategy.service';
 import { GrowthChannelFitService } from './growth-channel-fit.service';
 import { GrowthMotionService } from './growth-motion.service';
 import { GrowthObjectiveService } from './growth-objective.service';
+import { GrowthPlanService } from './growth-plan.service';
 import { MessagingStrategyService } from './messaging-strategy.service';
 import { StrategySignalService } from './strategy-signal.service';
 import type { AcquisitionStrategyResult } from './types/acquisition-strategy.types';
@@ -43,6 +44,7 @@ import type { FunnelStrategyResult } from './types/funnel-strategy.types';
 import type { GrowthChannelFitResult } from './types/growth-channel-fit.types';
 import type { GrowthMotionResult } from './types/growth-motion.types';
 import type { GrowthObjectiveResult } from './types/growth-objective.types';
+import type { GrowthPlanResult } from './types/growth-plan.types';
 import type { GrowthStrategyOverview } from './types/growth-strategy-overview.types';
 import type { MessagingStrategyResult } from './types/messaging-strategy.types';
 import type { StrategySignalResult } from './types/strategy-signal.types';
@@ -101,6 +103,7 @@ export class GrowthStrategyService {
     private readonly contentStrategyService: ContentStrategyService,
     private readonly acquisitionStrategyService: AcquisitionStrategyService,
     private readonly conversionStrategyService: ConversionStrategyService,
+    private readonly growthPlanService: GrowthPlanService,
   ) {}
 
   /**
@@ -166,8 +169,9 @@ export class GrowthStrategyService {
     const contentStrategy = this.contentStrategyService.build({ signals, objectives, channels, funnel, messaging });
     const acquisitionStrategy = this.acquisitionStrategyService.build({ signals, objectives, channels, funnel, messaging, contentStrategy });
     const conversionStrategy = this.conversionStrategyService.build({ signals, objectives, channels, funnel, messaging, contentStrategy, acquisitionStrategy });
+    const growthPlan = this.growthPlanService.build({ signals, objectives, channels, funnel, messaging, contentStrategy, acquisitionStrategy, conversionStrategy });
 
-    return { signals, objectives, channels, funnel, messaging, contentStrategy, acquisitionStrategy, conversionStrategy, generatedAt: new Date() };
+    return { signals, objectives, channels, funnel, messaging, contentStrategy, acquisitionStrategy, conversionStrategy, growthPlan, generatedAt: new Date() };
   }
 
   /**
@@ -226,6 +230,23 @@ export class GrowthStrategyService {
     const contentStrategy = this.contentStrategyService.build({ signals, objectives, channels, funnel, messaging });
     const acquisitionStrategy = this.acquisitionStrategyService.build({ signals, objectives, channels, funnel, messaging, contentStrategy });
     return this.conversionStrategyService.build({ signals, objectives, channels, funnel, messaging, contentStrategy, acquisitionStrategy });
+  }
+
+  /**
+   * Sprint 12H: same single 12A pass, then the full pure 12B/12C/funnel/
+   * messaging/content/acquisition/conversion chain feeds the pure
+   * growth-plan build — no internal HTTP calls, no repeated orchestration.
+   */
+  async buildPlanForProduct(organizationId: string, productId: string, userId: string): Promise<GrowthPlanResult> {
+    const signals = await this.buildSignalsForProduct(organizationId, productId, userId);
+    const objectives = this.growthObjectiveService.detect(signals);
+    const channels = this.growthChannelFitService.evaluate({ signals, objectives });
+    const funnel = this.funnelStrategyService.build({ signals, objectives, channels });
+    const messaging = this.messagingStrategyService.build({ signals, objectives, channels, funnel });
+    const contentStrategy = this.contentStrategyService.build({ signals, objectives, channels, funnel, messaging });
+    const acquisitionStrategy = this.acquisitionStrategyService.build({ signals, objectives, channels, funnel, messaging, contentStrategy });
+    const conversionStrategy = this.conversionStrategyService.build({ signals, objectives, channels, funnel, messaging, contentStrategy, acquisitionStrategy });
+    return this.growthPlanService.build({ signals, objectives, channels, funnel, messaging, contentStrategy, acquisitionStrategy, conversionStrategy });
   }
 
   async buildSignalsForProduct(organizationId: string, productId: string, userId: string): Promise<StrategySignalResult> {

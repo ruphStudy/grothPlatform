@@ -11,6 +11,7 @@ import type {
   AudienceIntelligencePreview,
   CompetitiveIntelligencePreview,
   FunnelStage,
+  GrowthPlanPhase,
   GrowthStrategyOverview,
   KeywordIntelligencePreview,
   Product,
@@ -2758,6 +2759,155 @@ export default function ProductPage() {
                         <h4 className="section-title">Conversion Evidence Gaps / Notes</h4>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                           {conversionNotes.map((w, i) => <div key={i} className="content-warning">{w}</div>)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* 30/60/90-Day Growth Plan */}
+              {(() => {
+                const plan = gs.growthPlan;
+                const phaseOrder: GrowthPlanPhase[] = ['days_1_30', 'days_31_60', 'days_61_90'];
+                const phaseLabels: Record<GrowthPlanPhase, string> = { days_1_30: 'Days 1–30', days_31_60: 'Days 31–60', days_61_90: 'Days 61–90' };
+                const phaseByName = new Map(plan.phases.map((p) => [p.phase, p]));
+                const initiativesByPhase = new Map(phaseOrder.map((p) => [p, plan.initiatives.filter((i) => i.phase === p).sort((a, b) => b.priorityScore - a.priorityScore)]));
+                const milestonesByPhase = new Map(phaseOrder.map((p) => [p, plan.milestones.filter((m) => m.phase === p)]));
+                const topPrioritySet = new Set(plan.topPriorityInitiativeIds);
+                const planNotes = Array.from(new Set([...plan.missingEvidence, ...plan.warnings]));
+
+                return (
+                  <div style={{ marginTop: 24 }}>
+                    <h3 className="section-title">30 / 60 / 90-Day Growth Plan</h3>
+                    <div className="content-warning">
+                      This 30/60/90-day plan is a strategic execution hypothesis, not a forecast of traffic, leads, conversions, or revenue.
+                    </div>
+                    <div className="content-warning" style={{ marginTop: 6 }}>
+                      Priority represents recommended sequencing, not financial impact.
+                    </div>
+
+                    {/* A. Plan Overview */}
+                    <Card className="profile-section confidence-card">
+                      <ConfidenceBar label="Growth Plan Confidence" score={plan.confidenceScore} />
+                      <div className="summary-grid" style={{ marginTop: 14 }}>
+                        <div>
+                          <span className="summary-label">Total Initiatives</span>
+                          <p>{plan.initiatives.length}</p>
+                        </div>
+                        <div>
+                          <span className="summary-label">Top Priorities</span>
+                          <p>{plan.topPriorityInitiativeIds.length}</p>
+                        </div>
+                        {phaseOrder.map((p) => (
+                          <div key={p}>
+                            <span className="summary-label">{phaseLabels[p]}</span>
+                            <p>{phaseByName.get(p)?.theme ?? 'Not determined'}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+
+                    {/* B. Phase View */}
+                    {plan.initiatives.length === 0 ? (
+                      <p className="muted" style={{ marginTop: 12 }}>No reliable 30/60/90-day initiatives were detected from current strategy evidence.</p>
+                    ) : (
+                      phaseOrder.map((phase) => {
+                        const phaseSummary = phaseByName.get(phase);
+                        const phaseInitiatives = initiativesByPhase.get(phase) ?? [];
+                        const phaseMilestones = milestonesByPhase.get(phase) ?? [];
+                        const topInitiatives = phaseInitiatives.slice(0, 6);
+                        const remainingInitiatives = phaseInitiatives.slice(6);
+
+                        return (
+                          <div key={phase} style={{ marginTop: 20 }}>
+                            <h4 className="section-title">{phaseLabels[phase]} — {phaseSummary?.theme ?? ''}</h4>
+                            {phaseSummary && <p className="muted">{phaseSummary.objective}</p>}
+                            <div className="profile-meta" style={{ marginTop: 6 }}>
+                              <span>Confidence: <strong>{phaseSummary?.confidenceScore ?? 0}</strong></span>
+                              <span>Initiatives: <strong>{phaseInitiatives.length}</strong></span>
+                            </div>
+
+                            {phaseInitiatives.length === 0 ? (
+                              <p className="muted" style={{ marginTop: 8 }}>No additional initiatives are recommended for this phase until stronger evidence is available.</p>
+                            ) : (
+                              <>
+                                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                  {topInitiatives.map((init) => (
+                                    <Card key={init.id} className="entity-card">
+                                      <div className="entity-card-header">
+                                        <h4 style={{ margin: 0 }}>{init.title}</h4>
+                                        {topPrioritySet.has(init.id) && <span className="tag">Top Priority</span>}
+                                      </div>
+                                      <p className="entity-card-meta">{labelize(init.type)}</p>
+                                      <p>{init.objective}</p>
+                                      <div className="profile-meta">
+                                        <span>Priority: <strong>{init.priorityScore}</strong></span>
+                                        <span>Confidence: <strong>{init.confidenceScore}</strong></span>
+                                      </div>
+                                      {init.funnelStages.length > 0 && (
+                                        <div className="tag-list" style={{ marginTop: 6 }}>
+                                          {init.funnelStages.map((s, i) => <span key={i} className="tag">{labelize(s)}</span>)}
+                                        </div>
+                                      )}
+                                      {init.audienceSegmentIds.length > 0 && (
+                                        <p className="muted" style={{ margin: '6px 0 0' }}>{init.audienceSegmentIds.length} related audience segment(s).</p>
+                                      )}
+                                      {init.actions.length > 0 && (
+                                        <ul className="bullet-list" style={{ marginTop: 6 }}>{init.actions.map((a, i) => <li key={i}>{a}</li>)}</ul>
+                                      )}
+                                      {init.expectedLearning.length > 0 && (
+                                        <p className="muted" style={{ margin: '6px 0 0' }}>Expected learning: {init.expectedLearning.join(' ')}</p>
+                                      )}
+                                      {init.successSignals.length > 0 && (
+                                        <p className="muted" style={{ margin: '4px 0 0' }}>Success signals: {init.successSignals.join(', ')}</p>
+                                      )}
+                                      {init.dependencies.length > 0 && (
+                                        <div className="content-warning" style={{ marginTop: 6 }}>{init.dependencies.join('; ')}</div>
+                                      )}
+                                      {init.reasons.length > 0 && <p className="muted" style={{ margin: '4px 0 0' }}>{init.reasons.join(' ')}</p>}
+                                    </Card>
+                                  ))}
+                                </div>
+                                {remainingInitiatives.length > 0 && (
+                                  <details style={{ marginTop: 10 }}>
+                                    <summary className="summary-label" style={{ cursor: 'pointer' }}>
+                                      Show {remainingInitiatives.length} more initiative(s)
+                                    </summary>
+                                    <ul className="bullet-list" style={{ marginTop: 8 }}>
+                                      {remainingInitiatives.map((init) => <li key={init.id}>{init.title}</li>)}
+                                    </ul>
+                                  </details>
+                                )}
+                              </>
+                            )}
+
+                            {/* Milestones */}
+                            <div style={{ marginTop: 10 }}>
+                              {phaseMilestones.length === 0 ? (
+                                <p className="muted">No reliable phase milestones were detected.</p>
+                              ) : (
+                                phaseMilestones.map((m) => (
+                                  <div key={m.id} className="audience-card" style={{ marginTop: 6 }}>
+                                    <h4 style={{ margin: 0 }}>{m.title}</h4>
+                                    <p className="audience-meta">{m.outcomeDirection}</p>
+                                    {m.validationSignals.length > 0 && <p className="muted" style={{ margin: '4px 0 0' }}>Validation signals: {m.validationSignals.join(', ')}</p>}
+                                    <p className="muted" style={{ margin: '4px 0 0' }}>{m.initiativeIds.length} related initiative(s) · Confidence: {m.confidenceScore}</p>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+
+                    {/* Plan Evidence Gaps / Notes */}
+                    {planNotes.length > 0 && (
+                      <div style={{ marginTop: 16 }}>
+                        <h4 className="section-title">Growth Plan Evidence Gaps / Notes</h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {planNotes.map((w, i) => <div key={i} className="content-warning">{w}</div>)}
                         </div>
                       </div>
                     )}
