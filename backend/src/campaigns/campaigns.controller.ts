@@ -1,9 +1,11 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CampaignAudienceChannelService } from './campaign-audience-channel.service';
 import { CampaignGoalService } from './campaign-goal.service';
 import { CampaignsService } from './campaigns.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { DeriveCampaignGoalDto } from './dto/derive-campaign-goal.dto';
+import { SetCampaignAudienceChannelDto } from './dto/set-campaign-audience-channel.dto';
 import { SetCampaignGoalDto } from './dto/set-campaign-goal.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
 
@@ -13,6 +15,7 @@ export class CampaignsController {
   constructor(
     private readonly campaignsService: CampaignsService,
     private readonly campaignGoalService: CampaignGoalService,
+    private readonly campaignAudienceChannelService: CampaignAudienceChannelService,
   ) {}
 
   @Post()
@@ -77,5 +80,26 @@ export class CampaignsController {
     @Body() dto: DeriveCampaignGoalDto,
   ) {
     return this.campaignGoalService.deriveGoalForCampaign(organizationId, productId, campaignId, req.user.userId, dto?.campaignType);
+  }
+
+  @Patch(':campaignId/audience-channel')
+  setAudienceChannel(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+    @Body() dto: SetCampaignAudienceChannelDto,
+  ) {
+    return this.campaignAudienceChannelService.setManualMapping(organizationId, productId, campaignId, req.user.userId, dto);
+  }
+
+  @Post(':campaignId/audience-channel/derive')
+  deriveAudienceChannel(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+  ) {
+    return this.campaignAudienceChannelService.deriveMappingForCampaign(organizationId, productId, campaignId, req.user.userId);
   }
 }

@@ -1465,6 +1465,46 @@ export interface CampaignGoal {
   warnings: string[];
 }
 
+// Sprint 13C foundation types — audience/channel mapping is wired on the
+// backend; the Campaign detail UI itself is deferred to Sprint 13E/13F.
+export type CampaignAudienceChannelSource = 'manual' | 'strategy';
+
+export interface CampaignAudienceRecommendation {
+  audienceSegmentId: string;
+  label?: string;
+  relevanceScore: number;
+  confidenceScore: number;
+  relatedGoalTypes: string[];
+  relatedFunnelStages: string[];
+  relatedChannelIds: string[];
+  reasons: string[];
+  warnings: string[];
+}
+
+export interface CampaignChannelRecommendation {
+  channel: string;
+  fitScore: number;
+  confidenceScore: number;
+  audienceSegmentIds: string[];
+  relatedGoalTypes: string[];
+  relatedFunnelStages: string[];
+  reasons: string[];
+  weaknesses: string[];
+  warnings: string[];
+}
+
+export interface CampaignAudienceChannelMapping {
+  audiences: CampaignAudienceRecommendation[];
+  channels: CampaignChannelRecommendation[];
+  primaryAudienceSegmentId?: string;
+  primaryChannel?: string;
+  confidenceScore: number;
+  missingEvidence: string[];
+  warnings: string[];
+  source: CampaignAudienceChannelSource;
+  generatedAt?: string;
+}
+
 export interface Campaign {
   id: string;
   organizationId: string;
@@ -1487,6 +1527,7 @@ export interface Campaign {
   strategyReference?: CampaignStrategyReference;
   planningMetadata: CampaignPlanningMetadata;
   goal?: CampaignGoal;
+  audienceChannelMapping?: CampaignAudienceChannelMapping;
   createdBy: string;
   updatedBy?: string;
   createdAt?: string;

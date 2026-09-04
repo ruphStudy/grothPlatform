@@ -99,6 +99,104 @@ export class CampaignGoalRecord {
 }
 export const CampaignGoalRecordSchema = SchemaFactory.createForClass(CampaignGoalRecord);
 
+export const CAMPAIGN_AUDIENCE_CHANNEL_SOURCES = ['manual', 'strategy'] as const;
+
+@Schema({ _id: false })
+export class CampaignAudienceRecommendationRecord {
+  @Prop({ required: true })
+  audienceSegmentId: string;
+
+  @Prop()
+  label?: string;
+
+  @Prop({ type: Number, required: true })
+  relevanceScore: number;
+
+  @Prop({ type: Number, required: true })
+  confidenceScore: number;
+
+  @Prop({ type: [String], default: [] })
+  relatedGoalTypes: string[];
+
+  @Prop({ type: [String], default: [] })
+  relatedFunnelStages: string[];
+
+  @Prop({ type: [String], default: [] })
+  relatedChannelIds: string[];
+
+  @Prop({ type: [String], default: [] })
+  reasons: string[];
+
+  @Prop({ type: [String], default: [] })
+  warnings: string[];
+}
+export const CampaignAudienceRecommendationRecordSchema = SchemaFactory.createForClass(CampaignAudienceRecommendationRecord);
+
+@Schema({ _id: false })
+export class CampaignChannelRecommendationRecord {
+  @Prop({ required: true })
+  channel: string;
+
+  @Prop({ type: Number, required: true })
+  fitScore: number;
+
+  @Prop({ type: Number, required: true })
+  confidenceScore: number;
+
+  @Prop({ type: [String], default: [] })
+  audienceSegmentIds: string[];
+
+  @Prop({ type: [String], default: [] })
+  relatedGoalTypes: string[];
+
+  @Prop({ type: [String], default: [] })
+  relatedFunnelStages: string[];
+
+  @Prop({ type: [String], default: [] })
+  reasons: string[];
+
+  @Prop({ type: [String], default: [] })
+  weaknesses: string[];
+
+  @Prop({ type: [String], default: [] })
+  warnings: string[];
+}
+export const CampaignChannelRecommendationRecordSchema = SchemaFactory.createForClass(CampaignChannelRecommendationRecord);
+
+// Structured audience/channel mapping — either defined manually or derived
+// from an approved Growth Strategy plus the campaign's current goal. Never
+// stores the strategy payload itself.
+@Schema({ _id: false })
+export class CampaignAudienceChannelMappingRecord {
+  @Prop({ type: [CampaignAudienceRecommendationRecordSchema], default: [] })
+  audiences: CampaignAudienceRecommendationRecord[];
+
+  @Prop({ type: [CampaignChannelRecommendationRecordSchema], default: [] })
+  channels: CampaignChannelRecommendationRecord[];
+
+  @Prop()
+  primaryAudienceSegmentId?: string;
+
+  @Prop()
+  primaryChannel?: string;
+
+  @Prop({ type: Number })
+  confidenceScore?: number;
+
+  @Prop({ type: [String], default: [] })
+  missingEvidence: string[];
+
+  @Prop({ type: [String], default: [] })
+  warnings: string[];
+
+  @Prop({ type: String, enum: CAMPAIGN_AUDIENCE_CHANNEL_SOURCES, required: true })
+  source: (typeof CAMPAIGN_AUDIENCE_CHANNEL_SOURCES)[number];
+
+  @Prop({ type: Date })
+  generatedAt?: Date;
+}
+export const CampaignAudienceChannelMappingRecordSchema = SchemaFactory.createForClass(CampaignAudienceChannelMappingRecord);
+
 @Schema({ timestamps: true })
 export class Campaign {
   @Prop({ type: Types.ObjectId, ref: 'Organization', required: true })
@@ -162,6 +260,9 @@ export class Campaign {
 
   @Prop({ type: CampaignGoalRecordSchema })
   goal?: CampaignGoalRecord;
+
+  @Prop({ type: CampaignAudienceChannelMappingRecordSchema })
+  audienceChannelMapping?: CampaignAudienceChannelMappingRecord;
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   createdBy: Types.ObjectId;
