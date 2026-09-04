@@ -1403,3 +1403,59 @@ export interface ProductIntelligenceProfile {
   createdAt: string;
   updatedAt: string;
 }
+
+// Sprint 13A foundation types — CRUD-only for now; the Campaign Planning UI
+// itself belongs to later Sprint 13 steps.
+export type CampaignStatus = 'draft' | 'planned' | 'approved' | 'active' | 'paused' | 'completed' | 'archived';
+
+export type CampaignType =
+  | 'awareness'
+  | 'education'
+  | 'consideration'
+  | 'lead_generation'
+  | 'conversion'
+  | 'activation'
+  | 'retention'
+  | 'product_launch'
+  | 'promotion'
+  | 'evergreen'
+  | 'custom';
+
+export type CampaignPlanningSource = 'manual' | 'strategy_generated';
+
+export interface CampaignStrategyReference {
+  reviewedStrategyGeneratedAt?: string;
+  strategyReviewId?: string;
+}
+
+export interface CampaignPlanningMetadata {
+  source: CampaignPlanningSource;
+  version: number;
+}
+
+export interface Campaign {
+  id: string;
+  organizationId: string;
+  productId: string;
+  name: string;
+  slug: string;
+  description?: string;
+  status: CampaignStatus;
+  type?: CampaignType;
+  objectiveIds: string[];
+  channelIds: string[];
+  audienceSegmentIds: string[];
+  funnelStages: string[];
+  messagingPillarIds: string[];
+  contentPillarIds: string[];
+  acquisitionMotionIds: string[];
+  conversionActionIds: string[];
+  startDate?: string;
+  endDate?: string;
+  strategyReference?: CampaignStrategyReference;
+  planningMetadata: CampaignPlanningMetadata;
+  createdBy: string;
+  updatedBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
