@@ -653,6 +653,81 @@ textarea:focus {
   padding: 14px 4px 0;
 }
 
+/* Campaign calendar */
+
+.calendar-week {
+  margin-bottom: 24px;
+}
+
+.calendar-week-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.calendar-days {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.calendar-day {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 10px;
+  min-height: 72px;
+}
+
+.calendar-day-number {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.calendar-day-empty {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.activity-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.activity-card:last-child {
+  margin-bottom: 0;
+}
+
+.activity-card-title {
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.priority-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.priority-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 10px 12px;
+  min-width: 170px;
+  font-size: 13px;
+}
+
 /* Responsive */
 
 @media (max-width: 640px) {
@@ -674,5 +749,13 @@ textarea:focus {
 
   .page-title {
     font-size: 22px;
+  }
+
+  .calendar-days {
+    grid-template-columns: 1fr;
+  }
+
+  .priority-list {
+    flex-direction: column;
   }
 }

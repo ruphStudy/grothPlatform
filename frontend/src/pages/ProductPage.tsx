@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
 import { AppLayout } from '../components/AppLayout';
 import { Badge } from '../components/Badge';
@@ -9,6 +9,7 @@ import { Loading } from '../components/Loading';
 import { PageHeader } from '../components/PageHeader';
 import type {
   AudienceIntelligencePreview,
+  Campaign,
   CompetitiveIntelligencePreview,
   FunnelStage,
   GrowthPlanPhase,
@@ -125,6 +126,7 @@ export default function ProductPage() {
     () => Object.fromEntries(GROWTH_STRATEGY_SECTION_LIST.map((s) => [s.key, { status: 'pending', note: '' }])) as Record<GrowthStrategySection, SectionDraft>,
   );
   const [overallNoteDraft, setOverallNoteDraft] = useState('');
+  const [campaignCount, setCampaignCount] = useState<number | null>(null);
 
   async function loadData() {
     if (!organizationId || !productId) return;
@@ -150,6 +152,15 @@ export default function ProductPage() {
       setLoadError(err instanceof ApiError ? err.message : 'Failed to load product');
     } finally {
       setLoading(false);
+    }
+
+    // Best-effort only — the Campaign Planning card degrades gracefully to a
+    // plain link-out if this fails, so it never blocks the rest of the page.
+    try {
+      const campaigns = await apiRequest<Campaign[]>(`/organizations/${organizationId}/products/${productId}/campaigns`);
+      setCampaignCount(campaigns.length);
+    } catch {
+      setCampaignCount(null);
     }
   }
 
@@ -421,6 +432,25 @@ export default function ProductPage() {
           <div>
             <span className="summary-label">Target Markets</span>
             <p>{product?.targetMarkets?.length ? product.targetMarkets.join(', ') : '-'}</p>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="analysis-card">
+        <div className="analysis-header">
+          <div>
+            <h2 className="card-title">Campaign Planning</h2>
+            <p className="card-subtitle">
+              {campaignCount === null ? 'Plan and track campaigns for this product.' : `${campaignCount} campaign${campaignCount === 1 ? '' : 's'} for this product.`}
+            </p>
+          </div>
+          <div className="form-inline" style={{ margin: 0 }}>
+            <Link className="btn btn-secondary" to={`/organizations/${organizationId}/products/${productId}/campaigns`}>
+              View Campaigns
+            </Link>
+            <Link className="btn btn-primary" to={`/organizations/${organizationId}/products/${productId}/campaigns`}>
+              Create Campaign
+            </Link>
           </div>
         </div>
       </Card>
