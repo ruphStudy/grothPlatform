@@ -162,6 +162,7 @@ export class GrowthStrategyReviewService {
     }));
 
     return {
+      id: doc._id.toString(),
       organizationId: doc.organizationId.toString(),
       productId: doc.productId.toString(),
       status: doc.status,

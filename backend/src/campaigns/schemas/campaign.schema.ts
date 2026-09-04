@@ -19,6 +19,23 @@ export const CAMPAIGN_TYPES = [
 
 export const CAMPAIGN_PLANNING_SOURCES = ['manual', 'strategy_generated'] as const;
 
+export const CAMPAIGN_GOAL_TYPES = [
+  'awareness',
+  'education',
+  'consideration',
+  'lead_generation',
+  'conversion',
+  'activation',
+  'retention',
+  'positioning',
+  'differentiation',
+  'buyer_enablement',
+  'product_launch',
+  'custom',
+] as const;
+
+export const CAMPAIGN_GOAL_SOURCES = ['manual', 'strategy'] as const;
+
 export type CampaignDocument = HydratedDocument<Campaign>;
 
 // Lightweight pointer back to the Growth Strategy this campaign was planned
@@ -42,6 +59,45 @@ export class CampaignPlanningMetadata {
   version: number;
 }
 export const CampaignPlanningMetadataSchema = SchemaFactory.createForClass(CampaignPlanningMetadata);
+
+// The campaign's objective, either defined manually or derived from an
+// approved Growth Strategy — never the strategy payload itself.
+@Schema({ _id: false })
+export class CampaignGoalRecord {
+  @Prop({ type: String, enum: CAMPAIGN_GOAL_TYPES, required: true })
+  type: (typeof CAMPAIGN_GOAL_TYPES)[number];
+
+  @Prop({ required: true })
+  title: string;
+
+  @Prop({ default: '' })
+  description: string;
+
+  @Prop({ type: Number })
+  priorityScore?: number;
+
+  @Prop({ type: Number })
+  confidenceScore?: number;
+
+  @Prop({ type: String, enum: CAMPAIGN_GOAL_SOURCES, required: true })
+  source: (typeof CAMPAIGN_GOAL_SOURCES)[number];
+
+  @Prop({ type: [String], default: [] })
+  relatedStrategyObjectiveIds: string[];
+
+  @Prop({ type: [String], default: [] })
+  relatedFunnelStages: string[];
+
+  @Prop({ type: [String], default: [] })
+  relatedConversionActionIds: string[];
+
+  @Prop({ type: [String], default: [] })
+  successSignals: string[];
+
+  @Prop({ type: [String], default: [] })
+  warnings: string[];
+}
+export const CampaignGoalRecordSchema = SchemaFactory.createForClass(CampaignGoalRecord);
 
 @Schema({ timestamps: true })
 export class Campaign {
@@ -103,6 +159,9 @@ export class Campaign {
 
   @Prop({ type: CampaignPlanningMetadataSchema, required: true, default: () => ({ source: 'manual', version: 1 }) })
   planningMetadata: CampaignPlanningMetadata;
+
+  @Prop({ type: CampaignGoalRecordSchema })
+  goal?: CampaignGoalRecord;
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   createdBy: Types.ObjectId;

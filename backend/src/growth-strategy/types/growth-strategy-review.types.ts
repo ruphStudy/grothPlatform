@@ -22,6 +22,7 @@ export interface GrowthStrategySectionReviewResponse {
 }
 
 export interface GrowthStrategyReviewResponse {
+  id?: string;
   organizationId: string;
   productId: string;
 

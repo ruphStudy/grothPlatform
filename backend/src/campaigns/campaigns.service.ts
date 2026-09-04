@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { ProductsService } from '../products/products.service';
+import { toCampaignResponse } from './campaigns.mapper';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
 import { Campaign, CampaignDocument } from './schemas/campaign.schema';
@@ -70,7 +71,7 @@ export class CampaignsService {
       createdBy: new Types.ObjectId(userId),
     }).save();
 
-    return this.toResponse(campaign);
+    return toCampaignResponse(campaign);
   }
 
   async findAll(organizationId: string, productId: string, userId: string, filters: CampaignListFilters): Promise<CampaignResponse[]> {
@@ -84,13 +85,13 @@ export class CampaignsService {
     if (filters.type) query.type = filters.type;
 
     const campaigns = await this.campaignModel.find(query).sort({ createdAt: -1 }).exec();
-    return campaigns.map((c) => this.toResponse(c));
+    return campaigns.map((c) => toCampaignResponse(c));
   }
 
   async findOne(organizationId: string, productId: string, campaignId: string, userId: string): Promise<CampaignResponse> {
     await this.productsService.findOne(organizationId, productId, userId);
     const campaign = await this.findCampaignDoc(organizationId, productId, campaignId);
-    return this.toResponse(campaign);
+    return toCampaignResponse(campaign);
   }
 
   async update(organizationId: string, productId: string, campaignId: string, userId: string, dto: UpdateCampaignDto): Promise<CampaignResponse> {
@@ -122,7 +123,7 @@ export class CampaignsService {
 
     campaign.updatedBy = new Types.ObjectId(userId);
     await campaign.save();
-    return this.toResponse(campaign);
+    return toCampaignResponse(campaign);
   }
 
   // ---------------------------------------------------------------------
@@ -153,7 +154,9 @@ export class CampaignsService {
     return slug;
   }
 
-  private async findCampaignDoc(organizationId: string, productId: string, campaignId: string): Promise<CampaignDocument> {
+  // Public: also reused by CampaignGoalService for its own tenant-safe
+  // campaign lookups ahead of goal derivation/persistence.
+  async findCampaignDoc(organizationId: string, productId: string, campaignId: string): Promise<CampaignDocument> {
     if (!Types.ObjectId.isValid(campaignId)) {
       throw new NotFoundException('Campaign not found');
     }
@@ -168,42 +171,5 @@ export class CampaignsService {
       throw new NotFoundException('Campaign not found');
     }
     return campaign;
-  }
-
-  private toResponse(campaign: CampaignDocument): CampaignResponse {
-    return {
-      id: campaign._id.toString(),
-      organizationId: campaign.organizationId.toString(),
-      productId: campaign.productId.toString(),
-      name: campaign.name,
-      slug: campaign.slug,
-      description: campaign.description,
-      status: campaign.status,
-      type: campaign.type,
-      objectiveIds: campaign.objectiveIds,
-      channelIds: campaign.channelIds,
-      audienceSegmentIds: campaign.audienceSegmentIds,
-      funnelStages: campaign.funnelStages,
-      messagingPillarIds: campaign.messagingPillarIds,
-      contentPillarIds: campaign.contentPillarIds,
-      acquisitionMotionIds: campaign.acquisitionMotionIds,
-      conversionActionIds: campaign.conversionActionIds,
-      startDate: campaign.startDate,
-      endDate: campaign.endDate,
-      strategyReference: campaign.strategyReference
-        ? {
-            reviewedStrategyGeneratedAt: campaign.strategyReference.reviewedStrategyGeneratedAt,
-            strategyReviewId: campaign.strategyReference.strategyReviewId?.toString(),
-          }
-        : undefined,
-      planningMetadata: {
-        source: campaign.planningMetadata.source,
-        version: campaign.planningMetadata.version,
-      },
-      createdBy: campaign.createdBy.toString(),
-      updatedBy: campaign.updatedBy?.toString(),
-      createdAt: campaign.createdAt,
-      updatedAt: campaign.updatedAt,
-    };
   }
 }

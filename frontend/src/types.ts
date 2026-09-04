@@ -1433,6 +1433,38 @@ export interface CampaignPlanningMetadata {
   version: number;
 }
 
+// Sprint 13B foundation types — deriving/setting a goal is wired on the
+// backend; the Campaign detail UI itself is deferred to Sprint 13E/13F.
+export type CampaignGoalType =
+  | 'awareness'
+  | 'education'
+  | 'consideration'
+  | 'lead_generation'
+  | 'conversion'
+  | 'activation'
+  | 'retention'
+  | 'positioning'
+  | 'differentiation'
+  | 'buyer_enablement'
+  | 'product_launch'
+  | 'custom';
+
+export type CampaignGoalSource = 'manual' | 'strategy';
+
+export interface CampaignGoal {
+  type: CampaignGoalType;
+  title: string;
+  description: string;
+  priorityScore?: number;
+  confidenceScore?: number;
+  source: CampaignGoalSource;
+  relatedStrategyObjectiveIds: string[];
+  relatedFunnelStages: string[];
+  relatedConversionActionIds: string[];
+  successSignals: string[];
+  warnings: string[];
+}
+
 export interface Campaign {
   id: string;
   organizationId: string;
@@ -1454,6 +1486,7 @@ export interface Campaign {
   endDate?: string;
   strategyReference?: CampaignStrategyReference;
   planningMetadata: CampaignPlanningMetadata;
+  goal?: CampaignGoal;
   createdBy: string;
   updatedBy?: string;
   createdAt?: string;

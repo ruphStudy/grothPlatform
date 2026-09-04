@@ -1,3 +1,7 @@
+import type { CampaignGoal } from './campaign-goal.types';
+
+export type { CampaignGoal, CampaignGoalType, CampaignGoalSource } from './campaign-goal.types';
+
 export type CampaignStatus = 'draft' | 'planned' | 'approved' | 'active' | 'paused' | 'completed' | 'archived';
 
 export type CampaignType =
@@ -51,6 +55,7 @@ export interface CampaignResponse {
 
   strategyReference?: CampaignStrategyReferenceResponse;
   planningMetadata: CampaignPlanningMetadataResponse;
+  goal?: CampaignGoal;
 
   createdBy: string;
   updatedBy?: string;
