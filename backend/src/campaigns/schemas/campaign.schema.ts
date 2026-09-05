@@ -343,6 +343,54 @@ export class CampaignPlanRecord {
 }
 export const CampaignPlanRecordSchema = SchemaFactory.createForClass(CampaignPlanRecord);
 
+export const CAMPAIGN_REVIEW_STATUSES = ['draft', 'approved', 'changes_requested'] as const;
+export const CAMPAIGN_REVIEW_SECTIONS = ['goal', 'audience_channels', 'plan', 'calendar'] as const;
+export const CAMPAIGN_REVIEW_SECTION_STATUSES = ['pending', 'approved', 'changes_requested'] as const;
+
+@Schema({ _id: false })
+export class CampaignSectionReviewRecord {
+  @Prop({ type: String, enum: CAMPAIGN_REVIEW_SECTIONS, required: true })
+  section: (typeof CAMPAIGN_REVIEW_SECTIONS)[number];
+
+  @Prop({ type: String, enum: CAMPAIGN_REVIEW_SECTION_STATUSES, required: true, default: 'pending' })
+  status: (typeof CAMPAIGN_REVIEW_SECTION_STATUSES)[number];
+
+  @Prop()
+  note?: string;
+
+  @Prop({ type: Date })
+  reviewedAt?: Date;
+}
+export const CampaignSectionReviewRecordSchema = SchemaFactory.createForClass(CampaignSectionReviewRecord);
+
+// Review/approval metadata only — embedded directly on Campaign since a
+// campaign review belongs 1:1 to its campaign and never needs the plan
+// payload duplicated alongside it.
+@Schema({ _id: false })
+export class CampaignReviewRecord {
+  @Prop({ type: String, enum: CAMPAIGN_REVIEW_STATUSES, required: true, default: 'draft' })
+  status: (typeof CAMPAIGN_REVIEW_STATUSES)[number];
+
+  @Prop({ type: [CampaignSectionReviewRecordSchema], default: [] })
+  sectionReviews: CampaignSectionReviewRecord[];
+
+  @Prop()
+  overallNote?: string;
+
+  @Prop({ type: Date })
+  approvedAt?: Date;
+
+  @Prop({ type: Date })
+  changesRequestedAt?: Date;
+
+  @Prop({ type: Number })
+  reviewedPlanningVersion?: number;
+
+  @Prop({ type: Date })
+  reviewedPlanGeneratedAt?: Date;
+}
+export const CampaignReviewRecordSchema = SchemaFactory.createForClass(CampaignReviewRecord);
+
 @Schema({ timestamps: true })
 export class Campaign {
   @Prop({ type: Types.ObjectId, ref: 'Organization', required: true })
@@ -412,6 +460,9 @@ export class Campaign {
 
   @Prop({ type: CampaignPlanRecordSchema })
   plan?: CampaignPlanRecord;
+
+  @Prop({ type: CampaignReviewRecordSchema })
+  review?: CampaignReviewRecord;
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   createdBy: Types.ObjectId;

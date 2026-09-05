@@ -1571,6 +1571,31 @@ export interface CampaignPlanResult {
   generatedAt?: string;
 }
 
+// Sprint 13F foundation types — persisted 1:1 on the campaign, mirroring the
+// Growth Strategy review architecture (12I) adapted for an embedded review.
+export type CampaignReviewStatus = 'draft' | 'approved' | 'changes_requested';
+
+export type CampaignReviewSection = 'goal' | 'audience_channels' | 'plan' | 'calendar';
+
+export type CampaignSectionReviewStatus = 'pending' | 'approved' | 'changes_requested';
+
+export interface CampaignSectionReview {
+  section: CampaignReviewSection;
+  status: CampaignSectionReviewStatus;
+  note?: string;
+  reviewedAt?: string;
+}
+
+export interface CampaignReview {
+  status: CampaignReviewStatus;
+  sectionReviews: CampaignSectionReview[];
+  overallNote?: string;
+  approvedAt?: string;
+  changesRequestedAt?: string;
+  reviewedPlanningVersion?: number;
+  reviewedPlanGeneratedAt?: string;
+}
+
 export interface Campaign {
   id: string;
   organizationId: string;
@@ -1595,6 +1620,7 @@ export interface Campaign {
   goal?: CampaignGoal;
   audienceChannelMapping?: CampaignAudienceChannelMapping;
   plan?: CampaignPlanResult;
+  review: CampaignReview;
   createdBy: string;
   updatedBy?: string;
   createdAt?: string;

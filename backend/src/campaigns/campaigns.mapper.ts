@@ -1,5 +1,13 @@
-import { CampaignDocument } from './schemas/campaign.schema';
+import { CAMPAIGN_REVIEW_SECTIONS, CampaignDocument } from './schemas/campaign.schema';
+import type { CampaignReview } from './types/campaign-review.types';
 import type { CampaignResponse } from './types/campaign.types';
+
+function defaultCampaignReview(): CampaignReview {
+  return {
+    status: 'draft',
+    sectionReviews: CAMPAIGN_REVIEW_SECTIONS.map((section) => ({ section, status: 'pending' })),
+  };
+}
 
 // Shared by CampaignsService and CampaignGoalService so both persist and
 // return the exact same response shape.
@@ -123,6 +131,22 @@ export function toCampaignResponse(campaign: CampaignDocument): CampaignResponse
           generatedAt: campaign.plan.generatedAt,
         }
       : undefined,
+    review: campaign.review
+      ? {
+          status: campaign.review.status,
+          sectionReviews: campaign.review.sectionReviews.map((s) => ({
+            section: s.section,
+            status: s.status,
+            note: s.note,
+            reviewedAt: s.reviewedAt,
+          })),
+          overallNote: campaign.review.overallNote,
+          approvedAt: campaign.review.approvedAt,
+          changesRequestedAt: campaign.review.changesRequestedAt,
+          reviewedPlanningVersion: campaign.review.reviewedPlanningVersion,
+          reviewedPlanGeneratedAt: campaign.review.reviewedPlanGeneratedAt,
+        }
+      : defaultCampaignReview(),
     createdBy: campaign.createdBy.toString(),
     updatedBy: campaign.updatedBy?.toString(),
     createdAt: campaign.createdAt,

@@ -3,12 +3,15 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CampaignAudienceChannelService } from './campaign-audience-channel.service';
 import { CampaignGoalService } from './campaign-goal.service';
 import { CampaignPlanService } from './campaign-plan.service';
+import { CampaignReviewService } from './campaign-review.service';
 import { CampaignsService } from './campaigns.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { DeriveCampaignGoalDto } from './dto/derive-campaign-goal.dto';
+import { RequestCampaignReviewChangesDto } from './dto/request-campaign-review-changes.dto';
 import { SetCampaignAudienceChannelDto } from './dto/set-campaign-audience-channel.dto';
 import { SetCampaignGoalDto } from './dto/set-campaign-goal.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
+import { UpdateCampaignReviewDto } from './dto/update-campaign-review.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('organizations/:organizationId/products/:productId/campaigns')
@@ -18,6 +21,7 @@ export class CampaignsController {
     private readonly campaignGoalService: CampaignGoalService,
     private readonly campaignAudienceChannelService: CampaignAudienceChannelService,
     private readonly campaignPlanService: CampaignPlanService,
+    private readonly campaignReviewService: CampaignReviewService,
   ) {}
 
   @Post()
@@ -113,5 +117,37 @@ export class CampaignsController {
     @Param('campaignId') campaignId: string,
   ) {
     return this.campaignPlanService.generatePlanForCampaign(organizationId, productId, campaignId, req.user.userId);
+  }
+
+  @Patch(':campaignId/review')
+  saveReview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+    @Body() dto: UpdateCampaignReviewDto,
+  ) {
+    return this.campaignReviewService.saveReview(organizationId, productId, campaignId, req.user.userId, dto);
+  }
+
+  @Post(':campaignId/review/approve')
+  approveReview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+  ) {
+    return this.campaignReviewService.approve(organizationId, productId, campaignId, req.user.userId);
+  }
+
+  @Post(':campaignId/review/request-changes')
+  requestReviewChanges(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+    @Body() dto: RequestCampaignReviewChangesDto,
+  ) {
+    return this.campaignReviewService.requestChanges(organizationId, productId, campaignId, req.user.userId, dto);
   }
 }

@@ -5,6 +5,7 @@ import { ProductsModule } from '../products/products.module';
 import { CampaignAudienceChannelService } from './campaign-audience-channel.service';
 import { CampaignGoalService } from './campaign-goal.service';
 import { CampaignPlanService } from './campaign-plan.service';
+import { CampaignReviewService } from './campaign-review.service';
 import { CampaignsController } from './campaigns.controller';
 import { CampaignsService } from './campaigns.service';
 import { Campaign, CampaignSchema } from './schemas/campaign.schema';
@@ -12,7 +13,7 @@ import { Campaign, CampaignSchema } from './schemas/campaign.schema';
 @Module({
   imports: [ProductsModule, GrowthStrategyModule, MongooseModule.forFeature([{ name: Campaign.name, schema: CampaignSchema }])],
   controllers: [CampaignsController],
-  providers: [CampaignsService, CampaignGoalService, CampaignAudienceChannelService, CampaignPlanService],
-  exports: [CampaignsService, CampaignGoalService, CampaignAudienceChannelService, CampaignPlanService],
+  providers: [CampaignsService, CampaignGoalService, CampaignAudienceChannelService, CampaignPlanService, CampaignReviewService],
+  exports: [CampaignsService, CampaignGoalService, CampaignAudienceChannelService, CampaignPlanService, CampaignReviewService],
 })
 export class CampaignsModule {}

@@ -6,7 +6,16 @@ import { Card } from '../components/Card';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { Loading } from '../components/Loading';
 import { PageHeader } from '../components/PageHeader';
-import type { Campaign, CampaignActivity, CampaignAudienceChannelMapping, CampaignGoalType, CampaignStatus, CampaignType } from '../types';
+import type {
+  Campaign,
+  CampaignActivity,
+  CampaignAudienceChannelMapping,
+  CampaignGoalType,
+  CampaignReviewSection,
+  CampaignSectionReviewStatus,
+  CampaignStatus,
+  CampaignType,
+} from '../types';
 
 const CAMPAIGN_STATUSES: CampaignStatus[] = ['draft', 'planned', 'approved', 'active', 'paused', 'completed', 'archived'];
 const CAMPAIGN_TYPES: CampaignType[] = [
@@ -36,6 +45,13 @@ const CAMPAIGN_GOAL_TYPES: CampaignGoalType[] = [
   'product_launch',
   'custom',
 ];
+const CAMPAIGN_REVIEW_SECTION_LIST: { key: CampaignReviewSection; label: string }[] = [
+  { key: 'goal', label: 'Goal' },
+  { key: 'audience_channels', label: 'Audience & Channels' },
+  { key: 'plan', label: 'Plan' },
+  { key: 'calendar', label: 'Calendar' },
+];
+const CAMPAIGN_SECTION_REVIEW_STATUSES: CampaignSectionReviewStatus[] = ['pending', 'approved', 'changes_requested'];
 
 function labelize(value: string): string {
   return value
@@ -227,6 +243,14 @@ export default function CampaignDetailPage() {
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
   const [calendarView, setCalendarView] = useState<'calendar' | 'list'>('calendar');
 
+  const [reviewBusy, setReviewBusy] = useState<'saving' | 'approving' | 'requesting' | null>(null);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewSavedMessage, setReviewSavedMessage] = useState<string | null>(null);
+  const [sectionDrafts, setSectionDrafts] = useState<Record<CampaignReviewSection, { status: CampaignSectionReviewStatus; note: string }>>(
+    () => Object.fromEntries(CAMPAIGN_REVIEW_SECTION_LIST.map((s) => [s.key, { status: 'pending', note: '' }])) as Record<CampaignReviewSection, { status: CampaignSectionReviewStatus; note: string }>,
+  );
+  const [overallNoteDraft, setOverallNoteDraft] = useState('');
+
   const basePath = `/organizations/${organizationId}/products/${productId}/campaigns/${campaignId}`;
 
   async function loadData() {
@@ -247,6 +271,23 @@ export default function CampaignDetailPage() {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId, productId, campaignId]);
+
+  // Initialize the review draft from persisted state once per campaign load
+  // (not on every subsequent update) so unrelated actions elsewhere on the
+  // page never clobber an in-progress, unsaved review edit.
+  useEffect(() => {
+    if (!campaign) return;
+    setSectionDrafts(
+      Object.fromEntries(
+        CAMPAIGN_REVIEW_SECTION_LIST.map((s) => {
+          const existing = campaign.review.sectionReviews.find((sr) => sr.section === s.key);
+          return [s.key, { status: existing?.status ?? 'pending', note: existing?.note ?? '' }];
+        }),
+      ) as Record<CampaignReviewSection, { status: CampaignSectionReviewStatus; note: string }>,
+    );
+    setOverallNoteDraft(campaign.review.overallNote ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaign?.id]);
 
   function startEditOverview() {
     if (!campaign) return;
@@ -395,6 +436,57 @@ export default function CampaignDetailPage() {
     }
   }
 
+  async function handleSaveReview() {
+    setReviewBusy('saving');
+    setReviewError(null);
+    setReviewSavedMessage(null);
+    try {
+      const body = {
+        overallNote: overallNoteDraft || undefined,
+        sectionReviews: CAMPAIGN_REVIEW_SECTION_LIST.map((s) => ({
+          section: s.key,
+          status: sectionDrafts[s.key].status,
+          note: sectionDrafts[s.key].note || undefined,
+        })),
+      };
+      const updated = await apiRequest<Campaign>(`${basePath}/review`, { method: 'PATCH', body });
+      setCampaign(updated);
+      setReviewSavedMessage('Review saved.');
+    } catch (err) {
+      setReviewError(err instanceof ApiError ? err.message : 'Failed to save review');
+    } finally {
+      setReviewBusy(null);
+    }
+  }
+
+  async function handleApproveCampaign() {
+    setReviewBusy('approving');
+    setReviewError(null);
+    setReviewSavedMessage(null);
+    try {
+      const updated = await apiRequest<Campaign>(`${basePath}/review/approve`, { method: 'POST', body: {} });
+      setCampaign(updated);
+    } catch (err) {
+      setReviewError(err instanceof ApiError ? err.message : 'Failed to approve campaign');
+    } finally {
+      setReviewBusy(null);
+    }
+  }
+
+  async function handleRequestChanges() {
+    setReviewBusy('requesting');
+    setReviewError(null);
+    setReviewSavedMessage(null);
+    try {
+      const updated = await apiRequest<Campaign>(`${basePath}/review/request-changes`, { method: 'POST', body: { note: overallNoteDraft || undefined } });
+      setCampaign(updated);
+    } catch (err) {
+      setReviewError(err instanceof ApiError ? err.message : 'Failed to request changes');
+    } finally {
+      setReviewBusy(null);
+    }
+  }
+
   if (loading) {
     return (
       <AppLayout>
@@ -421,6 +513,19 @@ export default function CampaignDetailPage() {
   const planMissingEvidence = plan ? dedupe(plan.missingEvidence) : [];
   const topPriorities = plan ? plan.topPriorityActivityIds.map((id) => plan.activities.find((a) => a.id === id)).filter((a): a is CampaignActivity => !!a) : [];
   const sortedActivities = plan ? [...plan.activities].sort((a, b) => a.day - b.day || b.priorityScore - a.priorityScore) : [];
+
+  const review = campaign.review;
+  const isReviewStale =
+    review.status === 'approved' &&
+    (campaign.planningMetadata.version > (review.reviewedPlanningVersion ?? 0) ||
+      (!!plan?.generatedAt && !!review.reviewedPlanGeneratedAt && new Date(plan.generatedAt).getTime() > new Date(review.reviewedPlanGeneratedAt).getTime()));
+  const effectiveReviewStatusLabel = isReviewStale ? 'Review Required (Stale)' : labelize(review.status);
+  const missingApprovalPrereqs: string[] = [];
+  if (!campaign.goal) missingApprovalPrereqs.push('the campaign goal');
+  if (!hasMapping) missingApprovalPrereqs.push('the audience/channel mapping');
+  if (!plan) missingApprovalPrereqs.push('the 30-day plan');
+  const hasUnresolvedSectionChanges = review.sectionReviews.some((s) => s.status === 'changes_requested');
+  const canApprove = missingApprovalPrereqs.length === 0 && !hasUnresolvedSectionChanges;
 
   return (
     <AppLayout>
@@ -881,7 +986,7 @@ export default function CampaignDetailPage() {
               {confirmRegenerate ? (
                 <div>
                   <div className="content-warning" style={{ marginBottom: 8 }}>
-                    Regenerating replaces the current plan and resets generated activity statuses to Planned.
+                    Regenerating replaces the current plan and resets generated activity statuses to Planned. Regenerating the plan will make the current campaign approval stale.
                   </div>
                   <div className="form-inline">
                     <button className="btn btn-primary" onClick={handleGeneratePlan} disabled={planBusy}>
@@ -900,6 +1005,92 @@ export default function CampaignDetailPage() {
             </div>
           </>
         )}
+      </Card>
+
+      {/* Campaign Review & Approval */}
+      <Card className="analysis-card">
+        <div className="analysis-header">
+          <div>
+            <h2 className="card-title">Campaign Review &amp; Approval</h2>
+            <p className="card-subtitle">Explicit review before this campaign can move toward publishing/scheduling.</p>
+          </div>
+          <span className={`quality-badge ${isReviewStale ? 'quality-limited' : statusQualityClass(review.status as CampaignStatus)}`}>{effectiveReviewStatusLabel}</span>
+        </div>
+
+        <ErrorMessage message={reviewError} />
+        {reviewSavedMessage && <p className="muted">{reviewSavedMessage}</p>}
+
+        {isReviewStale && <div className="content-warning" style={{ marginBottom: 12 }}>Campaign changed after the last approval. Review is required again.</div>}
+
+        <div className="summary-grid" style={{ marginBottom: 16 }}>
+          <div>
+            <span className="summary-label">Approved At</span>
+            <p>{review.approvedAt ? new Date(review.approvedAt).toLocaleString() : '-'}</p>
+          </div>
+          <div>
+            <span className="summary-label">Changes Requested At</span>
+            <p>{review.changesRequestedAt ? new Date(review.changesRequestedAt).toLocaleString() : '-'}</p>
+          </div>
+          <div>
+            <span className="summary-label">Reviewed Planning Version</span>
+            <p>{review.reviewedPlanningVersion ?? '-'}</p>
+          </div>
+          <div>
+            <span className="summary-label">Current Planning Version</span>
+            <p>{campaign.planningMetadata.version}</p>
+          </div>
+        </div>
+
+        <div className="section" style={{ marginTop: 0 }}>
+          <h3 className="section-title">Section Reviews</h3>
+          {CAMPAIGN_REVIEW_SECTION_LIST.map((s) => (
+            <div key={s.key} className="form-inline" style={{ alignItems: 'flex-start', marginBottom: 10 }}>
+              <div style={{ minWidth: 160, fontWeight: 600 }}>{s.label}</div>
+              <div className="field" style={{ marginBottom: 0 }}>
+                <select
+                  value={sectionDrafts[s.key].status}
+                  onChange={(e) =>
+                    setSectionDrafts({ ...sectionDrafts, [s.key]: { ...sectionDrafts[s.key], status: e.target.value as CampaignSectionReviewStatus } })
+                  }
+                >
+                  {CAMPAIGN_SECTION_REVIEW_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {labelize(status)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field field-full" style={{ marginBottom: 0, flex: 1 }}>
+                <input
+                  placeholder="Optional note"
+                  value={sectionDrafts[s.key].note}
+                  onChange={(e) => setSectionDrafts({ ...sectionDrafts, [s.key]: { ...sectionDrafts[s.key], note: e.target.value } })}
+                />
+              </div>
+            </div>
+          ))}
+          <div className="field field-full">
+            <label htmlFor="review-overall-note">Overall Note</label>
+            <textarea id="review-overall-note" value={overallNoteDraft} onChange={(e) => setOverallNoteDraft(e.target.value)} />
+          </div>
+        </div>
+
+        {missingApprovalPrereqs.length > 0 && (
+          <p className="muted">Complete {missingApprovalPrereqs.join(', ')} before approval.</p>
+        )}
+        {missingApprovalPrereqs.length === 0 && hasUnresolvedSectionChanges && <p className="muted">Resolve requested changes before approving this campaign.</p>}
+
+        <div className="form-inline">
+          <button className="btn btn-secondary" onClick={handleSaveReview} disabled={reviewBusy !== null}>
+            {reviewBusy === 'saving' ? 'Saving review...' : 'Save Review'}
+          </button>
+          <button className="btn btn-primary" onClick={handleApproveCampaign} disabled={reviewBusy !== null || !canApprove}>
+            {reviewBusy === 'approving' ? 'Approving campaign...' : 'Approve Campaign'}
+          </button>
+          <button className="btn btn-ghost" onClick={handleRequestChanges} disabled={reviewBusy !== null}>
+            {reviewBusy === 'requesting' ? 'Requesting changes...' : 'Request Changes'}
+          </button>
+        </div>
       </Card>
     </AppLayout>
   );
