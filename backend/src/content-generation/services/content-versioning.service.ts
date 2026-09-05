@@ -430,6 +430,8 @@ export class ContentVersioningService {
       characterCount: version.payload.characterCount,
       cost: version.generationMetadata.cost,
       warningsCount: version.generationMetadata.warnings.length,
+      generationReason: version.generationMetadata.generationReason,
+      improvedFromVersion: version.generationMetadata.improvedFromVersion,
     };
   }
 
@@ -440,7 +442,7 @@ export class ContentVersioningService {
       sourceType: version.sourceType,
       sourceId: version.sourceId,
       payload: version.payload,
-      generationMetadata: version.generationMetadata,
+      generationMetadata: { ...version.generationMetadata, improvedFromVersionId: version.generationMetadata.improvedFromVersionId?.toString() },
       generationOptions: version.generationOptions,
       sourceSnapshot: version.sourceSnapshot,
       groundingEvidenceSnapshot: version.groundingEvidenceSnapshot,

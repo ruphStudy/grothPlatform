@@ -69,11 +69,14 @@ const BASE_INSTAGRAM_INSTRUCTION = [
   'Return only the final caption copy.',
 ].join(' ');
 
-function countHashtags(text: string): number {
+// Exported so the 16H improvement flow can recompute hashtag/emoji counts
+// for a revised Instagram caption with the exact same rules used for
+// original generation.
+export function countHashtags(text: string): number {
   return text.match(HASHTAG_PATTERN)?.length ?? 0;
 }
 
-function countEmojis(text: string): number {
+export function countEmojis(text: string): number {
   return text.match(EMOJI_PATTERN)?.length ?? 0;
 }
 

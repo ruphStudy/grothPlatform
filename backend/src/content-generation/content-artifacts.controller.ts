@@ -1,9 +1,11 @@
-import { Controller, Get, Logger, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Logger, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CampaignsService } from '../campaigns/campaigns.service';
+import { ContentImprovementOptionsDto } from './dto/content-improvement-options.dto';
 import { ContentBrandVoiceService } from './services/content-brand-voice.service';
 import { ContentFactValidationService } from './services/content-fact-validation.service';
 import { ContentGroundingService } from './services/content-grounding.service';
+import { ContentImprovementService } from './services/content-improvement.service';
 import { ContentOriginalityService } from './services/content-originality.service';
 import { ContentQualityService } from './services/content-quality.service';
 import { ContentReadabilityService } from './services/content-readability.service';
@@ -32,6 +34,7 @@ export class ContentArtifactsController {
     private readonly brandVoiceService: ContentBrandVoiceService,
     private readonly originalityService: ContentOriginalityService,
     private readonly qualityService: ContentQualityService,
+    private readonly improvementService: ContentImprovementService,
   ) {}
 
   // Keeps Quality (16G) synchronized after any 16A-16F manual recheck (spec
@@ -431,6 +434,31 @@ export class ContentArtifactsController {
       organizationId,
       productId,
       campaignId,
+    });
+  }
+
+  // Sprint 16H: exactly one explicit, user-triggered, paid AI call. Never
+  // auto-triggered. All tenant/approval/staleness gates and the tenant-safe
+  // version load happen inside the service, before the AI call.
+  @Post('artifacts/:artifactId/versions/:version/improve')
+  async improveVersion(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+    @Param('artifactId') artifactId: string,
+    @Param('version', ParseIntPipe) version: number,
+    @Body() body: ContentImprovementOptionsDto,
+  ) {
+    return this.improvementService.improveVersion({
+      organizationId,
+      productId,
+      campaignId,
+      artifactId,
+      version,
+      userId: req.user.userId,
+      focus: body.focus,
+      language: body.language,
     });
   }
 }

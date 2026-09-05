@@ -111,6 +111,9 @@ export class ContentVersionSourceContext {
 }
 export const ContentVersionSourceContextSchema = SchemaFactory.createForClass(ContentVersionSourceContext);
 
+export const CONTENT_VERSION_GENERATION_REASONS = ['generated', 'regenerated', 'auto_improved'] as const;
+export type ContentVersionGenerationReason = (typeof CONTENT_VERSION_GENERATION_REASONS)[number];
+
 // Never carries systemPrompt, the full generation prompt, or the raw
 // provider response — only safe, already-normalized generation accounting.
 @Schema({ _id: false })
@@ -138,6 +141,21 @@ export class ContentVersionGenerationMetadata {
 
   @Prop({ required: true })
   generatedAt: Date;
+
+  // Sprint 16H: set only for AI-assisted improvement versions. Existing
+  // (pre-16H) versions omit these fields entirely — absence means the
+  // version was a normal generation/regeneration.
+  @Prop({ type: String, enum: CONTENT_VERSION_GENERATION_REASONS })
+  generationReason?: ContentVersionGenerationReason;
+
+  @Prop({ type: Number })
+  improvedFromVersion?: number;
+
+  @Prop({ type: Types.ObjectId, ref: 'ContentVersion' })
+  improvedFromVersionId?: Types.ObjectId;
+
+  @Prop({ type: String })
+  improvementFocus?: string;
 }
 export const ContentVersionGenerationMetadataSchema = SchemaFactory.createForClass(ContentVersionGenerationMetadata);
 

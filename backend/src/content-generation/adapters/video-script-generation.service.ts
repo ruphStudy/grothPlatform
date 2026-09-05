@@ -133,14 +133,17 @@ function splitSubSections(text: string): { name: string; body: string }[] {
   return sections;
 }
 
-interface ParsedScript {
+export interface ParsedScript {
   hook?: string;
   ctaText?: string;
   scenes?: VideoScriptScene[];
   narrationText: string;
 }
 
-function parseVideoScript(raw: string, includeSceneDirections: boolean): ParsedScript {
+// Exported so the 16H improvement flow can parse a revised script with the
+// exact same [HOOK]/[SCENE n]/[NARRATION]/[VISUAL]/[CTA] rules used for
+// original generation.
+export function parseVideoScript(raw: string, includeSceneDirections: boolean): ParsedScript {
   const text = raw.replace(/\r\n/g, '\n');
   const topSections = splitTopSections(text);
 

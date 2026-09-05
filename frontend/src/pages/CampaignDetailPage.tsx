@@ -55,6 +55,8 @@ import type {
   ContentOriginalitySummary,
   ContentQualityResult,
   ContentQualitySummary,
+  ContentImprovementFocus,
+  ContentImprovementResult,
   ContentVersionDetail,
   ContentVersionSummary,
 } from '../types';
@@ -263,6 +265,20 @@ function ActivityCard({ activity, mapping, allActivities }: { activity: Campaign
 // and the previous version stays available below under History.
 const REGENERATE_CONFIRM_MESSAGE = 'Regenerating will create a new version (the current version stays available under History) and may incur additional cost. Continue?';
 
+// 16H — Auto-Improve is one explicit, paid AI call that creates a new
+// version; it never runs automatically and never guarantees a higher
+// Quality Score.
+const IMPROVE_CONFIRM_MESSAGE = 'AI improvement creates a new version and may incur provider usage cost. Continue?';
+
+const IMPROVEMENT_FOCUS_OPTIONS: { value: ContentImprovementFocus; label: string }[] = [
+  { value: 'all', label: 'Overall' },
+  { value: 'facts', label: 'Facts' },
+  { value: 'seo', label: 'SEO' },
+  { value: 'readability', label: 'Readability' },
+  { value: 'brand_voice', label: 'Brand Voice' },
+  { value: 'originality', label: 'Originality' },
+];
+
 // 15J — shared, kind-agnostic version history widget. Applied to every
 // generated-content panel (Blog, LinkedIn, X, Facebook, Instagram,
 // Newsletter, Video Script). Viewing an older version only affects this
@@ -420,7 +436,24 @@ function QualityScoreBadge({ quality }: { quality: ContentQualitySummary | undef
   );
 }
 
-function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePath: string; artifactId: string | undefined; latestVersion: number | undefined }) {
+// Exact labels follow current generation semantics (spec section 31): v1
+// with no reason is "Generated", a later version with no reason is
+// "Regenerated", and an AI-improved version names its source version.
+function generationReasonLabel(v: { version: number; generationReason?: ContentVersionSummary['generationReason']; improvedFromVersion?: number }): string {
+  if (v.generationReason === 'auto_improved') return `Auto-improved from v${v.improvedFromVersion ?? '?'}`;
+  if (v.version <= 1) return 'Generated';
+  return 'Regenerated';
+}
+
+function ContentVersionHistory({ basePath, artifactId, latestVersion: latestVersionProp }: { basePath: string; artifactId: string | undefined; latestVersion: number | undefined }) {
+  // Shadows the `latestVersion` prop so a successful Improve (which creates
+  // a new version the parent doesn't know about yet) can update "latest"
+  // locally without waiting for the parent to refetch.
+  const [latestVersion, setLatestVersion] = useState(latestVersionProp);
+  useEffect(() => {
+    setLatestVersion(latestVersionProp);
+  }, [latestVersionProp]);
+
   const [open, setOpen] = useState(false);
   const [versions, setVersions] = useState<ContentVersionSummary[] | null>(null);
   const [listBusy, setListBusy] = useState(false);
@@ -463,6 +496,10 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
   const [qualityOpen, setQualityOpen] = useState(false);
   const [qualityBusy, setQualityBusy] = useState(false);
   const [qualityError, setQualityError] = useState<string | null>(null);
+  const [improveFocus, setImproveFocus] = useState<ContentImprovementFocus>('all');
+  const [improveBusy, setImproveBusy] = useState(false);
+  const [improveError, setImproveError] = useState<string | null>(null);
+  const [improveComparison, setImproveComparison] = useState<{ fromVersion: number; fromScore?: number; toVersion: number; toScore?: number } | null>(null);
 
   useEffect(() => {
     if (!artifactId || !latestVersion) return;
@@ -804,6 +841,47 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
     }
   }
 
+  // 16H — one explicit, paid AI call that creates a new version from the
+  // currently selected version. Never guarantees a higher Quality Score.
+  async function improveSelectedVersion(sourceVersion: ContentVersionDetail) {
+    if (!artifactId) return;
+    const confirmed = window.confirm(IMPROVE_CONFIRM_MESSAGE);
+    if (!confirmed) return;
+    setImproveBusy(true);
+    setImproveError(null);
+    setImproveComparison(null);
+    try {
+      const result = await apiRequest<ContentImprovementResult>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${sourceVersion.version}/improve`, {
+        method: 'POST',
+        body: { focus: improveFocus },
+      });
+      setImproveComparison({ fromVersion: sourceVersion.version, fromScore: sourceVersion.quality?.score, toVersion: result.version, toScore: result.quality?.score });
+      if (result.version > (latestVersion ?? 0)) {
+        setLatestVersion(result.version);
+        setLatestGrounding(result.grounding);
+        setLatestFactValidation(result.factValidation);
+        setLatestSeoReview(result.seoReview);
+        setLatestReadability(result.readability);
+        setLatestBrandVoice(result.brandVoice);
+        setLatestOriginality(result.originality);
+        setLatestQuality(result.quality);
+      }
+      if (open) {
+        try {
+          const refreshed = await apiRequest<ContentVersionSummary[]>(`${basePath}/content-generation/artifacts/${artifactId}/versions`);
+          setVersions(refreshed);
+        } catch {
+          // Non-fatal — the new version was still created and selected below.
+        }
+      }
+      await viewVersion(result.version);
+    } catch (err) {
+      setImproveError(err instanceof ApiError ? err.message : 'Failed to improve content with AI');
+    } finally {
+      setImproveBusy(false);
+    }
+  }
+
   async function toggleOpen() {
     if (!artifactId) return;
     if (open) {
@@ -903,10 +981,19 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
                   <ReadabilityBadge readability={v.readability} />
                   <BrandVoiceBadge brandVoice={v.brandVoice} />
                   <OriginalityBadge originality={v.originality} />
+                  <span className="entity-card-meta">{generationReasonLabel(v)}</span>
                   <span className="entity-card-meta">{new Date(v.generatedAt).toLocaleString()}</span>
                   {v.wordCount !== undefined && <span className="entity-card-meta">{v.wordCount} words</span>}
                   {v.version === latestVersion && <span className="entity-card-meta">(latest)</span>}
-                  <button className="btn btn-secondary" onClick={() => viewVersion(v.version)} disabled={selectedBusy}>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      setImproveComparison(null);
+                      setImproveError(null);
+                      void viewVersion(v.version);
+                    }}
+                    disabled={selectedBusy}
+                  >
                     View
                   </button>
                 </li>
@@ -918,6 +1005,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
             <div style={{ marginTop: 8, padding: 10, border: '1px solid var(--border-color, #ddd)', borderRadius: 6 }}>
               <div className="tag-list">
                 <span className="tag">Viewing v{selected.version}</span>
+                <span className="entity-card-meta">{generationReasonLabel(selected)}</span>
                 <QualityScoreBadge quality={selected.quality} />
                 <GroundingBadge grounding={selected.grounding} />
                 <FactValidationBadge factValidation={selected.factValidation} />
@@ -931,7 +1019,29 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
                 <button className="btn btn-secondary" onClick={() => recalculateQuality(selected.version)} disabled={qualityBusy}>
                   {qualityBusy ? 'Recalculating...' : 'Recalculate Quality'}
                 </button>
-                <button className="btn btn-secondary" onClick={() => setSelected(null)}>
+                <select
+                  value={improveFocus}
+                  onChange={(e) => setImproveFocus(e.target.value as ContentImprovementFocus)}
+                  disabled={improveBusy}
+                  aria-label="Improve focus"
+                >
+                  {IMPROVEMENT_FOCUS_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      Improve: {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <button className="btn btn-secondary" onClick={() => improveSelectedVersion(selected)} disabled={improveBusy}>
+                  {improveBusy ? 'Improving...' : 'Improve with AI'}
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setImproveComparison(null);
+                    setImproveError(null);
+                    setSelected(null);
+                  }}
+                >
                   View Latest
                 </button>
                 <button className="btn btn-secondary" onClick={() => copyVersion(selected)}>
@@ -974,6 +1084,18 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
                   {originalityBusy ? 'Rechecking...' : 'Recheck Originality'}
                 </button>
               </div>
+              {improveBusy && <Loading />}
+              <ErrorMessage message={improveError} />
+              {improveComparison && (
+                <p className="entity-card-meta" style={{ marginTop: 6 }}>
+                  Quality: v{improveComparison.fromVersion} {improveComparison.fromScore ?? '—'}
+                  {' → '}
+                  v{improveComparison.toVersion} {improveComparison.toScore ?? '—'}
+                  {improveComparison.fromScore !== undefined && improveComparison.toScore !== undefined && improveComparison.toScore < improveComparison.fromScore
+                    ? ' (decreased)'
+                    : ''}
+                </p>
+              )}
               {qualityOpen && (
                 <div style={{ marginTop: 8, padding: 8, background: 'var(--surface-muted, #f5f5f5)', borderRadius: 6, border: '1px solid var(--border-color, #ddd)' }}>
                   {qualityBusy && <Loading />}

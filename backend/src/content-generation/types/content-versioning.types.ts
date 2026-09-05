@@ -52,6 +52,8 @@ export interface ContentVersionPayload {
   emojiCount?: number;
 }
 
+export type ContentVersionGenerationReason = 'generated' | 'regenerated' | 'auto_improved';
+
 export interface ContentVersionGenerationMetadata {
   provider: string;
   model: string;
@@ -61,6 +63,10 @@ export interface ContentVersionGenerationMetadata {
   sourceContext?: ContentVersionSourceContext;
   warnings: string[];
   generatedAt: Date;
+  generationReason?: ContentVersionGenerationReason;
+  improvedFromVersion?: number;
+  improvedFromVersionId?: string;
+  improvementFocus?: string;
 }
 
 export interface ContentVersionGenerationOptions {
@@ -147,6 +153,8 @@ export interface ContentVersionSummary {
   brandVoice?: ContentBrandVoiceSummary;
   originality?: ContentOriginalitySummary;
   quality?: ContentQualitySummary;
+  generationReason?: ContentVersionGenerationReason;
+  improvedFromVersion?: number;
 }
 
 export interface ContentVersionDetail extends ContentVersionSummary {

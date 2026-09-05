@@ -2841,6 +2841,10 @@ export interface ContentArtifact {
   updatedAt: string;
 }
 
+export type ContentVersionGenerationReason = 'generated' | 'regenerated' | 'auto_improved';
+
+export type ContentImprovementFocus = 'all' | 'facts' | 'seo' | 'readability' | 'brand_voice' | 'originality';
+
 export interface ContentVersionSummary {
   id: string;
   version: number;
@@ -2859,6 +2863,8 @@ export interface ContentVersionSummary {
   brandVoice?: ContentBrandVoiceSummary;
   originality?: ContentOriginalitySummary;
   quality?: ContentQualitySummary;
+  generationReason?: ContentVersionGenerationReason;
+  improvedFromVersion?: number;
 }
 
 export interface ContentVersionDetail extends ContentVersionSummary {
@@ -2871,6 +2877,26 @@ export interface ContentVersionDetail extends ContentVersionSummary {
   sourceSnapshot?: ContentVersionSourceSnapshot;
   groundingEvidenceSnapshot?: ContentVersionGroundingEvidenceSnapshot;
   isCurrentPlanningVersion?: boolean;
+}
+
+export interface ContentImprovementResult {
+  artifactId: string;
+  versionId: string;
+  version: number;
+  kind: ContentGenerationKind;
+  improvedFromVersion: number;
+  improvementFocus: ContentImprovementFocus;
+  provider: string;
+  model: string;
+  warnings: string[];
+  generatedAt: string;
+  grounding?: ContentGroundingSummary;
+  factValidation?: ContentFactValidationSummary;
+  seoReview?: ContentSeoReviewSummary;
+  readability?: ContentReadabilitySummary;
+  brandVoice?: ContentBrandVoiceSummary;
+  originality?: ContentOriginalitySummary;
+  quality?: ContentQualitySummary;
 }
 
 export interface ArtifactWithLatestVersion {

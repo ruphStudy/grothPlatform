@@ -28,6 +28,7 @@ import { ContentVersion, ContentVersionSchema } from './schemas/content-version.
 import { ContentBrandVoiceService } from './services/content-brand-voice.service';
 import { ContentFactValidationService } from './services/content-fact-validation.service';
 import { ContentGroundingService } from './services/content-grounding.service';
+import { ContentImprovementService } from './services/content-improvement.service';
 import { ContentOriginalityService } from './services/content-originality.service';
 import { ContentQualityService } from './services/content-quality.service';
 import { ContentReadabilityService } from './services/content-readability.service';
@@ -64,6 +65,7 @@ import { ContentVersioningService } from './services/content-versioning.service'
     ContentBrandVoiceService,
     ContentOriginalityService,
     ContentQualityService,
+    ContentImprovementService,
     ContentVersioningService,
     BlogGenerationService,
     LinkedInGenerationService,

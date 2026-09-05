@@ -58,13 +58,16 @@ const BASE_NEWSLETTER_INSTRUCTION = [
 // NLP parser; only these three section names are recognized.
 const SECTION_MARKER_REGEX = /(?:^|\n)[ \t]*(?:\[(SUBJECT|PREHEADER|BODY)\]|(SUBJECT|PREHEADER|BODY)\s*:)[ \t]*/gi;
 
-interface ParsedNewsletter {
+export interface ParsedNewsletter {
   subjectLine?: string;
   preheader?: string;
   body?: string;
 }
 
-function parseNewsletterSections(raw: string): ParsedNewsletter {
+// Exported so the 16H improvement flow can parse a revised newsletter with
+// the exact same [SUBJECT]/[PREHEADER]/[BODY] rules used for original
+// generation.
+export function parseNewsletterSections(raw: string): ParsedNewsletter {
   const text = raw.replace(/\r\n/g, '\n');
   const matches: { index: number; length: number; name: string }[] = [];
   let match: RegExpExecArray | null;

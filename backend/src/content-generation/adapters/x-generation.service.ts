@@ -67,6 +67,39 @@ const BASE_X_INSTRUCTION = [
 const POST_MARKER_REGEX = /(?:^|\n)[ \t]*(?:\[POST\s*(\d+)\]|POST\s*(\d+)\s*[:\-]|(\d+)[.)])[ \t]*/gi;
 
 /**
+ * Small deterministic delimiter reader — not a general natural-language
+ * parser. Accepts "[POST N]", "POST N:"/"POST N-", "N." or "N)" markers at
+ * the start of a line, and requires the parsed post numbers to be a
+ * strictly ordered 1..N sequence; anything else is treated as unparseable
+ * so the caller can fail validation rather than guess. Exported (moved out
+ * of the class in 16H) so the improvement flow can parse a revised thread
+ * with the exact same rules used for original generation.
+ */
+export function parseXThreadPosts(raw: string): string[] {
+  const text = raw.replace(/\r\n/g, '\n');
+  const matches: { index: number; length: number; num: number }[] = [];
+  let match: RegExpExecArray | null;
+  POST_MARKER_REGEX.lastIndex = 0;
+  while ((match = POST_MARKER_REGEX.exec(text)) !== null) {
+    const num = Number(match[1] ?? match[2] ?? match[3]);
+    matches.push({ index: match.index, length: match[0].length, num });
+  }
+  if (matches.length === 0) return [];
+  for (let i = 0; i < matches.length; i++) {
+    if (matches[i].num !== i + 1) return [];
+  }
+
+  const posts: string[] = [];
+  for (let i = 0; i < matches.length; i++) {
+    const start = matches[i].index + matches[i].length;
+    const end = i + 1 < matches.length ? matches[i + 1].index : text.length;
+    const body = text.slice(start, end).trim();
+    if (body.length > 0) posts.push(body);
+  }
+  return posts;
+}
+
+/**
  * X content-type adapter over the 15A engine / 15B prompt builder. Follows
  * the exact explicit-target eligibility rule established in 15D: a
  * `generic_social` item is only ever generated as X because the user
@@ -316,7 +349,7 @@ export class XGenerationService {
     threadMaxPosts: number,
     warnings: string[],
   ): { posts: string[]; postCharacterCounts: number[]; wordCount: number } {
-    const parsed = this.parseThreadPosts(generation.content);
+    const parsed = parseXThreadPosts(generation.content);
     if (parsed.length === 0) {
       throw new ContentGenerationValidationError('The generated content could not be parsed into an X thread.');
     }
@@ -341,37 +374,6 @@ export class XGenerationService {
     const wordCount = posts.reduce((sum, p) => sum + (p.length === 0 ? 0 : p.split(/\s+/).filter((w) => w.length > 0).length), 0);
 
     return { posts, postCharacterCounts, wordCount };
-  }
-
-  /**
-   * Small deterministic delimiter reader — not a general natural-language
-   * parser. Accepts "[POST N]", "POST N:"/"POST N-", "N." or "N)" markers
-   * at the start of a line, and requires the parsed post numbers to be a
-   * strictly ordered 1..N sequence; anything else is treated as unparseable
-   * so the caller can fail validation rather than guess.
-   */
-  private parseThreadPosts(raw: string): string[] {
-    const text = raw.replace(/\r\n/g, '\n');
-    const matches: { index: number; length: number; num: number }[] = [];
-    let match: RegExpExecArray | null;
-    POST_MARKER_REGEX.lastIndex = 0;
-    while ((match = POST_MARKER_REGEX.exec(text)) !== null) {
-      const num = Number(match[1] ?? match[2] ?? match[3]);
-      matches.push({ index: match.index, length: match[0].length, num });
-    }
-    if (matches.length === 0) return [];
-    for (let i = 0; i < matches.length; i++) {
-      if (matches[i].num !== i + 1) return [];
-    }
-
-    const posts: string[] = [];
-    for (let i = 0; i < matches.length; i++) {
-      const start = matches[i].index + matches[i].length;
-      const end = i + 1 < matches.length ? matches[i + 1].index : text.length;
-      const body = text.slice(start, end).trim();
-      if (body.length > 0) posts.push(body);
-    }
-    return posts;
   }
 
   // ---------------------------------------------------------------------
