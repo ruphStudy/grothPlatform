@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BlogCalendarService } from './blog-calendar.service';
 import { ContentIdeaService } from './content-idea.service';
 import { ContentPillarPlanService } from './content-pillar-plan.service';
+import { RepurposingPlanService } from './repurposing-plan.service';
 import { SocialCalendarService } from './social-calendar.service';
 import { TopicPrioritizationService } from './topic-prioritization.service';
 import { VideoCalendarService } from './video-calendar.service';
@@ -17,6 +18,7 @@ export class ContentPlanningController {
     private readonly blogCalendarService: BlogCalendarService,
     private readonly socialCalendarService: SocialCalendarService,
     private readonly videoCalendarService: VideoCalendarService,
+    private readonly repurposingPlanService: RepurposingPlanService,
   ) {}
 
   @Post('ideas-preview')
@@ -77,5 +79,15 @@ export class ContentPlanningController {
     @Param('campaignId') campaignId: string,
   ) {
     return this.videoCalendarService.buildVideoCalendarForCampaign(organizationId, productId, campaignId, req.user.userId);
+  }
+
+  @Post('repurposing-preview')
+  buildRepurposingPlan(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+  ) {
+    return this.repurposingPlanService.buildRepurposingPlanForCampaign(organizationId, productId, campaignId, req.user.userId);
   }
 }

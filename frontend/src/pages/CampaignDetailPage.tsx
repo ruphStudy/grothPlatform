@@ -23,6 +23,7 @@ import type {
   ContentPillarPlanResult,
   ContentTopicTier,
   TopicPrioritizationResult,
+  RepurposingPlanResult,
 } from '../types';
 
 const CAMPAIGN_STATUSES: CampaignStatus[] = ['draft', 'planned', 'approved', 'active', 'paused', 'completed', 'archived'];
@@ -295,6 +296,14 @@ export default function CampaignDetailPage() {
   const [videoTypeFilter, setVideoTypeFilter] = useState('');
   const [videoFormatFilter, setVideoFormatFilter] = useState('');
   const [videoFunnelStageFilter, setVideoFunnelStageFilter] = useState('');
+
+  const [repurposingPlan, setRepurposingPlan] = useState<RepurposingPlanResult | null>(null);
+  const [repurposingBusy, setRepurposingBusy] = useState(false);
+  const [repurposingError, setRepurposingError] = useState<string | null>(null);
+  const [repurposingSourceFilter, setRepurposingSourceFilter] = useState('');
+  const [repurposingTargetFilter, setRepurposingTargetFilter] = useState('');
+  const [repurposingFunnelStageFilter, setRepurposingFunnelStageFilter] = useState('');
+  const [repurposingView, setRepurposingView] = useState<'chains' | 'items'>('chains');
 
   const basePath = `/organizations/${organizationId}/products/${productId}/campaigns/${campaignId}`;
 
@@ -611,6 +620,19 @@ export default function CampaignDetailPage() {
     }
   }
 
+  async function handleBuildRepurposingPlan() {
+    setRepurposingBusy(true);
+    setRepurposingError(null);
+    try {
+      const result = await apiRequest<RepurposingPlanResult>(`${basePath}/content-planning/repurposing-preview`, { method: 'POST', body: {} });
+      setRepurposingPlan(result);
+    } catch (err) {
+      setRepurposingError(err instanceof ApiError ? err.message : 'Failed to build cross-channel repurposing plan');
+    } finally {
+      setRepurposingBusy(false);
+    }
+  }
+
   if (loading) {
     return (
       <AppLayout>
@@ -731,6 +753,24 @@ export default function CampaignDetailPage() {
           }),
         }))
         .filter((week) => week.itemIds.length > 0)
+    : [];
+
+  const repurposingMissingEvidence = repurposingPlan ? dedupe(repurposingPlan.missingEvidence) : [];
+  const repurposingWarnings = repurposingPlan ? dedupe(repurposingPlan.warnings) : [];
+  const repurposingSourceTypes = repurposingPlan ? dedupe(repurposingPlan.items.map((i) => i.sourceType)) : [];
+  const repurposingTargetTypes = repurposingPlan ? dedupe(repurposingPlan.items.map((i) => i.targetType)) : [];
+  const repurposingFunnelStages = repurposingPlan ? dedupe(repurposingPlan.items.map((i) => i.funnelStage)) : [];
+  const filteredRepurposingItems = repurposingPlan
+    ? repurposingPlan.items
+        .filter((i) => !repurposingSourceFilter || i.sourceType === repurposingSourceFilter)
+        .filter((i) => !repurposingTargetFilter || i.targetType === repurposingTargetFilter)
+        .filter((i) => !repurposingFunnelStageFilter || i.funnelStage === repurposingFunnelStageFilter)
+    : [];
+  const filteredRepurposingItemIds = new Set(filteredRepurposingItems.map((i) => i.id));
+  const filteredRepurposingChains = repurposingPlan
+    ? repurposingPlan.chains
+        .map((chain) => ({ ...chain, repurposingItemIds: chain.repurposingItemIds.filter((id) => filteredRepurposingItemIds.has(id)) }))
+        .filter((chain) => chain.repurposingItemIds.length > 0)
     : [];
 
   return (
@@ -2348,6 +2388,208 @@ export default function CampaignDetailPage() {
                       </div>
                     );
                   })}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="section">
+          <h3 className="section-title">Cross-Channel Repurposing</h3>
+
+          <ErrorMessage message={repurposingError} />
+
+          {!repurposingPlan && !repurposingBusy && <p className="muted">No cross-channel repurposing plan has been built yet.</p>}
+
+          <button className="btn btn-primary" onClick={handleBuildRepurposingPlan} disabled={repurposingBusy}>
+            {repurposingBusy ? 'Building cross-channel repurposing plan...' : repurposingPlan ? 'Rebuild Repurposing Plan' : 'Build Repurposing Plan'}
+          </button>
+
+          {repurposingPlan && (
+            <div style={{ marginTop: 16 }}>
+              <div className="summary-grid" style={{ marginBottom: 16 }}>
+                <div>
+                  <span className="summary-label">Total Repurposing Items</span>
+                  <p>{repurposingPlan.items.length}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Repurposing Chains</span>
+                  <p>{repurposingPlan.chains.length}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Overall Confidence</span>
+                  <p>{repurposingPlan.confidenceScore}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Top Priority Items</span>
+                  <p>{repurposingPlan.topPriorityItemIds.length}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Existing Calendar Linkages</span>
+                  <p>{repurposingPlan.items.filter((i) => i.isExistingLinkage).length}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Target Channels Represented</span>
+                  <p>{repurposingTargetTypes.length ? repurposingTargetTypes.map((t) => labelize(t)).join(', ') : '-'}</p>
+                </div>
+              </div>
+
+              {(repurposingMissingEvidence.length > 0 || repurposingWarnings.length > 0) && (
+                <div className="content-warning" style={{ marginBottom: 16 }}>
+                  {[...repurposingMissingEvidence, ...repurposingWarnings].join(' ')}
+                </div>
+              )}
+
+              {repurposingPlan.items.length === 0 ? (
+                <p className="muted">No reliable cross-channel repurposing opportunities were detected from the current calendars and campaign channels.</p>
+              ) : (
+                <>
+                  <div className="form-inline">
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <select value={repurposingSourceFilter} onChange={(e) => setRepurposingSourceFilter(e.target.value)}>
+                        <option value="">All source types</option>
+                        {repurposingSourceTypes.map((t) => (
+                          <option key={t} value={t}>
+                            {labelize(t)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <select value={repurposingTargetFilter} onChange={(e) => setRepurposingTargetFilter(e.target.value)}>
+                        <option value="">All target types</option>
+                        {repurposingTargetTypes.map((t) => (
+                          <option key={t} value={t}>
+                            {labelize(t)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <select value={repurposingFunnelStageFilter} onChange={(e) => setRepurposingFunnelStageFilter(e.target.value)}>
+                        <option value="">All funnel stages</option>
+                        {repurposingFunnelStages.map((s) => (
+                          <option key={s} value={s}>
+                            {labelize(s)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <select value={repurposingView} onChange={(e) => setRepurposingView(e.target.value as 'chains' | 'items')}>
+                        <option value="chains">Chain view</option>
+                        <option value="items">Item view</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {filteredRepurposingChains.length === 0 && filteredRepurposingItems.length === 0 ? (
+                    <p className="muted">No repurposing items match the selected filters.</p>
+                  ) : repurposingView === 'chains' ? (
+                    <div className="calendar-days">
+                      {filteredRepurposingChains.map((chain) => {
+                        const derivatives = chain.repurposingItemIds
+                          .map((id) => repurposingPlan.items.find((i) => i.id === id))
+                          .filter((i): i is NonNullable<typeof i> => !!i);
+                        const sourceLabel = derivatives[0];
+                        return (
+                          <div className="activity-card" key={chain.id} style={{ minWidth: 320 }}>
+                            <div className="activity-card-title">{chain.title}</div>
+                            {sourceLabel && (
+                              <div className="entity-card-meta">
+                                Source: {labelize(sourceLabel.sourceType)} &mdash; {sourceLabel.sourceTitle}
+                              </div>
+                            )}
+                            <div className="tag-list">
+                              <span className={`quality-badge ${qualityBadgeClass(scoreQuality(chain.priorityScore))}`}>Priority {chain.priorityScore}</span>
+                              <span className="tag">Confidence {chain.confidenceScore}</span>
+                            </div>
+                            <div style={{ marginTop: 8 }}>
+                              {derivatives.map((item) => (
+                                <div className="entity-card-meta" key={item.id} style={{ marginTop: 4 }}>
+                                  &rarr; {labelize(item.targetType)} ({labelize(item.actionType)}): {item.targetTitle}
+                                  {item.isExistingLinkage && <span className="tag" style={{ marginLeft: 6 }}>Existing calendar linkage</span>}
+                                </div>
+                              ))}
+                            </div>
+                            {chain.reasons.length > 0 && (
+                              <details style={{ marginTop: 6 }}>
+                                <summary className="summary-label" style={{ cursor: 'pointer' }}>
+                                  Reasons
+                                </summary>
+                                <ul className="bullet-list">
+                                  {chain.reasons.map((r, i) => (
+                                    <li key={i}>{r}</li>
+                                  ))}
+                                </ul>
+                              </details>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="calendar-days">
+                      {filteredRepurposingItems.map((item) => (
+                        <div className="activity-card" key={item.id} style={{ minWidth: 320 }}>
+                          <div className="activity-card-title">{item.targetTitle}</div>
+                          <div className="tag-list">
+                            <span className="tag">{labelize(item.sourceType)} &rarr; {labelize(item.targetType)}</span>
+                            <span className="tag">{labelize(item.actionType)}</span>
+                            <span className="tag">{labelize(item.targetFormatDirection)}</span>
+                            <span className={`quality-badge ${qualityBadgeClass(scoreQuality(item.priorityScore))}`}>Priority {item.priorityScore}</span>
+                            {item.isExistingLinkage && <span className="tag">Existing calendar linkage</span>}
+                          </div>
+                          <div className="entity-card-meta">Source: {item.sourceTitle}</div>
+                          {item.sourceDay && item.recommendedTargetDay && (
+                            <div className="entity-card-meta">
+                              Day {item.sourceDay} &rarr; Day {item.recommendedTargetDay}
+                            </div>
+                          )}
+                          {item.audienceSegmentIds.length > 0 && (
+                            <div className="entity-card-meta">Audience: {item.audienceSegmentIds.map((id) => audienceLabel(mapping, id)).join(', ')}</div>
+                          )}
+                          {item.suggestedCTA && <div className="entity-card-meta">CTA: {item.suggestedCTA}</div>}
+                          <details style={{ marginTop: 6 }}>
+                            <summary className="summary-label" style={{ cursor: 'pointer' }}>
+                              Details
+                            </summary>
+                            <div style={{ marginTop: 8 }}>
+                              {item.keywords.length > 0 && (
+                                <>
+                                  <span className="summary-label">Keywords</span>
+                                  <div className="tag-list">
+                                    {item.keywords.map((k, i) => (
+                                      <span className="tag" key={i}>
+                                        {k}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </>
+                              )}
+                              {item.messagingPillarIds.length > 0 && (
+                                <>
+                                  <span className="summary-label">Messaging Pillars</span>
+                                  <p className="entity-card-meta">{item.messagingPillarIds.join(', ')}</p>
+                                </>
+                              )}
+                              {item.reasons.length > 0 && (
+                                <>
+                                  <span className="summary-label">Reasons</span>
+                                  <ul className="bullet-list">
+                                    {item.reasons.map((r, i) => (
+                                      <li key={i}>{r}</li>
+                                    ))}
+                                  </ul>
+                                </>
+                              )}
+                              {item.warnings.length > 0 && <div className="content-warning" style={{ marginTop: 8 }}>{item.warnings.join(' ')}</div>}
+                            </div>
+                          </details>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </>
               )}
             </div>
