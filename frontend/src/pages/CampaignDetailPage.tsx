@@ -29,6 +29,8 @@ import type {
   LinkedInDraftResult,
   LinkedInGenerationOptions,
   SocialCalendarItem,
+  XDraftResult,
+  XGenerationOptions,
 } from '../types';
 
 const CAMPAIGN_STATUSES: CampaignStatus[] = ['draft', 'planned', 'approved', 'active', 'paused', 'completed', 'archived'];
@@ -301,6 +303,10 @@ export default function CampaignDetailPage() {
   const [linkedInBusyIds, setLinkedInBusyIds] = useState<Record<string, boolean>>({});
   const [linkedInErrors, setLinkedInErrors] = useState<Record<string, string | null>>({});
   const [linkedInOptionsById, setLinkedInOptionsById] = useState<Record<string, LinkedInGenerationOptions>>({});
+  const [xDrafts, setXDrafts] = useState<Record<string, XDraftResult>>({});
+  const [xBusyIds, setXBusyIds] = useState<Record<string, boolean>>({});
+  const [xErrors, setXErrors] = useState<Record<string, string | null>>({});
+  const [xOptionsById, setXOptionsById] = useState<Record<string, XGenerationOptions>>({});
 
   const [videoCalendar, setVideoCalendar] = useState<VideoCalendarResult | null>(null);
   const [videoCalendarBusy, setVideoCalendarBusy] = useState(false);
@@ -663,6 +669,52 @@ export default function CampaignDetailPage() {
 
   function handleCopyLinkedInDraft(content: string) {
     void navigator.clipboard.writeText(content);
+  }
+
+  function getXOptions(item: SocialCalendarItem): XGenerationOptions {
+    return (
+      xOptionsById[item.id] ?? {
+        mode: item.recommendedFormat === 'thread_direction' ? 'thread' : 'single_post',
+        tone: 'concise',
+        includeCTA: !!item.suggestedCTA,
+        includeHashtags: false,
+        maxHashtags: 2,
+        threadMaxPosts: 5,
+      }
+    );
+  }
+
+  function updateXOptions(item: SocialCalendarItem, patch: Partial<XGenerationOptions>) {
+    setXOptionsById((prev) => ({ ...prev, [item.id]: { ...getXOptions(item), ...patch } }));
+  }
+
+  async function generateXDraft(socialCalendarItemId: string, options?: XGenerationOptions): Promise<XDraftResult> {
+    return apiRequest<XDraftResult>(`${basePath}/content-generation/x/${socialCalendarItemId}`, { method: 'POST', body: options ?? {} });
+  }
+
+  async function handleGenerateXDraft(item: SocialCalendarItem, isRegenerate: boolean) {
+    if (isRegenerate) {
+      const confirmed = window.confirm('Regenerating will make another AI request and may incur additional cost. Continue?');
+      if (!confirmed) return;
+    }
+    setXBusyIds((prev) => ({ ...prev, [item.id]: true }));
+    setXErrors((prev) => ({ ...prev, [item.id]: null }));
+    try {
+      const result = await generateXDraft(item.id, getXOptions(item));
+      setXDrafts((prev) => ({ ...prev, [item.id]: result }));
+    } catch (err) {
+      setXErrors((prev) => ({ ...prev, [item.id]: err instanceof ApiError ? err.message : 'Failed to generate X draft' }));
+    } finally {
+      setXBusyIds((prev) => ({ ...prev, [item.id]: false }));
+    }
+  }
+
+  function handleCopyXDraft(content: string) {
+    void navigator.clipboard.writeText(content);
+  }
+
+  function handleCopyXThread(posts: string[]) {
+    void navigator.clipboard.writeText(posts.join('\n\n'));
   }
 
   async function handleBuildSocialCalendar() {
@@ -2380,6 +2432,136 @@ export default function CampaignDetailPage() {
                                             <button className="btn btn-secondary" style={{ marginTop: 6 }} onClick={() => handleCopyLinkedInDraft(draft.content)}>
                                               Copy Post
                                             </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
+
+                                  {(() => {
+                                    const isXEligible = item.platform !== 'facebook' && item.platform !== 'instagram' && item.platform !== 'linkedin';
+                                    if (!isXEligible) return null;
+                                    const xOptions = getXOptions(item);
+                                    const draft = xDrafts[item.id];
+                                    return (
+                                      <div style={{ marginTop: 10 }}>
+                                        {item.platform === 'generic_social' && (
+                                          <p className="entity-card-meta">X is being chosen as the generation target; this social item was planned generically.</p>
+                                        )}
+                                        <ErrorMessage message={xErrors[item.id] ?? null} />
+                                        {!draft && <p className="entity-card-meta">AI generation uses your configured provider and may incur usage cost.</p>}
+
+                                        <div className="form-inline">
+                                          <div className="field" style={{ marginBottom: 0 }}>
+                                            <select value={xOptions.mode} onChange={(e) => updateXOptions(item, { mode: e.target.value as XGenerationOptions['mode'] })}>
+                                              <option value="single_post">Single</option>
+                                              <option value="thread">Thread</option>
+                                            </select>
+                                          </div>
+                                          <div className="field" style={{ marginBottom: 0 }}>
+                                            <select value={xOptions.tone} onChange={(e) => updateXOptions(item, { tone: e.target.value as XGenerationOptions['tone'] })}>
+                                              <option value="concise">Concise</option>
+                                              <option value="professional">Professional</option>
+                                              <option value="conversational">Conversational</option>
+                                              <option value="thought_leadership">Thought Leadership</option>
+                                            </select>
+                                          </div>
+                                          <label className="entity-card-meta" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <input type="checkbox" checked={!!xOptions.includeCTA} onChange={(e) => updateXOptions(item, { includeCTA: e.target.checked })} />
+                                            Include CTA
+                                          </label>
+                                          <label className="entity-card-meta" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <input type="checkbox" checked={!!xOptions.includeHashtags} onChange={(e) => updateXOptions(item, { includeHashtags: e.target.checked })} />
+                                            Include hashtags
+                                          </label>
+                                          {xOptions.includeHashtags && (
+                                            <div className="field" style={{ marginBottom: 0 }}>
+                                              <select value={xOptions.maxHashtags} onChange={(e) => updateXOptions(item, { maxHashtags: Number(e.target.value) })}>
+                                                {[1, 2, 3, 4].map((n) => (
+                                                  <option key={n} value={n}>
+                                                    Max {n} hashtag{n === 1 ? '' : 's'}
+                                                  </option>
+                                                ))}
+                                              </select>
+                                            </div>
+                                          )}
+                                          {xOptions.mode === 'thread' && (
+                                            <div className="field" style={{ marginBottom: 0 }}>
+                                              <select value={xOptions.threadMaxPosts} onChange={(e) => updateXOptions(item, { threadMaxPosts: Number(e.target.value) })}>
+                                                {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                                                  <option key={n} value={n}>
+                                                    Max {n} posts
+                                                  </option>
+                                                ))}
+                                              </select>
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        <button className="btn btn-secondary" onClick={() => handleGenerateXDraft(item, !!draft)} disabled={!!xBusyIds[item.id]}>
+                                          {xBusyIds[item.id] ? 'Generating draft...' : draft ? 'Regenerate X Draft' : 'Generate X'}
+                                        </button>
+
+                                        {draft && (
+                                          <div style={{ marginTop: 10 }}>
+                                            <div className="tag-list">
+                                              <span className="tag">{labelize(draft.mode)}</span>
+                                              <span className="tag">{draft.wordCount} words</span>
+                                              <span className="tag">{labelize(draft.tone)}</span>
+                                              <span className="tag">{draft.provider} / {draft.model}</span>
+                                              {draft.usage.totalTokens !== undefined && <span className="tag">{draft.usage.totalTokens} tokens</span>}
+                                              {draft.cost && <span className="tag">${draft.cost.estimated.toFixed(4)} {draft.cost.currency}</span>}
+                                              <span className="tag">Prompt {draft.promptVersion}</span>
+                                            </div>
+                                            <div className="entity-card-meta">Generated {new Date(draft.generatedAt).toLocaleString()}</div>
+                                            {draft.warnings.length > 0 && <div className="content-warning" style={{ marginTop: 6 }}>{draft.warnings.join(' ')}</div>}
+
+                                            {draft.mode === 'single_post' ? (
+                                              <>
+                                                <div className="entity-card-meta">{draft.characterCount} characters</div>
+                                                <pre
+                                                  style={{
+                                                    marginTop: 8,
+                                                    padding: 10,
+                                                    whiteSpace: 'pre-wrap',
+                                                    wordBreak: 'break-word',
+                                                    maxHeight: 320,
+                                                    overflowY: 'auto',
+                                                    background: 'var(--surface-muted, #f5f5f5)',
+                                                    borderRadius: 6,
+                                                  }}
+                                                >
+                                                  {draft.content}
+                                                </pre>
+                                                <button className="btn btn-secondary" style={{ marginTop: 6 }} onClick={() => handleCopyXDraft(draft.content ?? '')}>
+                                                  Copy Post
+                                                </button>
+                                              </>
+                                            ) : (
+                                              <>
+                                                {(draft.posts ?? []).map((post, i) => (
+                                                  <div key={i} style={{ marginTop: 8 }}>
+                                                    <span className="summary-label">Post {i + 1}</span>
+                                                    <pre
+                                                      style={{
+                                                        marginTop: 4,
+                                                        padding: 10,
+                                                        whiteSpace: 'pre-wrap',
+                                                        wordBreak: 'break-word',
+                                                        background: 'var(--surface-muted, #f5f5f5)',
+                                                        borderRadius: 6,
+                                                      }}
+                                                    >
+                                                      {post}
+                                                    </pre>
+                                                    <div className="entity-card-meta">{draft.postCharacterCounts?.[i] ?? post.length} characters</div>
+                                                  </div>
+                                                ))}
+                                                <button className="btn btn-secondary" style={{ marginTop: 6 }} onClick={() => handleCopyXThread(draft.posts ?? [])}>
+                                                  Copy Full Thread
+                                                </button>
+                                              </>
+                                            )}
                                           </div>
                                         )}
                                       </div>
