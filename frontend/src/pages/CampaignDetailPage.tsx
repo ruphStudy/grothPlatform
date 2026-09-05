@@ -16,6 +16,8 @@ import type {
   CampaignStatus,
   CampaignType,
   ContentIdeaResult,
+  CampaignContentPillarTier,
+  ContentPillarPlanResult,
   ContentTopicTier,
   TopicPrioritizationResult,
 } from '../types';
@@ -268,6 +270,10 @@ export default function CampaignDetailPage() {
   const [topicTierFilter, setTopicTierFilter] = useState('');
   const [topicChannelFilter, setTopicChannelFilter] = useState('');
   const [topicFunnelStageFilter, setTopicFunnelStageFilter] = useState('');
+
+  const [pillarPlan, setPillarPlan] = useState<ContentPillarPlanResult | null>(null);
+  const [pillarPlanBusy, setPillarPlanBusy] = useState(false);
+  const [pillarPlanError, setPillarPlanError] = useState<string | null>(null);
 
   const basePath = `/organizations/${organizationId}/products/${productId}/campaigns/${campaignId}`;
 
@@ -532,6 +538,19 @@ export default function CampaignDetailPage() {
     }
   }
 
+  async function handleBuildContentPillars() {
+    setPillarPlanBusy(true);
+    setPillarPlanError(null);
+    try {
+      const result = await apiRequest<ContentPillarPlanResult>(`${basePath}/content-planning/pillars-preview`, { method: 'POST', body: {} });
+      setPillarPlan(result);
+    } catch (err) {
+      setPillarPlanError(err instanceof ApiError ? err.message : 'Failed to build content pillars');
+    } finally {
+      setPillarPlanBusy(false);
+    }
+  }
+
   if (loading) {
     return (
       <AppLayout>
@@ -599,6 +618,11 @@ export default function CampaignDetailPage() {
   const TOPIC_TIER_VISIBLE_CAP: Record<ContentTopicTier, number> = { primary: Infinity, secondary: 8, experimental: 6, deferred: Infinity };
   const topicMissingEvidence = topics ? dedupe(topics.missingEvidence) : [];
   const topicWarnings = topics ? dedupe(topics.warnings) : [];
+
+  const topicTitleById = new Map((topics?.topics ?? []).map((t) => [t.id, t.title]));
+  const PILLAR_TIER_ORDER: CampaignContentPillarTier[] = ['primary', 'supporting', 'experimental'];
+  const pillarMissingEvidence = pillarPlan ? dedupe(pillarPlan.missingEvidence) : [];
+  const pillarWarnings = pillarPlan ? dedupe(pillarPlan.warnings) : [];
 
   return (
     <AppLayout>
@@ -1509,6 +1533,148 @@ export default function CampaignDetailPage() {
                     );
                   })}
                 </>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="section">
+          <h3 className="section-title">Content Pillars</h3>
+
+          <ErrorMessage message={pillarPlanError} />
+
+          {!pillarPlan && !pillarPlanBusy && <p className="muted">No campaign content pillars have been built yet.</p>}
+
+          <button className="btn btn-primary" onClick={handleBuildContentPillars} disabled={pillarPlanBusy}>
+            {pillarPlanBusy ? 'Building content pillars...' : pillarPlan ? 'Rebuild Content Pillars' : 'Build Content Pillars'}
+          </button>
+
+          {pillarPlan && (
+            <div style={{ marginTop: 16 }}>
+              <div className="summary-grid" style={{ marginBottom: 16 }}>
+                <div>
+                  <span className="summary-label">Total Pillars</span>
+                  <p>{pillarPlan.pillars.length}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Primary</span>
+                  <p>{pillarPlan.pillars.filter((p) => p.tier === 'primary').length}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Supporting</span>
+                  <p>{pillarPlan.pillars.filter((p) => p.tier === 'supporting').length}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Experimental</span>
+                  <p>{pillarPlan.pillars.filter((p) => p.tier === 'experimental').length}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Overall Confidence</span>
+                  <p>{pillarPlan.confidenceScore}</p>
+                </div>
+              </div>
+
+              {(pillarMissingEvidence.length > 0 || pillarWarnings.length > 0) && (
+                <div className="content-warning" style={{ marginBottom: 16 }}>
+                  {[...pillarMissingEvidence, ...pillarWarnings].join(' ')}
+                </div>
+              )}
+
+              {pillarPlan.pillars.length === 0 ? (
+                <p className="muted">No reliable content pillars were detected from the approved campaign and strategy evidence.</p>
+              ) : (
+                PILLAR_TIER_ORDER.filter((tier) => pillarPlan.pillars.some((p) => p.tier === tier)).map((tier) => {
+                  const tierPillars = pillarPlan.pillars.filter((p) => p.tier === tier).sort((a, b) => b.priorityScore - a.priorityScore);
+                  return (
+                    <div key={tier} style={{ marginTop: 16 }}>
+                      <h4 style={{ marginBottom: 8 }}>
+                        {labelize(tier)} ({tierPillars.length})
+                      </h4>
+                      <div className="grid-cards">
+                        {tierPillars.map((pillar) => (
+                          <Card key={pillar.id} className="entity-card">
+                            <div className="entity-card-header">
+                              <h3>{pillar.title}</h3>
+                              {tier === 'primary' && <span className="tag">Primary</span>}
+                            </div>
+                            <div className="tag-list">
+                              <span className="tag">{labelize(pillar.theme)}</span>
+                              <span className={`quality-badge ${qualityBadgeClass(scoreQuality(pillar.priorityScore))}`}>Priority {pillar.priorityScore}</span>
+                              <span className="tag">Confidence {pillar.confidenceScore}</span>
+                              <span className="tag">
+                                {pillar.topicIds.length} topic{pillar.topicIds.length === 1 ? '' : 's'}
+                              </span>
+                            </div>
+                            <p className="entity-card-meta">{pillar.purpose}</p>
+                            {pillar.channels.length > 0 && <div className="entity-card-meta">Channels: {pillar.channels.map((c) => labelize(c)).join(', ')}</div>}
+                            {pillar.funnelStages.length > 0 && <div className="entity-card-meta">Funnel: {pillar.funnelStages.map((s) => labelize(s)).join(', ')}</div>}
+                            {pillar.audienceSegmentIds.length > 0 && (
+                              <div className="entity-card-meta">Audience: {pillar.audienceSegmentIds.map((id) => audienceLabel(mapping, id)).join(', ')}</div>
+                            )}
+                            <details style={{ marginTop: 6 }}>
+                              <summary className="summary-label" style={{ cursor: 'pointer' }}>
+                                Details
+                              </summary>
+                              <div style={{ marginTop: 8 }}>
+                                {pillar.keywords.length > 0 && (
+                                  <>
+                                    <span className="summary-label">Keywords</span>
+                                    <div className="tag-list">
+                                      {pillar.keywords.map((k, i) => (
+                                        <span className="tag" key={i}>
+                                          {k}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+                                {pillar.intentTypes.length > 0 && (
+                                  <>
+                                    <span className="summary-label">Intent Types</span>
+                                    <div className="tag-list">
+                                      {pillar.intentTypes.map((t, i) => (
+                                        <span className="tag" key={i}>
+                                          {labelize(t)}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+                                <span className="summary-label">Member Topics</span>
+                                <ul className="bullet-list">
+                                  {pillar.topicIds.map((id) => (
+                                    <li key={id}>{topicTitleById.get(id) ?? id}</li>
+                                  ))}
+                                </ul>
+                                {pillar.reasons.length > 0 && (
+                                  <>
+                                    <span className="summary-label">Reasons</span>
+                                    <ul className="bullet-list">
+                                      {pillar.reasons.map((r, i) => (
+                                        <li key={i}>{r}</li>
+                                      ))}
+                                    </ul>
+                                  </>
+                                )}
+                                {pillar.weaknesses.length > 0 && (
+                                  <>
+                                    <span className="summary-label">Weaknesses</span>
+                                    <ul className="bullet-list">
+                                      {pillar.weaknesses.map((w, i) => (
+                                        <li key={i}>{w}</li>
+                                      ))}
+                                    </ul>
+                                  </>
+                                )}
+                                {pillar.warnings.length > 0 && <div className="content-warning" style={{ marginTop: 8 }}>{pillar.warnings.join(' ')}</div>}
+                              </div>
+                            </details>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
           )}
