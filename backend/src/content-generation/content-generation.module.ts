@@ -7,6 +7,7 @@ import { BlogGenerationService } from './adapters/blog-generation.service';
 import { FacebookGenerationService } from './adapters/facebook-generation.service';
 import { InstagramGenerationService } from './adapters/instagram-generation.service';
 import { LinkedInGenerationService } from './adapters/linkedin-generation.service';
+import { NewsletterGenerationService } from './adapters/newsletter-generation.service';
 import { XGenerationService } from './adapters/x-generation.service';
 import { ContentGenerationController } from './content-generation.controller';
 import { ContentGenerationEngineService } from './engine/content-generation-engine.service';
@@ -25,6 +26,7 @@ import { ContentPromptBuilderService } from './prompting/content-prompt-builder.
     XGenerationService,
     FacebookGenerationService,
     InstagramGenerationService,
+    NewsletterGenerationService,
   ],
   exports: [ContentGenerationEngineService, ContentPromptBuilderService],
 })

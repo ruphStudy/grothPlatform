@@ -35,6 +35,9 @@ import type {
   FacebookGenerationOptions,
   InstagramCaptionResult,
   InstagramGenerationOptions,
+  NewsletterDraftResult,
+  NewsletterGenerationOptions,
+  NewsletterSourceType,
 } from '../types';
 
 const CAMPAIGN_STATUSES: CampaignStatus[] = ['draft', 'planned', 'approved', 'active', 'paused', 'completed', 'archived'];
@@ -237,6 +240,141 @@ function ActivityCard({ activity, mapping, allActivities }: { activity: Campaign
   );
 }
 
+// Shared by every newsletter source location (Blog Calendar, Content
+// Pillar) — state stays lifted to the parent, keyed by `${sourceType}:${sourceId}`,
+// so newsletter drafts never collide with each other or with any other
+// platform's generation state.
+function NewsletterGenerationPanel({
+  draft,
+  busy,
+  error,
+  options,
+  onOptionsChange,
+  onGenerate,
+  onCopySubject,
+  onCopyBody,
+  onCopyFull,
+}: {
+  draft: NewsletterDraftResult | undefined;
+  busy: boolean;
+  error: string | null;
+  options: NewsletterGenerationOptions;
+  onOptionsChange: (patch: Partial<NewsletterGenerationOptions>) => void;
+  onGenerate: () => void;
+  onCopySubject: (subject: string) => void;
+  onCopyBody: (content: string) => void;
+  onCopyFull: () => void;
+}) {
+  return (
+    <div style={{ marginTop: 10 }}>
+      <ErrorMessage message={error} />
+      {!draft && <p className="entity-card-meta">AI generation uses your configured provider and may incur usage cost.</p>}
+
+      <div className="form-inline">
+        <div className="field" style={{ marginBottom: 0 }}>
+          <select value={options.tone} onChange={(e) => onOptionsChange({ tone: e.target.value as NewsletterGenerationOptions['tone'] })}>
+            <option value="professional">Professional</option>
+            <option value="conversational">Conversational</option>
+            <option value="educational">Educational</option>
+            <option value="thought_leadership">Thought Leadership</option>
+          </select>
+        </div>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <select value={options.length} onChange={(e) => onOptionsChange({ length: e.target.value as NewsletterGenerationOptions['length'] })}>
+            <option value="short">Short</option>
+            <option value="medium">Medium</option>
+            <option value="long">Long</option>
+          </select>
+        </div>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <select value={options.outputFormat} onChange={(e) => onOptionsChange({ outputFormat: e.target.value as NewsletterGenerationOptions['outputFormat'] })}>
+            <option value="markdown">Markdown</option>
+            <option value="plain_text">Plain Text</option>
+          </select>
+        </div>
+        <label className="entity-card-meta" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <input type="checkbox" checked={!!options.includeSubjectLine} onChange={(e) => onOptionsChange({ includeSubjectLine: e.target.checked })} />
+          Include subject
+        </label>
+        <label className="entity-card-meta" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <input type="checkbox" checked={!!options.includePreheader} onChange={(e) => onOptionsChange({ includePreheader: e.target.checked })} />
+          Include preheader
+        </label>
+        <label className="entity-card-meta" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <input type="checkbox" checked={!!options.includeCTA} onChange={(e) => onOptionsChange({ includeCTA: e.target.checked })} />
+          Include CTA
+        </label>
+      </div>
+
+      <button className="btn btn-secondary" onClick={onGenerate} disabled={busy}>
+        {busy ? 'Generating newsletter...' : draft ? 'Regenerate Newsletter' : 'Generate Newsletter'}
+      </button>
+
+      {draft && (
+        <div style={{ marginTop: 10 }}>
+          <div className="tag-list">
+            <span className="tag">{draft.wordCount} words</span>
+            <span className="tag">{draft.characterCount} chars</span>
+            <span className="tag">{labelize(draft.tone)}</span>
+            <span className="tag">{labelize(draft.length)}</span>
+            <span className="tag">{draft.provider} / {draft.model}</span>
+            {draft.usage.totalTokens !== undefined && <span className="tag">{draft.usage.totalTokens} tokens</span>}
+            {draft.cost && <span className="tag">${draft.cost.estimated.toFixed(4)} {draft.cost.currency}</span>}
+            <span className="tag">Prompt {draft.promptVersion}</span>
+          </div>
+          <div className="entity-card-meta">Generated {new Date(draft.generatedAt).toLocaleString()}</div>
+          {draft.warnings.length > 0 && <div className="content-warning" style={{ marginTop: 6 }}>{draft.warnings.join(' ')}</div>}
+
+          {draft.subjectLine && (
+            <>
+              <span className="summary-label" style={{ marginTop: 8, display: 'block' }}>
+                Subject
+              </span>
+              <p>{draft.subjectLine}</p>
+              <button className="btn btn-secondary" onClick={() => onCopySubject(draft.subjectLine!)}>
+                Copy Subject
+              </button>
+            </>
+          )}
+          {draft.preheader && (
+            <>
+              <span className="summary-label" style={{ marginTop: 8, display: 'block' }}>
+                Preheader
+              </span>
+              <p>{draft.preheader}</p>
+            </>
+          )}
+          <span className="summary-label" style={{ marginTop: 8, display: 'block' }}>
+            Body
+          </span>
+          <pre
+            style={{
+              marginTop: 4,
+              padding: 10,
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              maxHeight: 320,
+              overflowY: 'auto',
+              background: 'var(--surface-muted, #f5f5f5)',
+              borderRadius: 6,
+            }}
+          >
+            {draft.content}
+          </pre>
+          <div className="tag-list" style={{ marginTop: 6 }}>
+            <button className="btn btn-secondary" onClick={() => onCopyBody(draft.content)}>
+              Copy Body
+            </button>
+            <button className="btn btn-secondary" onClick={onCopyFull}>
+              Copy Full Newsletter
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CampaignDetailPage() {
   const { organizationId, productId, campaignId } = useParams<{ organizationId: string; productId: string; campaignId: string }>();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
@@ -319,6 +457,10 @@ export default function CampaignDetailPage() {
   const [instagramBusyIds, setInstagramBusyIds] = useState<Record<string, boolean>>({});
   const [instagramErrors, setInstagramErrors] = useState<Record<string, string | null>>({});
   const [instagramOptionsById, setInstagramOptionsById] = useState<Record<string, InstagramGenerationOptions>>({});
+  const [newsletterDrafts, setNewsletterDrafts] = useState<Record<string, NewsletterDraftResult>>({});
+  const [newsletterBusyKeys, setNewsletterBusyKeys] = useState<Record<string, boolean>>({});
+  const [newsletterErrors, setNewsletterErrors] = useState<Record<string, string | null>>({});
+  const [newsletterOptionsByKey, setNewsletterOptionsByKey] = useState<Record<string, NewsletterGenerationOptions>>({});
 
   const [videoCalendar, setVideoCalendar] = useState<VideoCalendarResult | null>(null);
   const [videoCalendarBusy, setVideoCalendarBusy] = useState(false);
@@ -810,6 +952,57 @@ export default function CampaignDetailPage() {
   function instagramFormatNote(recommendedFormat: string): string | null {
     if (recommendedFormat === 'text_post' || recommendedFormat === 'short_post') return null;
     return `Caption for ${labelize(recommendedFormat)}`;
+  }
+
+  function newsletterKey(sourceType: NewsletterSourceType, sourceId: string): string {
+    return `${sourceType}:${sourceId}`;
+  }
+
+  function getNewsletterOptions(key: string): NewsletterGenerationOptions {
+    return newsletterOptionsByKey[key] ?? { tone: 'professional', length: 'medium', includeSubjectLine: true, includePreheader: true, includeCTA: undefined, outputFormat: 'markdown' };
+  }
+
+  function updateNewsletterOptions(key: string, patch: Partial<NewsletterGenerationOptions>) {
+    setNewsletterOptionsByKey((prev) => ({ ...prev, [key]: { ...getNewsletterOptions(key), ...patch } }));
+  }
+
+  async function generateNewsletterDraft(sourceType: NewsletterSourceType, sourceId: string, options?: NewsletterGenerationOptions): Promise<NewsletterDraftResult> {
+    return apiRequest<NewsletterDraftResult>(`${basePath}/content-generation/newsletter/${sourceType}/${sourceId}`, { method: 'POST', body: options ?? {} });
+  }
+
+  async function handleGenerateNewsletterDraft(sourceType: NewsletterSourceType, sourceId: string, isRegenerate: boolean) {
+    const key = newsletterKey(sourceType, sourceId);
+    if (isRegenerate) {
+      const confirmed = window.confirm('Regenerating will make another AI request and may incur additional cost. Continue?');
+      if (!confirmed) return;
+    }
+    setNewsletterBusyKeys((prev) => ({ ...prev, [key]: true }));
+    setNewsletterErrors((prev) => ({ ...prev, [key]: null }));
+    try {
+      const result = await generateNewsletterDraft(sourceType, sourceId, getNewsletterOptions(key));
+      setNewsletterDrafts((prev) => ({ ...prev, [key]: result }));
+    } catch (err) {
+      setNewsletterErrors((prev) => ({ ...prev, [key]: err instanceof ApiError ? err.message : 'Failed to generate newsletter draft' }));
+    } finally {
+      setNewsletterBusyKeys((prev) => ({ ...prev, [key]: false }));
+    }
+  }
+
+  function handleCopyNewsletterSubject(subject: string) {
+    void navigator.clipboard.writeText(subject);
+  }
+
+  function handleCopyNewsletterBody(content: string) {
+    void navigator.clipboard.writeText(content);
+  }
+
+  function handleCopyFullNewsletter(draft: NewsletterDraftResult) {
+    const parts: string[] = [];
+    if (draft.subjectLine) parts.push(`Subject: ${draft.subjectLine}`);
+    if (draft.preheader) parts.push(`Preheader: ${draft.preheader}`);
+    parts.push('');
+    parts.push(draft.content);
+    void navigator.clipboard.writeText(parts.join('\n'));
   }
 
   async function handleBuildSocialCalendar() {
@@ -2036,6 +2229,18 @@ export default function CampaignDetailPage() {
                                 {pillar.warnings.length > 0 && <div className="content-warning" style={{ marginTop: 8 }}>{pillar.warnings.join(' ')}</div>}
                               </div>
                             </details>
+
+                            <NewsletterGenerationPanel
+                              draft={newsletterDrafts[newsletterKey('content_pillar', pillar.id)]}
+                              busy={!!newsletterBusyKeys[newsletterKey('content_pillar', pillar.id)]}
+                              error={newsletterErrors[newsletterKey('content_pillar', pillar.id)] ?? null}
+                              options={getNewsletterOptions(newsletterKey('content_pillar', pillar.id))}
+                              onOptionsChange={(patch) => updateNewsletterOptions(newsletterKey('content_pillar', pillar.id), patch)}
+                              onGenerate={() => handleGenerateNewsletterDraft('content_pillar', pillar.id, !!newsletterDrafts[newsletterKey('content_pillar', pillar.id)])}
+                              onCopySubject={handleCopyNewsletterSubject}
+                              onCopyBody={handleCopyNewsletterBody}
+                              onCopyFull={() => handleCopyFullNewsletter(newsletterDrafts[newsletterKey('content_pillar', pillar.id)])}
+                            />
                           </Card>
                         ))}
                       </div>
@@ -2246,6 +2451,18 @@ export default function CampaignDetailPage() {
                                     </div>
                                   )}
                                 </div>
+
+                                <NewsletterGenerationPanel
+                                  draft={newsletterDrafts[newsletterKey('blog_calendar_item', item.id)]}
+                                  busy={!!newsletterBusyKeys[newsletterKey('blog_calendar_item', item.id)]}
+                                  error={newsletterErrors[newsletterKey('blog_calendar_item', item.id)] ?? null}
+                                  options={getNewsletterOptions(newsletterKey('blog_calendar_item', item.id))}
+                                  onOptionsChange={(patch) => updateNewsletterOptions(newsletterKey('blog_calendar_item', item.id), patch)}
+                                  onGenerate={() => handleGenerateNewsletterDraft('blog_calendar_item', item.id, !!newsletterDrafts[newsletterKey('blog_calendar_item', item.id)])}
+                                  onCopySubject={handleCopyNewsletterSubject}
+                                  onCopyBody={handleCopyNewsletterBody}
+                                  onCopyFull={() => handleCopyFullNewsletter(newsletterDrafts[newsletterKey('blog_calendar_item', item.id)])}
+                                />
                               </div>
                             </div>
                           );

@@ -4,11 +4,13 @@ import { BlogGenerationService } from './adapters/blog-generation.service';
 import { FacebookGenerationService } from './adapters/facebook-generation.service';
 import { InstagramGenerationService } from './adapters/instagram-generation.service';
 import { LinkedInGenerationService } from './adapters/linkedin-generation.service';
+import { NewsletterGenerationService } from './adapters/newsletter-generation.service';
 import { XGenerationService } from './adapters/x-generation.service';
 import { BlogGenerationOptionsDto } from './dto/blog-generation-options.dto';
 import { FacebookGenerationOptionsDto } from './dto/facebook-generation-options.dto';
 import { InstagramGenerationOptionsDto } from './dto/instagram-generation-options.dto';
 import { LinkedInGenerationOptionsDto } from './dto/linkedin-generation-options.dto';
+import { NewsletterGenerationOptionsDto } from './dto/newsletter-generation-options.dto';
 import { XGenerationOptionsDto } from './dto/x-generation-options.dto';
 
 @UseGuards(JwtAuthGuard)
@@ -20,6 +22,7 @@ export class ContentGenerationController {
     private readonly xGenerationService: XGenerationService,
     private readonly facebookGenerationService: FacebookGenerationService,
     private readonly instagramGenerationService: InstagramGenerationService,
+    private readonly newsletterGenerationService: NewsletterGenerationService,
   ) {}
 
   // One paid generation call per request — never auto-triggered, only ever
@@ -82,5 +85,18 @@ export class ContentGenerationController {
     @Body() body: InstagramGenerationOptionsDto,
   ) {
     return this.instagramGenerationService.generateInstagramCaption(organizationId, productId, campaignId, socialCalendarItemId, req.user.userId, body);
+  }
+
+  @Post('newsletter/:sourceType/:sourceId')
+  generateNewsletterDraft(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+    @Param('sourceType') sourceType: string,
+    @Param('sourceId') sourceId: string,
+    @Body() body: NewsletterGenerationOptionsDto,
+  ) {
+    return this.newsletterGenerationService.generateNewsletterDraft(organizationId, productId, campaignId, sourceType, sourceId, req.user.userId, body);
   }
 }
