@@ -2,6 +2,8 @@
 // never change this shape — prompt construction stays in 15B/adapters.
 export type ContentGenerationKind = 'blog' | 'linkedin' | 'x' | 'facebook' | 'instagram' | 'newsletter' | 'video_script' | 'generic';
 
+export const CONTENT_GENERATION_KINDS: ContentGenerationKind[] = ['blog', 'linkedin', 'x', 'facebook', 'instagram', 'newsletter', 'video_script', 'generic'];
+
 export interface ContentGenerationSourceContext {
   strategyGeneratedAt?: string;
   campaignPlanningVersion?: number;

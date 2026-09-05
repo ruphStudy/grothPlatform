@@ -4,10 +4,9 @@ import { randomUUID } from 'crypto';
 import { ContentGenerationConfigurationError, ContentGenerationEmptyResultError, ContentGenerationValidationError } from '../errors/content-generation.errors';
 import { OpenAiContentGenerationProvider } from '../providers/openai-content-generation.provider';
 import type { ContentGenerationProvider } from '../providers/content-generation-provider.interface';
+import { CONTENT_GENERATION_KINDS } from '../types/content-generation.types';
 import type { ContentGenerationKind, ContentGenerationRequest, ContentGenerationResult, ContentGenerationUsage } from '../types/content-generation.types';
 import { estimateContentGenerationCost } from './content-generation-cost.util';
-
-const SUPPORTED_KINDS: ContentGenerationKind[] = ['blog', 'linkedin', 'x', 'facebook', 'instagram', 'newsletter', 'video_script', 'generic'];
 
 const DEFAULT_MAX_PROMPT_CHARS = 50000;
 const DEFAULT_TEMPERATURE = 0.7;
@@ -99,7 +98,7 @@ export class ContentGenerationEngineService {
   // ---------------------------------------------------------------------
 
   private validate(request: ContentGenerationRequest): void {
-    if (!SUPPORTED_KINDS.includes(request.kind)) {
+    if (!CONTENT_GENERATION_KINDS.includes(request.kind)) {
       throw new ContentGenerationValidationError(`Unsupported content generation kind: ${String(request.kind)}`);
     }
     if (typeof request.prompt !== 'string' || request.prompt.trim().length === 0) {
