@@ -1,6 +1,7 @@
 import type { CampaignAudienceChannelMapping } from '../../campaigns/types/campaign-audience-channel.types';
 import type { GrowthStrategyOverview } from '../../growth-strategy/types/growth-strategy-overview.types';
 import type { StrategySignal, StrategySignalCategory } from '../../growth-strategy/types/strategy-signal.types';
+import type { ContentVersionBrandVoiceSnapshot } from '../types/content-brand-voice.types';
 import type { ContentVersionGroundingEvidenceSnapshot } from '../types/content-grounding.types';
 import type { ContentPromptBuildInput, ContentPromptEvidence } from '../types/content-prompt.types';
 
@@ -70,5 +71,18 @@ export function buildGroundingEvidenceSnapshot(input: ContentPromptBuildInput): 
     keywords: input.content.keywords ?? [],
     topic: input.content.topic,
     pillar: input.content.pillar,
+  };
+}
+
+// Sprint 16E: denormalizes the exact brand tone/style/avoid direction handed
+// to the prompt so a ContentVersion can be (re)reviewed for brand voice
+// later without rebuilding Growth Strategy. Only `tone` is populated by any
+// adapter today — `style`/`avoid` pass through as-is for forward
+// compatibility if a future caller populates them.
+export function buildBrandVoiceSnapshot(input: ContentPromptBuildInput): ContentVersionBrandVoiceSnapshot {
+  return {
+    tone: input.brand?.tone,
+    style: input.brand?.style,
+    avoid: input.brand?.avoid,
   };
 }

@@ -18,10 +18,12 @@ import { OpenAiContentGenerationProvider } from './providers/openai-content-gene
 import { ContentPromptBuilderService } from './prompting/content-prompt-builder.service';
 import { ContentArtifact, ContentArtifactSchema } from './schemas/content-artifact.schema';
 import { ContentFactValidationResult, ContentFactValidationResultSchema } from './schemas/content-fact-validation-result.schema';
+import { ContentBrandVoiceResult, ContentBrandVoiceResultSchema } from './schemas/content-brand-voice-result.schema';
 import { ContentGroundingResult, ContentGroundingResultSchema } from './schemas/content-grounding-result.schema';
 import { ContentReadabilityResult, ContentReadabilityResultSchema } from './schemas/content-readability-result.schema';
 import { ContentSeoReviewResult, ContentSeoReviewResultSchema } from './schemas/content-seo-review-result.schema';
 import { ContentVersion, ContentVersionSchema } from './schemas/content-version.schema';
+import { ContentBrandVoiceService } from './services/content-brand-voice.service';
 import { ContentFactValidationService } from './services/content-fact-validation.service';
 import { ContentGroundingService } from './services/content-grounding.service';
 import { ContentReadabilityService } from './services/content-readability.service';
@@ -41,6 +43,7 @@ import { ContentVersioningService } from './services/content-versioning.service'
       { name: ContentFactValidationResult.name, schema: ContentFactValidationResultSchema },
       { name: ContentSeoReviewResult.name, schema: ContentSeoReviewResultSchema },
       { name: ContentReadabilityResult.name, schema: ContentReadabilityResultSchema },
+      { name: ContentBrandVoiceResult.name, schema: ContentBrandVoiceResultSchema },
     ]),
   ],
   controllers: [ContentGenerationController, ContentArtifactsController],
@@ -52,6 +55,7 @@ import { ContentVersioningService } from './services/content-versioning.service'
     ContentFactValidationService,
     ContentSeoReviewService,
     ContentReadabilityService,
+    ContentBrandVoiceService,
     ContentVersioningService,
     BlogGenerationService,
     LinkedInGenerationService,
@@ -69,6 +73,7 @@ import { ContentVersioningService } from './services/content-versioning.service'
     ContentFactValidationService,
     ContentSeoReviewService,
     ContentReadabilityService,
+    ContentBrandVoiceService,
   ],
 })
 export class ContentGenerationModule {}

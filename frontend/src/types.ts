@@ -2697,6 +2697,51 @@ export interface ContentReadabilityResult extends ContentReadabilitySummary {
   reviewedAt: string;
 }
 
+export type BrandVoiceCheckType =
+  | 'requested_tone'
+  | 'style_alignment'
+  | 'avoid_rules'
+  | 'hype'
+  | 'professionalism'
+  | 'conversationality'
+  | 'clarity'
+  | 'consistency'
+  | 'unsupported_voice_claims'
+  | 'platform_fit'
+  | 'other';
+
+export type BrandVoiceCheckClassification = 'passed' | 'warning' | 'failed' | 'not_applicable';
+
+export type ContentBrandVoiceStatus = 'aligned' | 'needs_adjustment' | 'misaligned';
+
+export interface BrandVoiceCheck {
+  id: string;
+  type: BrandVoiceCheckType;
+  classification: BrandVoiceCheckClassification;
+  score?: number;
+  reason: string;
+  evidence?: string[];
+}
+
+export interface ContentBrandVoiceSummary {
+  status: ContentBrandVoiceStatus;
+  score: number;
+  warningCount: number;
+  failedCount: number;
+}
+
+export interface ContentBrandVoiceResult extends ContentBrandVoiceSummary {
+  contentVersionId: string;
+  artifactId: string;
+  organizationId: string;
+  productId: string;
+  campaignId: string;
+  checks: BrandVoiceCheck[];
+  passedCount: number;
+  warnings: string[];
+  reviewedAt: string;
+}
+
 export interface ContentArtifact {
   id: string;
   kind: ContentGenerationKind;
@@ -2723,6 +2768,7 @@ export interface ContentVersionSummary {
   factValidation?: ContentFactValidationSummary;
   seoReview?: ContentSeoReviewSummary;
   readability?: ContentReadabilitySummary;
+  brandVoice?: ContentBrandVoiceSummary;
 }
 
 export interface ContentVersionDetail extends ContentVersionSummary {

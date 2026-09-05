@@ -1,6 +1,7 @@
 import { Controller, Get, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CampaignsService } from '../campaigns/campaigns.service';
+import { ContentBrandVoiceService } from './services/content-brand-voice.service';
 import { ContentFactValidationService } from './services/content-fact-validation.service';
 import { ContentGroundingService } from './services/content-grounding.service';
 import { ContentReadabilityService } from './services/content-readability.service';
@@ -23,6 +24,7 @@ export class ContentArtifactsController {
     private readonly factValidationService: ContentFactValidationService,
     private readonly seoReviewService: ContentSeoReviewService,
     private readonly readabilityService: ContentReadabilityService,
+    private readonly brandVoiceService: ContentBrandVoiceService,
   ) {}
 
   @Get('artifacts')
@@ -263,6 +265,50 @@ export class ContentArtifactsController {
       kind: versionDetail.kind,
       payload: versionDetail.payload,
       text: this.readabilityService.extractReadableText(versionDetail.kind, versionDetail.payload),
+    });
+  }
+
+  // Read-only: never rebuilds Growth Strategy. Returns null (not 404) when
+  // no brand voice result exists yet for an otherwise-valid version.
+  @Get('artifacts/:artifactId/versions/:version/brand-voice')
+  async getBrandVoice(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+    @Param('artifactId') artifactId: string,
+    @Param('version', ParseIntPipe) version: number,
+  ) {
+    await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
+    const versionDetail = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
+    return this.brandVoiceService.getResult(versionDetail.id);
+  }
+
+  // Manual recheck: recomputes against this version's own persisted
+  // brandVoiceSnapshot — never rebuilds Growth Strategy. No confirmation
+  // required since this never calls a paid API.
+  @Post('artifacts/:artifactId/versions/:version/brand-voice')
+  async recheckBrandVoice(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+    @Param('artifactId') artifactId: string,
+    @Param('version', ParseIntPipe) version: number,
+  ) {
+    await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
+    const versionDetail = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
+    return this.brandVoiceService.reviewContentVersion({
+      contentVersionId: versionDetail.id,
+      artifactId: versionDetail.artifactId,
+      organizationId,
+      productId,
+      campaignId,
+      kind: versionDetail.kind,
+      payload: versionDetail.payload,
+      text: extractGroundableText(versionDetail.payload),
+      brandVoiceSnapshot: versionDetail.brandVoiceSnapshot,
+      generationOptions: versionDetail.generationOptions,
     });
   }
 }

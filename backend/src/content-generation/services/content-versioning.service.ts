@@ -5,6 +5,7 @@ import { Model, Types } from 'mongoose';
 import { ContentVersionPersistenceError } from '../errors/content-generation.errors';
 import { ContentArtifact, ContentArtifactDocument } from '../schemas/content-artifact.schema';
 import { ContentVersion, ContentVersionDocument } from '../schemas/content-version.schema';
+import { ContentBrandVoiceService } from './content-brand-voice.service';
 import { ContentFactValidationService } from './content-fact-validation.service';
 import { ContentGroundingService } from './content-grounding.service';
 import { ContentReadabilityService } from './content-readability.service';
@@ -58,6 +59,7 @@ export class ContentVersioningService {
     private readonly factValidationService: ContentFactValidationService,
     private readonly seoReviewService: ContentSeoReviewService,
     private readonly readabilityService: ContentReadabilityService,
+    private readonly brandVoiceService: ContentBrandVoiceService,
   ) {}
 
   async saveGeneratedVersion(input: SaveGeneratedVersionInput): Promise<SavedVersionResult> {
@@ -90,6 +92,7 @@ export class ContentVersioningService {
         generationOptions: input.generationOptions,
         sourceSnapshot: input.sourceSnapshot,
         groundingEvidenceSnapshot: input.groundingEvidenceSnapshot,
+        brandVoiceSnapshot: input.brandVoiceSnapshot,
         createdBy: userId,
       });
     } catch {
@@ -175,7 +178,28 @@ export class ContentVersioningService {
       this.logger.warn(`contentVersionId=${versionDoc._id.toString()} kind=readability success=false reason=${(err as Error).message}`);
     }
 
-    return { artifactId: artifact._id.toString(), versionId: versionDoc._id.toString(), version, grounding, factValidation, seoReview, readability };
+    // Same no-paid-API guarantee: a failure here must never discard the
+    // generated version.
+    let brandVoice: SavedVersionResult['brandVoice'];
+    try {
+      const result = await this.brandVoiceService.reviewContentVersion({
+        contentVersionId: versionDoc._id.toString(),
+        artifactId: artifact._id.toString(),
+        organizationId: input.organizationId,
+        productId: input.productId,
+        campaignId: input.campaignId,
+        kind: input.kind,
+        payload: input.payload,
+        text: extractGroundableText(input.payload),
+        brandVoiceSnapshot: input.brandVoiceSnapshot,
+        generationOptions: input.generationOptions,
+      });
+      brandVoice = { status: result.status, score: result.score, warningCount: result.warningCount, failedCount: result.failedCount };
+    } catch (err) {
+      this.logger.warn(`contentVersionId=${versionDoc._id.toString()} kind=brand_voice success=false reason=${(err as Error).message}. Brand voice review could not be completed.`);
+    }
+
+    return { artifactId: artifact._id.toString(), versionId: versionDoc._id.toString(), version, grounding, factValidation, seoReview, readability, brandVoice };
   }
 
   async listArtifacts(organizationId: string, productId: string, campaignId: string, filter?: ArtifactFilter): Promise<ContentArtifactResponse[]> {
@@ -224,11 +248,12 @@ export class ContentVersioningService {
     const versions = await this.versionModel.find(query).sort({ version: -1 }).limit(limit).exec();
     const summaries = versions.map((v) => this.toVersionSummary(v));
     const versionIds = summaries.map((s) => s.id);
-    const [groundingByVersionId, factValidationByVersionId, seoReviewByVersionId, readabilityByVersionId] = await Promise.all([
+    const [groundingByVersionId, factValidationByVersionId, seoReviewByVersionId, readabilityByVersionId, brandVoiceByVersionId] = await Promise.all([
       this.groundingService.getSummariesByVersionIds(versionIds),
       this.factValidationService.getSummariesByVersionIds(versionIds),
       this.seoReviewService.getSummariesByVersionIds(versionIds),
       this.readabilityService.getSummariesByVersionIds(versionIds),
+      this.brandVoiceService.getSummariesByVersionIds(versionIds),
     ]);
     return summaries.map((s) => ({
       ...s,
@@ -236,6 +261,7 @@ export class ContentVersioningService {
       factValidation: factValidationByVersionId.get(s.id),
       seoReview: seoReviewByVersionId.get(s.id),
       readability: readabilityByVersionId.get(s.id),
+      brandVoice: brandVoiceByVersionId.get(s.id),
     }));
   }
 
@@ -244,13 +270,14 @@ export class ContentVersioningService {
     const versionDoc = await this.versionModel.findOne({ artifactId: artifact._id, version });
     if (!versionDoc) throw new NotFoundException('Content version not found.');
     const detail = this.toVersionDetail(versionDoc);
-    const [grounding, factValidation, seoReview, readability] = await Promise.all([
+    const [grounding, factValidation, seoReview, readability, brandVoice] = await Promise.all([
       this.groundingService.getSummary(detail.id),
       this.factValidationService.getSummary(detail.id),
       this.seoReviewService.getSummary(detail.id),
       this.readabilityService.getSummary(detail.id),
+      this.brandVoiceService.getSummary(detail.id),
     ]);
-    return { ...detail, grounding, factValidation, seoReview, readability };
+    return { ...detail, grounding, factValidation, seoReview, readability, brandVoice };
   }
 
   async getLatestByCriteria(organizationId: string, productId: string, campaignId: string, kind: ContentGenerationKind, sourceType: string, sourceId: string): Promise<ArtifactWithLatestVersion | null> {
@@ -266,13 +293,14 @@ export class ContentVersioningService {
     const versionDoc = await this.versionModel.findById(artifact.latestVersionId);
     if (!versionDoc) return null;
     const detail = this.toVersionDetail(versionDoc);
-    const [grounding, factValidation, seoReview, readability] = await Promise.all([
+    const [grounding, factValidation, seoReview, readability, brandVoice] = await Promise.all([
       this.groundingService.getSummary(detail.id),
       this.factValidationService.getSummary(detail.id),
       this.seoReviewService.getSummary(detail.id),
       this.readabilityService.getSummary(detail.id),
+      this.brandVoiceService.getSummary(detail.id),
     ]);
-    return { artifact: this.toArtifactResponse(artifact), latestVersion: { ...detail, grounding, factValidation, seoReview, readability } };
+    return { artifact: this.toArtifactResponse(artifact), latestVersion: { ...detail, grounding, factValidation, seoReview, readability, brandVoice } };
   }
 
   async listLatestForCampaign(organizationId: string, productId: string, campaignId: string, filter?: ArtifactFilter): Promise<ArtifactWithLatestVersion[]> {
@@ -281,11 +309,12 @@ export class ContentVersioningService {
     const versions = await this.versionModel.find({ _id: { $in: latestVersionIds } }).exec();
     const versionById = new Map(versions.map((v) => [v._id.toString(), v]));
     const versionIds = versions.map((v) => v._id.toString());
-    const [groundingByVersionId, factValidationByVersionId, seoReviewByVersionId, readabilityByVersionId] = await Promise.all([
+    const [groundingByVersionId, factValidationByVersionId, seoReviewByVersionId, readabilityByVersionId, brandVoiceByVersionId] = await Promise.all([
       this.groundingService.getSummariesByVersionIds(versionIds),
       this.factValidationService.getSummariesByVersionIds(versionIds),
       this.seoReviewService.getSummariesByVersionIds(versionIds),
       this.readabilityService.getSummariesByVersionIds(versionIds),
+      this.brandVoiceService.getSummariesByVersionIds(versionIds),
     ]);
 
     return artifacts.map((artifact) => {
@@ -300,6 +329,7 @@ export class ContentVersioningService {
           factValidation: factValidationByVersionId.get(detail.id),
           seoReview: seoReviewByVersionId.get(detail.id),
           readability: readabilityByVersionId.get(detail.id),
+          brandVoice: brandVoiceByVersionId.get(detail.id),
         },
       };
     });
@@ -360,6 +390,7 @@ export class ContentVersioningService {
       generationOptions: version.generationOptions,
       sourceSnapshot: version.sourceSnapshot,
       groundingEvidenceSnapshot: version.groundingEvidenceSnapshot,
+      brandVoiceSnapshot: version.brandVoiceSnapshot,
     };
   }
 

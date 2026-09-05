@@ -274,6 +274,23 @@ export class ContentVersionGroundingEvidenceSnapshot {
 }
 export const ContentVersionGroundingEvidenceSnapshotSchema = SchemaFactory.createForClass(ContentVersionGroundingEvidenceSnapshot);
 
+// Denormalized brand-voice inputs captured at generation time — used by
+// Sprint 16E so a version can be (re)reviewed against the exact tone/style/
+// avoid direction that produced it, without rebuilding Growth Strategy.
+// Optional: versions saved before Sprint 16E will not have this.
+@Schema({ _id: false })
+export class ContentVersionBrandVoiceSnapshot {
+  @Prop({ type: [String], default: undefined })
+  tone?: string[];
+
+  @Prop({ type: [String], default: undefined })
+  style?: string[];
+
+  @Prop({ type: [String], default: undefined })
+  avoid?: string[];
+}
+export const ContentVersionBrandVoiceSnapshotSchema = SchemaFactory.createForClass(ContentVersionBrandVoiceSnapshot);
+
 // Immutable generation snapshot — once saved, payload/generationMetadata/
 // generationOptions/version are never updated. Only ContentArtifact's
 // latest pointers change on regeneration.
@@ -317,6 +334,9 @@ export class ContentVersion {
 
   @Prop({ type: ContentVersionGroundingEvidenceSnapshotSchema })
   groundingEvidenceSnapshot?: ContentVersionGroundingEvidenceSnapshot;
+
+  @Prop({ type: ContentVersionBrandVoiceSnapshotSchema })
+  brandVoiceSnapshot?: ContentVersionBrandVoiceSnapshot;
 
   @Prop({ type: Types.ObjectId, ref: 'User' })
   createdBy?: Types.ObjectId;

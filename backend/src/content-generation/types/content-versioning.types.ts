@@ -1,4 +1,5 @@
 import type { ContentGenerationKind } from './content-generation.types';
+import type { ContentBrandVoiceSummary, ContentVersionBrandVoiceSnapshot } from './content-brand-voice.types';
 import type { ContentFactValidationSummary } from './content-fact-validation.types';
 import type { ContentGroundingSummary, ContentVersionGroundingEvidenceSnapshot } from './content-grounding.types';
 import type { ContentReadabilitySummary } from './content-readability.types';
@@ -98,6 +99,7 @@ export interface SaveGeneratedVersionInput {
   generationOptions?: ContentVersionGenerationOptions;
   sourceSnapshot?: ContentVersionSourceSnapshot;
   groundingEvidenceSnapshot?: ContentVersionGroundingEvidenceSnapshot;
+  brandVoiceSnapshot?: ContentVersionBrandVoiceSnapshot;
   userId?: string;
 }
 
@@ -109,6 +111,7 @@ export interface SavedVersionResult {
   factValidation?: ContentFactValidationSummary;
   seoReview?: ContentSeoReviewSummary;
   readability?: ContentReadabilitySummary;
+  brandVoice?: ContentBrandVoiceSummary;
 }
 
 export interface ContentArtifactResponse {
@@ -137,6 +140,7 @@ export interface ContentVersionSummary {
   factValidation?: ContentFactValidationSummary;
   seoReview?: ContentSeoReviewSummary;
   readability?: ContentReadabilitySummary;
+  brandVoice?: ContentBrandVoiceSummary;
 }
 
 export interface ContentVersionDetail extends ContentVersionSummary {
@@ -148,6 +152,7 @@ export interface ContentVersionDetail extends ContentVersionSummary {
   generationOptions?: ContentVersionGenerationOptions;
   sourceSnapshot?: ContentVersionSourceSnapshot;
   groundingEvidenceSnapshot?: ContentVersionGroundingEvidenceSnapshot;
+  brandVoiceSnapshot?: ContentVersionBrandVoiceSnapshot;
 }
 
 export interface ArtifactWithLatestVersion {

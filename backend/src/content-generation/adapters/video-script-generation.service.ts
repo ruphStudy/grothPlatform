@@ -18,7 +18,7 @@ import { ProductsService } from '../../products/products.service';
 import { ContentGenerationEngineService } from '../engine/content-generation-engine.service';
 import { ContentPromptBuilderService } from '../prompting/content-prompt-builder.service';
 import { ContentVersioningService } from '../services/content-versioning.service';
-import { buildGroundingEvidenceSnapshot, mapEvidenceFromOverview, mapMessagingDirectionsFromOverview, resolveAudienceLabel } from '../shared/content-evidence-mapping.util';
+import { buildBrandVoiceSnapshot, buildGroundingEvidenceSnapshot, mapEvidenceFromOverview, mapMessagingDirectionsFromOverview, resolveAudienceLabel } from '../shared/content-evidence-mapping.util';
 import { buildGenerationMetadata } from '../shared/content-version-mapping.util';
 import type { ContentPromptBuildInput } from '../types/content-prompt.types';
 import type { VideoScriptDraftResult, VideoScriptDuration, VideoScriptGenerationOptions, VideoScriptScene, VideoScriptTone } from '../types/video-script-generation.types';
@@ -460,6 +460,7 @@ export class VideoScriptGenerationService {
       generationOptions: { language: options?.language, tone, duration, outputFormat, includeCTA: constraintsIncludeCTA, includeHook, includeSceneDirections },
       sourceSnapshot: { title: resolvedSource.title, type: resolvedSource.type, pillarId: resolvedSource.pillarId, topicId: resolvedSource.topicId },
       groundingEvidenceSnapshot: buildGroundingEvidenceSnapshot(promptInput),
+      brandVoiceSnapshot: buildBrandVoiceSnapshot(promptInput),
       userId,
     });
 

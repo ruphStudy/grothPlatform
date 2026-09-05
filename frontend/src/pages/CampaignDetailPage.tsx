@@ -49,6 +49,8 @@ import type {
   ContentSeoReviewSummary,
   ContentReadabilityResult,
   ContentReadabilitySummary,
+  ContentBrandVoiceResult,
+  ContentBrandVoiceSummary,
   ContentVersionDetail,
   ContentVersionSummary,
 } from '../types';
@@ -347,6 +349,27 @@ function ReadabilityBadge({ readability }: { readability: ContentReadabilitySumm
   );
 }
 
+function brandVoiceBadgeClass(status: ContentBrandVoiceSummary['status']): string {
+  if (status === 'aligned') return 'quality-good';
+  if (status === 'needs_adjustment') return 'quality-limited';
+  return 'quality-empty';
+}
+
+function brandVoiceBadgeLabel(status: ContentBrandVoiceSummary['status']): string {
+  if (status === 'aligned') return 'Aligned';
+  if (status === 'needs_adjustment') return 'Adjust';
+  return 'Misaligned';
+}
+
+function BrandVoiceBadge({ brandVoice }: { brandVoice: ContentBrandVoiceSummary | undefined }) {
+  if (!brandVoice) return null;
+  return (
+    <span className={`quality-badge ${brandVoiceBadgeClass(brandVoice.status)}`}>
+      Brand Voice: {brandVoice.score} — {brandVoiceBadgeLabel(brandVoice.status)}
+    </span>
+  );
+}
+
 function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePath: string; artifactId: string | undefined; latestVersion: number | undefined }) {
   const [open, setOpen] = useState(false);
   const [versions, setVersions] = useState<ContentVersionSummary[] | null>(null);
@@ -375,6 +398,11 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
   const [readabilityOpen, setReadabilityOpen] = useState(false);
   const [readabilityBusy, setReadabilityBusy] = useState(false);
   const [readabilityError, setReadabilityError] = useState<string | null>(null);
+  const [latestBrandVoice, setLatestBrandVoice] = useState<ContentBrandVoiceSummary | undefined>(undefined);
+  const [brandVoiceDetail, setBrandVoiceDetail] = useState<ContentBrandVoiceResult | null>(null);
+  const [brandVoiceOpen, setBrandVoiceOpen] = useState(false);
+  const [brandVoiceBusy, setBrandVoiceBusy] = useState(false);
+  const [brandVoiceError, setBrandVoiceError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!artifactId || !latestVersion) return;
@@ -390,6 +418,9 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
     apiRequest<ContentReadabilityResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${latestVersion}/readability`)
       .then((result) => setLatestReadability(result ?? undefined))
       .catch(() => setLatestReadability(undefined));
+    apiRequest<ContentBrandVoiceResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${latestVersion}/brand-voice`)
+      .then((result) => setLatestBrandVoice(result ?? undefined))
+      .catch(() => setLatestBrandVoice(undefined));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [artifactId, latestVersion]);
 
@@ -572,6 +603,51 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
     }
   }
 
+  async function loadBrandVoice(version: number) {
+    if (!artifactId) return;
+    setBrandVoiceBusy(true);
+    setBrandVoiceError(null);
+    try {
+      const result = await apiRequest<ContentBrandVoiceResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}/brand-voice`);
+      setBrandVoiceDetail(result);
+    } catch (err) {
+      setBrandVoiceError(err instanceof ApiError ? err.message : 'Failed to load brand voice');
+    } finally {
+      setBrandVoiceBusy(false);
+    }
+  }
+
+  async function toggleBrandVoice(version: number) {
+    if (brandVoiceOpen) {
+      setBrandVoiceOpen(false);
+      return;
+    }
+    setBrandVoiceOpen(true);
+    await loadBrandVoice(version);
+  }
+
+  async function recheckBrandVoice(version: number) {
+    if (!artifactId) return;
+    setBrandVoiceBusy(true);
+    setBrandVoiceError(null);
+    try {
+      const result = await apiRequest<ContentBrandVoiceResult>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}/brand-voice`, { method: 'POST' });
+      setBrandVoiceDetail(result);
+      setBrandVoiceOpen(true);
+      const summary = { status: result.status, score: result.score, warningCount: result.warningCount, failedCount: result.failedCount };
+      if (selected && selected.version === version) {
+        setSelected({ ...selected, brandVoice: summary });
+      }
+      if (version === latestVersion) {
+        setLatestBrandVoice(summary);
+      }
+    } catch (err) {
+      setBrandVoiceError(err instanceof ApiError ? err.message : 'Failed to recheck brand voice');
+    } finally {
+      setBrandVoiceBusy(false);
+    }
+  }
+
   async function toggleOpen() {
     if (!artifactId) return;
     if (open) {
@@ -608,6 +684,9 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
     setReadabilityOpen(false);
     setReadabilityDetail(null);
     setReadabilityError(null);
+    setBrandVoiceOpen(false);
+    setBrandVoiceDetail(null);
+    setBrandVoiceError(null);
     try {
       const detail = await apiRequest<ContentVersionDetail>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}`);
       setSelected(detail);
@@ -639,6 +718,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
         <FactValidationBadge factValidation={latestFactValidation} />
         <SeoReviewBadge seoReview={latestSeoReview} />
         <ReadabilityBadge readability={latestReadability} />
+        <BrandVoiceBadge brandVoice={latestBrandVoice} />
         <button className="btn btn-secondary" onClick={toggleOpen}>
           {open ? 'Hide History' : 'History'}
         </button>
@@ -656,6 +736,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
                   <FactValidationBadge factValidation={v.factValidation} />
                   <SeoReviewBadge seoReview={v.seoReview} />
                   <ReadabilityBadge readability={v.readability} />
+                  <BrandVoiceBadge brandVoice={v.brandVoice} />
                   <span className="entity-card-meta">{new Date(v.generatedAt).toLocaleString()}</span>
                   {v.wordCount !== undefined && <span className="entity-card-meta">{v.wordCount} words</span>}
                   {v.version === latestVersion && <span className="entity-card-meta">(latest)</span>}
@@ -675,6 +756,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
                 <FactValidationBadge factValidation={selected.factValidation} />
                 <SeoReviewBadge seoReview={selected.seoReview} />
                 <ReadabilityBadge readability={selected.readability} />
+                <BrandVoiceBadge brandVoice={selected.brandVoice} />
                 <button className="btn btn-secondary" onClick={() => setSelected(null)}>
                   View Latest
                 </button>
@@ -704,6 +786,12 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
                 </button>
                 <button className="btn btn-secondary" onClick={() => recheckReadability(selected.version)} disabled={readabilityBusy}>
                   {readabilityBusy ? 'Rechecking...' : 'Recheck Readability'}
+                </button>
+                <button className="btn btn-secondary" onClick={() => toggleBrandVoice(selected.version)}>
+                  {brandVoiceOpen ? 'Hide Brand Voice' : 'View Brand Voice'}
+                </button>
+                <button className="btn btn-secondary" onClick={() => recheckBrandVoice(selected.version)} disabled={brandVoiceBusy}>
+                  {brandVoiceBusy ? 'Rechecking...' : 'Recheck Brand Voice'}
                 </button>
               </div>
               {groundingOpen && (
@@ -860,6 +948,47 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
                       {readabilityDetail.checks.length > 0 && (
                         <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0' }}>
                           {readabilityDetail.checks
+                            .filter((c) => c.classification !== 'not_applicable')
+                            .map((c) => (
+                              <li
+                                key={c.id}
+                                style={{
+                                  padding: '6px 0',
+                                  borderTop: '1px solid var(--border-color, #ddd)',
+                                  color: c.classification === 'failed' ? 'var(--error, #b00020)' : undefined,
+                                }}
+                              >
+                                <span className="tag" style={{ marginRight: 6 }}>{c.classification}</span>
+                                <span className="tag" style={{ marginRight: 6 }}>{c.type}</span>
+                                <div className="entity-card-meta">{c.reason}</div>
+                                {c.evidence && c.evidence.length > 0 && <div className="entity-card-meta">Evidence: {c.evidence.join('; ')}</div>}
+                              </li>
+                            ))}
+                        </ul>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+              {brandVoiceOpen && (
+                <div style={{ marginTop: 8, padding: 8, background: 'var(--surface-muted, #f5f5f5)', borderRadius: 6 }}>
+                  {brandVoiceBusy && <Loading />}
+                  <ErrorMessage message={brandVoiceError} />
+                  {!brandVoiceBusy && !brandVoiceDetail && !brandVoiceError && <p className="entity-card-meta">No brand voice result yet.</p>}
+                  {brandVoiceDetail && (
+                    <>
+                      <div className="tag-list">
+                        <span className="tag">Score {brandVoiceDetail.score}</span>
+                        <span className="tag">Passed {brandVoiceDetail.passedCount}</span>
+                        <span className="tag">Warning {brandVoiceDetail.warningCount}</span>
+                        <span className="tag">Failed {brandVoiceDetail.failedCount}</span>
+                      </div>
+                      {brandVoiceDetail.warnings.length > 0 && (
+                        <div className="content-warning" style={{ marginTop: 6 }}>{brandVoiceDetail.warnings.join(' ')}</div>
+                      )}
+                      {brandVoiceDetail.checks.length > 0 && (
+                        <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0' }}>
+                          {brandVoiceDetail.checks
                             .filter((c) => c.classification !== 'not_applicable')
                             .map((c) => (
                               <li
