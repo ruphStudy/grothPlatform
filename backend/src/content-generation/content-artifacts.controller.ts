@@ -4,6 +4,7 @@ import { CampaignsService } from '../campaigns/campaigns.service';
 import { ContentBrandVoiceService } from './services/content-brand-voice.service';
 import { ContentFactValidationService } from './services/content-fact-validation.service';
 import { ContentGroundingService } from './services/content-grounding.service';
+import { ContentOriginalityService } from './services/content-originality.service';
 import { ContentReadabilityService } from './services/content-readability.service';
 import { ContentSeoReviewService } from './services/content-seo-review.service';
 import { ContentVersioningService } from './services/content-versioning.service';
@@ -25,6 +26,7 @@ export class ContentArtifactsController {
     private readonly seoReviewService: ContentSeoReviewService,
     private readonly readabilityService: ContentReadabilityService,
     private readonly brandVoiceService: ContentBrandVoiceService,
+    private readonly originalityService: ContentOriginalityService,
   ) {}
 
   @Get('artifacts')
@@ -309,6 +311,51 @@ export class ContentArtifactsController {
       text: extractGroundableText(versionDetail.payload),
       brandVoiceSnapshot: versionDetail.brandVoiceSnapshot,
       generationOptions: versionDetail.generationOptions,
+    });
+  }
+
+  // Read-only: never rebuilds Growth Strategy. Returns null (not 404) when
+  // no originality result exists yet for an otherwise-valid version.
+  @Get('artifacts/:artifactId/versions/:version/originality')
+  async getOriginality(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+    @Param('artifactId') artifactId: string,
+    @Param('version', ParseIntPipe) version: number,
+  ) {
+    await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
+    const versionDetail = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
+    return this.originalityService.getResult(versionDetail.id);
+  }
+
+  // Manual recheck: recomputes against other generated content already
+  // stored in GIP (own artifact history + same-campaign/product artifacts)
+  // — never rebuilds Growth Strategy, never calls an external plagiarism
+  // service. No confirmation required since this never calls a paid API.
+  @Post('artifacts/:artifactId/versions/:version/originality')
+  async recheckOriginality(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+    @Param('artifactId') artifactId: string,
+    @Param('version', ParseIntPipe) version: number,
+  ) {
+    await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
+    const versionDetail = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
+    return this.originalityService.reviewContentVersion({
+      contentVersionId: versionDetail.id,
+      artifactId: versionDetail.artifactId,
+      organizationId,
+      productId,
+      campaignId,
+      kind: versionDetail.kind,
+      sourceType: versionDetail.sourceType,
+      sourceId: versionDetail.sourceId,
+      payload: versionDetail.payload,
+      text: extractGroundableText(versionDetail.payload),
     });
   }
 }

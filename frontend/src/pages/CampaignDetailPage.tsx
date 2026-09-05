@@ -51,6 +51,8 @@ import type {
   ContentReadabilitySummary,
   ContentBrandVoiceResult,
   ContentBrandVoiceSummary,
+  ContentOriginalityResult,
+  ContentOriginalitySummary,
   ContentVersionDetail,
   ContentVersionSummary,
 } from '../types';
@@ -370,6 +372,27 @@ function BrandVoiceBadge({ brandVoice }: { brandVoice: ContentBrandVoiceSummary 
   );
 }
 
+function originalityBadgeClass(status: ContentOriginalitySummary['status']): string {
+  if (status === 'original') return 'quality-good';
+  if (status === 'needs_review') return 'quality-limited';
+  return 'quality-empty';
+}
+
+function originalityBadgeLabel(status: ContentOriginalitySummary['status']): string {
+  if (status === 'original') return 'Original';
+  if (status === 'needs_review') return 'Review';
+  return 'Repetitive';
+}
+
+function OriginalityBadge({ originality }: { originality: ContentOriginalitySummary | undefined }) {
+  if (!originality) return null;
+  return (
+    <span className={`quality-badge ${originalityBadgeClass(originality.status)}`}>
+      Originality: {originality.score} — {originalityBadgeLabel(originality.status)}
+    </span>
+  );
+}
+
 function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePath: string; artifactId: string | undefined; latestVersion: number | undefined }) {
   const [open, setOpen] = useState(false);
   const [versions, setVersions] = useState<ContentVersionSummary[] | null>(null);
@@ -403,6 +426,11 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
   const [brandVoiceOpen, setBrandVoiceOpen] = useState(false);
   const [brandVoiceBusy, setBrandVoiceBusy] = useState(false);
   const [brandVoiceError, setBrandVoiceError] = useState<string | null>(null);
+  const [latestOriginality, setLatestOriginality] = useState<ContentOriginalitySummary | undefined>(undefined);
+  const [originalityDetail, setOriginalityDetail] = useState<ContentOriginalityResult | null>(null);
+  const [originalityOpen, setOriginalityOpen] = useState(false);
+  const [originalityBusy, setOriginalityBusy] = useState(false);
+  const [originalityError, setOriginalityError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!artifactId || !latestVersion) return;
@@ -421,6 +449,9 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
     apiRequest<ContentBrandVoiceResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${latestVersion}/brand-voice`)
       .then((result) => setLatestBrandVoice(result ?? undefined))
       .catch(() => setLatestBrandVoice(undefined));
+    apiRequest<ContentOriginalityResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${latestVersion}/originality`)
+      .then((result) => setLatestOriginality(result ?? undefined))
+      .catch(() => setLatestOriginality(undefined));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [artifactId, latestVersion]);
 
@@ -648,6 +679,51 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
     }
   }
 
+  async function loadOriginality(version: number) {
+    if (!artifactId) return;
+    setOriginalityBusy(true);
+    setOriginalityError(null);
+    try {
+      const result = await apiRequest<ContentOriginalityResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}/originality`);
+      setOriginalityDetail(result);
+    } catch (err) {
+      setOriginalityError(err instanceof ApiError ? err.message : 'Failed to load originality');
+    } finally {
+      setOriginalityBusy(false);
+    }
+  }
+
+  async function toggleOriginality(version: number) {
+    if (originalityOpen) {
+      setOriginalityOpen(false);
+      return;
+    }
+    setOriginalityOpen(true);
+    await loadOriginality(version);
+  }
+
+  async function recheckOriginality(version: number) {
+    if (!artifactId) return;
+    setOriginalityBusy(true);
+    setOriginalityError(null);
+    try {
+      const result = await apiRequest<ContentOriginalityResult>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}/originality`, { method: 'POST' });
+      setOriginalityDetail(result);
+      setOriginalityOpen(true);
+      const summary = { status: result.status, score: result.score, duplicateSentenceCount: result.duplicateSentenceCount, crossContentMatchCount: result.crossContentMatchCount };
+      if (selected && selected.version === version) {
+        setSelected({ ...selected, originality: summary });
+      }
+      if (version === latestVersion) {
+        setLatestOriginality(summary);
+      }
+    } catch (err) {
+      setOriginalityError(err instanceof ApiError ? err.message : 'Failed to recheck originality');
+    } finally {
+      setOriginalityBusy(false);
+    }
+  }
+
   async function toggleOpen() {
     if (!artifactId) return;
     if (open) {
@@ -687,6 +763,9 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
     setBrandVoiceOpen(false);
     setBrandVoiceDetail(null);
     setBrandVoiceError(null);
+    setOriginalityOpen(false);
+    setOriginalityDetail(null);
+    setOriginalityError(null);
     try {
       const detail = await apiRequest<ContentVersionDetail>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}`);
       setSelected(detail);
@@ -719,6 +798,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
         <SeoReviewBadge seoReview={latestSeoReview} />
         <ReadabilityBadge readability={latestReadability} />
         <BrandVoiceBadge brandVoice={latestBrandVoice} />
+        <OriginalityBadge originality={latestOriginality} />
         <button className="btn btn-secondary" onClick={toggleOpen}>
           {open ? 'Hide History' : 'History'}
         </button>
@@ -737,6 +817,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
                   <SeoReviewBadge seoReview={v.seoReview} />
                   <ReadabilityBadge readability={v.readability} />
                   <BrandVoiceBadge brandVoice={v.brandVoice} />
+                  <OriginalityBadge originality={v.originality} />
                   <span className="entity-card-meta">{new Date(v.generatedAt).toLocaleString()}</span>
                   {v.wordCount !== undefined && <span className="entity-card-meta">{v.wordCount} words</span>}
                   {v.version === latestVersion && <span className="entity-card-meta">(latest)</span>}
@@ -757,6 +838,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
                 <SeoReviewBadge seoReview={selected.seoReview} />
                 <ReadabilityBadge readability={selected.readability} />
                 <BrandVoiceBadge brandVoice={selected.brandVoice} />
+                <OriginalityBadge originality={selected.originality} />
                 <button className="btn btn-secondary" onClick={() => setSelected(null)}>
                   View Latest
                 </button>
@@ -792,6 +874,12 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
                 </button>
                 <button className="btn btn-secondary" onClick={() => recheckBrandVoice(selected.version)} disabled={brandVoiceBusy}>
                   {brandVoiceBusy ? 'Rechecking...' : 'Recheck Brand Voice'}
+                </button>
+                <button className="btn btn-secondary" onClick={() => toggleOriginality(selected.version)}>
+                  {originalityOpen ? 'Hide Originality' : 'View Originality'}
+                </button>
+                <button className="btn btn-secondary" onClick={() => recheckOriginality(selected.version)} disabled={originalityBusy}>
+                  {originalityBusy ? 'Rechecking...' : 'Recheck Originality'}
                 </button>
               </div>
               {groundingOpen && (
@@ -1002,6 +1090,56 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
                                 <span className="tag" style={{ marginRight: 6 }}>{c.classification}</span>
                                 <span className="tag" style={{ marginRight: 6 }}>{c.type}</span>
                                 <div className="entity-card-meta">{c.reason}</div>
+                                {c.evidence && c.evidence.length > 0 && <div className="entity-card-meta">Evidence: {c.evidence.join('; ')}</div>}
+                              </li>
+                            ))}
+                        </ul>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+              {originalityOpen && (
+                <div style={{ marginTop: 8, padding: 8, background: 'var(--surface-muted, #f5f5f5)', borderRadius: 6 }}>
+                  {originalityBusy && <Loading />}
+                  <ErrorMessage message={originalityError} />
+                  <p className="entity-card-meta">Compared only with generated content stored in GIP — not the public internet.</p>
+                  {!originalityBusy && !originalityDetail && !originalityError && <p className="entity-card-meta">No originality result yet.</p>}
+                  {originalityDetail && (
+                    <>
+                      <div className="tag-list">
+                        <span className="tag">Score {originalityDetail.score}</span>
+                        <span className="tag">Passed {originalityDetail.passedCount}</span>
+                        <span className="tag">Warning {originalityDetail.warningCount}</span>
+                        <span className="tag">Failed {originalityDetail.failedCount}</span>
+                        <span className="tag">Duplicate sentences {originalityDetail.duplicateSentenceCount}</span>
+                        <span className="tag">Duplicate paragraphs {originalityDetail.duplicateParagraphCount}</span>
+                        <span className="tag">Cross-content matches {originalityDetail.crossContentMatchCount}</span>
+                      </div>
+                      {originalityDetail.warnings.length > 0 && (
+                        <div className="content-warning" style={{ marginTop: 6 }}>{originalityDetail.warnings.join(' ')}</div>
+                      )}
+                      {originalityDetail.checks.length > 0 && (
+                        <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0' }}>
+                          {originalityDetail.checks
+                            .filter((c) => c.classification !== 'not_applicable')
+                            .map((c) => (
+                              <li
+                                key={c.id}
+                                style={{
+                                  padding: '6px 0',
+                                  borderTop: '1px solid var(--border-color, #ddd)',
+                                  color: c.classification === 'failed' ? 'var(--error, #b00020)' : undefined,
+                                }}
+                              >
+                                <span className="tag" style={{ marginRight: 6 }}>{c.classification}</span>
+                                <span className="tag" style={{ marginRight: 6 }}>{c.type}</span>
+                                <div className="entity-card-meta">{c.reason}</div>
+                                {(c.matchedArtifactId || c.matchedVersionId) && (
+                                  <div className="entity-card-meta">
+                                    Matched artifact: {c.matchedArtifactId ?? '—'}{c.matchedVersionId ? ` (version id ${c.matchedVersionId})` : ''}
+                                  </div>
+                                )}
                                 {c.evidence && c.evidence.length > 0 && <div className="entity-card-meta">Evidence: {c.evidence.join('; ')}</div>}
                               </li>
                             ))}

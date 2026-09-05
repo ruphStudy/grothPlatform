@@ -2,6 +2,7 @@ import type { ContentGenerationKind } from './content-generation.types';
 import type { ContentBrandVoiceSummary, ContentVersionBrandVoiceSnapshot } from './content-brand-voice.types';
 import type { ContentFactValidationSummary } from './content-fact-validation.types';
 import type { ContentGroundingSummary, ContentVersionGroundingEvidenceSnapshot } from './content-grounding.types';
+import type { ContentOriginalitySummary } from './content-originality.types';
 import type { ContentReadabilitySummary } from './content-readability.types';
 import type { ContentSeoReviewSummary } from './content-seo-review.types';
 
@@ -112,6 +113,7 @@ export interface SavedVersionResult {
   seoReview?: ContentSeoReviewSummary;
   readability?: ContentReadabilitySummary;
   brandVoice?: ContentBrandVoiceSummary;
+  originality?: ContentOriginalitySummary;
 }
 
 export interface ContentArtifactResponse {
@@ -141,6 +143,7 @@ export interface ContentVersionSummary {
   seoReview?: ContentSeoReviewSummary;
   readability?: ContentReadabilitySummary;
   brandVoice?: ContentBrandVoiceSummary;
+  originality?: ContentOriginalitySummary;
 }
 
 export interface ContentVersionDetail extends ContentVersionSummary {

@@ -2742,6 +2742,53 @@ export interface ContentBrandVoiceResult extends ContentBrandVoiceSummary {
   reviewedAt: string;
 }
 
+export type OriginalityCheckType =
+  | 'internal_repetition'
+  | 'sentence_duplication'
+  | 'paragraph_duplication'
+  | 'phrase_repetition'
+  | 'cross_version_similarity'
+  | 'cross_artifact_similarity'
+  | 'template_repetition'
+  | 'other';
+
+export type OriginalityCheckClassification = 'passed' | 'warning' | 'failed' | 'not_applicable';
+
+export type ContentOriginalityStatus = 'original' | 'needs_review' | 'highly_repetitive';
+
+export interface OriginalityCheck {
+  id: string;
+  type: OriginalityCheckType;
+  classification: OriginalityCheckClassification;
+  score?: number;
+  reason: string;
+  matchedVersionId?: string;
+  matchedArtifactId?: string;
+  evidence?: string[];
+}
+
+export interface ContentOriginalitySummary {
+  status: ContentOriginalityStatus;
+  score: number;
+  duplicateSentenceCount: number;
+  crossContentMatchCount: number;
+}
+
+export interface ContentOriginalityResult extends ContentOriginalitySummary {
+  contentVersionId: string;
+  artifactId: string;
+  organizationId: string;
+  productId: string;
+  campaignId: string;
+  checks: OriginalityCheck[];
+  passedCount: number;
+  warningCount: number;
+  failedCount: number;
+  duplicateParagraphCount: number;
+  warnings: string[];
+  reviewedAt: string;
+}
+
 export interface ContentArtifact {
   id: string;
   kind: ContentGenerationKind;
@@ -2769,6 +2816,7 @@ export interface ContentVersionSummary {
   seoReview?: ContentSeoReviewSummary;
   readability?: ContentReadabilitySummary;
   brandVoice?: ContentBrandVoiceSummary;
+  originality?: ContentOriginalitySummary;
 }
 
 export interface ContentVersionDetail extends ContentVersionSummary {
