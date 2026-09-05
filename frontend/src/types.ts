@@ -2044,6 +2044,10 @@ export interface BlogDraftResult {
   sourceContext: BlogDraftSourceContext;
   warnings: string[];
   generatedAt: string;
+  // 15J — persisted version identity.
+  artifactId: string;
+  versionId: string;
+  version: number;
 }
 
 // Sprint 15D — LinkedIn draft generation. Only explicit `linkedin` items,
@@ -2094,6 +2098,10 @@ export interface LinkedInDraftResult {
   sourceContext: LinkedInDraftSourceContext;
   warnings: string[];
   generatedAt: string;
+  // 15J — persisted version identity.
+  artifactId: string;
+  versionId: string;
+  version: number;
 }
 
 // Sprint 15E — X draft generation. Same explicit-target eligibility rule
@@ -2148,6 +2156,10 @@ export interface XDraftResult {
   sourceContext: XDraftSourceContext;
   warnings: string[];
   generatedAt: string;
+  // 15J — persisted version identity.
+  artifactId: string;
+  versionId: string;
+  version: number;
 }
 
 // Sprint 15F — Facebook draft generation. Same explicit-target eligibility
@@ -2199,6 +2211,10 @@ export interface FacebookDraftResult {
   sourceContext: FacebookDraftSourceContext;
   warnings: string[];
   generatedAt: string;
+  // 15J — persisted version identity.
+  artifactId: string;
+  versionId: string;
+  version: number;
 }
 
 // Sprint 15G — Instagram caption generation. Caption copy only — no image,
@@ -2254,6 +2270,10 @@ export interface InstagramCaptionResult {
   sourceContext: InstagramCaptionSourceContext;
   warnings: string[];
   generatedAt: string;
+  // 15J — persisted version identity.
+  artifactId: string;
+  versionId: string;
+  version: number;
 }
 
 // Sprint 15H — newsletter draft generation. No dedicated Newsletter
@@ -2311,6 +2331,10 @@ export interface NewsletterDraftResult {
   sourceContext: NewsletterDraftSourceContext;
   warnings: string[];
   generatedAt: string;
+  // 15J — persisted version identity.
+  artifactId: string;
+  versionId: string;
+  version: number;
 }
 
 // Sprint 15I — video script generation. Script planning copy only — no
@@ -2374,4 +2398,133 @@ export interface VideoScriptDraftResult {
   sourceContext: VideoScriptDraftSourceContext;
   warnings: string[];
   generatedAt: string;
+  // 15J — persisted version identity.
+  artifactId: string;
+  versionId: string;
+  version: number;
+}
+
+// Sprint 15J — content versioning. A ContentArtifact is the stable logical
+// identity for one generated content lineage; a ContentVersion is an
+// immutable snapshot produced by one successful generation.
+export type ContentGenerationKind = 'blog' | 'linkedin' | 'x' | 'facebook' | 'instagram' | 'newsletter' | 'video_script';
+
+export interface ContentVersionUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+}
+
+export interface ContentVersionCost {
+  currency: 'USD';
+  estimated: number;
+}
+
+export interface ContentVersionSourceContext {
+  strategyGeneratedAt?: string;
+  campaignPlanningVersion?: number;
+  sourceIds?: string[];
+}
+
+export interface ContentVersionScene {
+  order: number;
+  heading?: string;
+  narration: string;
+  visualDirection?: string;
+}
+
+export interface ContentVersionPayload {
+  title?: string;
+  content?: string;
+  format?: string;
+  subjectLine?: string;
+  preheader?: string;
+  posts?: string[];
+  postCharacterCounts?: number[];
+  hook?: string;
+  scenes?: ContentVersionScene[];
+  mode?: string;
+  wordCount?: number;
+  characterCount?: number;
+  estimatedWordCount?: number;
+  estimatedDurationSeconds?: number;
+  hashtagCount?: number;
+  emojiCount?: number;
+}
+
+export interface ContentVersionGenerationMetadata {
+  provider: string;
+  model: string;
+  promptVersion: string;
+  usage?: ContentVersionUsage;
+  cost?: ContentVersionCost;
+  sourceContext?: ContentVersionSourceContext;
+  warnings: string[];
+  generatedAt: string;
+}
+
+export interface ContentVersionGenerationOptions {
+  language?: string;
+  tone?: string;
+  length?: string;
+  duration?: string;
+  mode?: string;
+  outputFormat?: string;
+  includeCTA?: boolean;
+  includeHashtags?: boolean;
+  includeEmojis?: boolean;
+  includeSubjectLine?: boolean;
+  includePreheader?: boolean;
+  includeHook?: boolean;
+  includeSceneDirections?: boolean;
+  maxHashtags?: number;
+  maxEmojis?: number;
+  threadMaxPosts?: number;
+}
+
+export interface ContentVersionSourceSnapshot {
+  title?: string;
+  type?: string;
+  pillarId?: string;
+  topicId?: string;
+}
+
+export interface ContentArtifact {
+  id: string;
+  kind: ContentGenerationKind;
+  sourceType: string;
+  sourceId: string;
+  latestVersion: number;
+  latestVersionId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContentVersionSummary {
+  id: string;
+  version: number;
+  kind: ContentGenerationKind;
+  generatedAt: string;
+  provider: string;
+  model: string;
+  wordCount?: number;
+  characterCount?: number;
+  cost?: ContentVersionCost;
+  warningsCount: number;
+}
+
+export interface ContentVersionDetail extends ContentVersionSummary {
+  artifactId: string;
+  sourceType: string;
+  sourceId: string;
+  payload: ContentVersionPayload;
+  generationMetadata: ContentVersionGenerationMetadata;
+  generationOptions?: ContentVersionGenerationOptions;
+  sourceSnapshot?: ContentVersionSourceSnapshot;
+  isCurrentPlanningVersion?: boolean;
+}
+
+export interface ArtifactWithLatestVersion {
+  artifact: ContentArtifact;
+  latestVersion?: ContentVersionDetail;
 }

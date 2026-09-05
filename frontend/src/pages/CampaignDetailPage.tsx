@@ -40,6 +40,9 @@ import type {
   NewsletterSourceType,
   VideoScriptDraftResult,
   VideoScriptGenerationOptions,
+  ArtifactWithLatestVersion,
+  ContentVersionDetail,
+  ContentVersionSummary,
 } from '../types';
 
 const CAMPAIGN_STATUSES: CampaignStatus[] = ['draft', 'planned', 'approved', 'active', 'paused', 'completed', 'archived'];
@@ -242,11 +245,163 @@ function ActivityCard({ activity, mapping, allActivities }: { activity: Campaign
   );
 }
 
+// 15J — regenerating never overwrites history: it always creates version+1
+// and the previous version stays available below under History.
+const REGENERATE_CONFIRM_MESSAGE = 'Regenerating will create a new version (the current version stays available under History) and may incur additional cost. Continue?';
+
+// 15J — shared, kind-agnostic version history widget. Applied to every
+// generated-content panel (Blog, LinkedIn, X, Facebook, Instagram,
+// Newsletter, Video Script). Viewing an older version only affects this
+// widget's own local state — it never replaces the live `draft` shown by
+// the panel above it, so regenerating always creates latest+1 and never
+// branches from whatever version happens to be open here.
+function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePath: string; artifactId: string | undefined; latestVersion: number | undefined }) {
+  const [open, setOpen] = useState(false);
+  const [versions, setVersions] = useState<ContentVersionSummary[] | null>(null);
+  const [listBusy, setListBusy] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<ContentVersionDetail | null>(null);
+  const [selectedBusy, setSelectedBusy] = useState(false);
+  const [selectedError, setSelectedError] = useState<string | null>(null);
+
+  async function toggleOpen() {
+    if (!artifactId) return;
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
+    setSelected(null);
+    setListBusy(true);
+    setListError(null);
+    try {
+      const result = await apiRequest<ContentVersionSummary[]>(`${basePath}/content-generation/artifacts/${artifactId}/versions`);
+      setVersions(result);
+    } catch (err) {
+      setListError(err instanceof ApiError ? err.message : 'Failed to load version history');
+    } finally {
+      setListBusy(false);
+    }
+  }
+
+  async function viewVersion(version: number) {
+    if (!artifactId) return;
+    setSelectedBusy(true);
+    setSelectedError(null);
+    try {
+      const detail = await apiRequest<ContentVersionDetail>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}`);
+      setSelected(detail);
+    } catch (err) {
+      setSelectedError(err instanceof ApiError ? err.message : 'Failed to load version');
+    } finally {
+      setSelectedBusy(false);
+    }
+  }
+
+  function copyVersion(detail: ContentVersionDetail) {
+    const parts: string[] = [];
+    if (detail.payload.title) parts.push(detail.payload.title);
+    if (detail.payload.subjectLine) parts.push(`Subject: ${detail.payload.subjectLine}`);
+    if (detail.payload.hook) parts.push(`Hook: ${detail.payload.hook}`);
+    if (detail.payload.content) parts.push(detail.payload.content);
+    if (detail.payload.posts) parts.push(detail.payload.posts.join('\n\n'));
+    if (detail.payload.scenes) parts.push(detail.payload.scenes.map((s) => s.narration).join('\n\n'));
+    void navigator.clipboard.writeText(parts.join('\n\n'));
+  }
+
+  if (!artifactId || !latestVersion) return null;
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div className="tag-list">
+        <span className="tag">v{latestVersion}</span>
+        <button className="btn btn-secondary" onClick={toggleOpen}>
+          {open ? 'Hide History' : 'History'}
+        </button>
+      </div>
+      {open && (
+        <div style={{ marginTop: 6 }}>
+          {listBusy && <Loading />}
+          <ErrorMessage message={listError} />
+          {versions && versions.length > 0 && (
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              {versions.map((v) => (
+                <li key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
+                  <span className="tag">v{v.version}</span>
+                  <span className="entity-card-meta">{new Date(v.generatedAt).toLocaleString()}</span>
+                  {v.wordCount !== undefined && <span className="entity-card-meta">{v.wordCount} words</span>}
+                  {v.version === latestVersion && <span className="entity-card-meta">(latest)</span>}
+                  <button className="btn btn-secondary" onClick={() => viewVersion(v.version)} disabled={selectedBusy}>
+                    View
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <ErrorMessage message={selectedError} />
+          {selected && (
+            <div style={{ marginTop: 8, padding: 10, border: '1px solid var(--border-color, #ddd)', borderRadius: 6 }}>
+              <div className="tag-list">
+                <span className="tag">Viewing v{selected.version}</span>
+                <button className="btn btn-secondary" onClick={() => setSelected(null)}>
+                  View Latest
+                </button>
+                <button className="btn btn-secondary" onClick={() => copyVersion(selected)}>
+                  Copy
+                </button>
+              </div>
+              {selected.payload.title && <p style={{ marginTop: 6 }}><strong>{selected.payload.title}</strong></p>}
+              {selected.payload.subjectLine && <p>Subject: {selected.payload.subjectLine}</p>}
+              {selected.payload.hook && <p>Hook: {selected.payload.hook}</p>}
+              {selected.payload.content && (
+                <pre
+                  style={{
+                    marginTop: 6,
+                    padding: 10,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    maxHeight: 260,
+                    overflowY: 'auto',
+                    background: 'var(--surface-muted, #f5f5f5)',
+                    borderRadius: 6,
+                  }}
+                >
+                  {selected.payload.content}
+                </pre>
+              )}
+              {selected.payload.posts && (
+                <ol style={{ marginTop: 6 }}>
+                  {selected.payload.posts.map((p, i) => (
+                    <li key={i} style={{ whiteSpace: 'pre-wrap', marginBottom: 6 }}>
+                      {p}
+                    </li>
+                  ))}
+                </ol>
+              )}
+              {selected.payload.scenes && (
+                <ol style={{ marginTop: 6 }}>
+                  {selected.payload.scenes.map((s) => (
+                    <li key={s.order} style={{ marginBottom: 6 }}>
+                      {s.heading ? `${s.heading}: ` : ''}
+                      {s.narration}
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Shared by every newsletter source location (Blog Calendar, Content
 // Pillar) — state stays lifted to the parent, keyed by `${sourceType}:${sourceId}`,
 // so newsletter drafts never collide with each other or with any other
 // platform's generation state.
 function NewsletterGenerationPanel({
+  basePath,
   draft,
   busy,
   error,
@@ -257,6 +412,7 @@ function NewsletterGenerationPanel({
   onCopyBody,
   onCopyFull,
 }: {
+  basePath: string;
   draft: NewsletterDraftResult | undefined;
   busy: boolean;
   error: string | null;
@@ -371,10 +527,194 @@ function NewsletterGenerationPanel({
               Copy Full Newsletter
             </button>
           </div>
+          <ContentVersionHistory basePath={basePath} artifactId={draft.artifactId} latestVersion={draft.version} />
         </div>
       )}
     </div>
   );
+}
+
+// 15J — hydration mapping. The campaign-wide artifacts fetch returns the
+// generic ContentVersionDetail shape; these map it back into each kind's
+// own specific DraftResult type so drafts survive a page refresh without
+// changing anything about how the per-kind panels already render them.
+function mapVersionToBlogDraft(sourceId: string, v: ContentVersionDetail): BlogDraftResult {
+  return {
+    id: v.id,
+    kind: 'blog',
+    blogCalendarItemId: sourceId,
+    title: v.payload.title ?? '',
+    content: v.payload.content ?? '',
+    format: (v.payload.format as BlogDraftResult['format']) ?? 'markdown',
+    wordCount: v.payload.wordCount ?? 0,
+    provider: v.generationMetadata.provider,
+    model: v.generationMetadata.model,
+    usage: v.generationMetadata.usage ?? {},
+    cost: v.generationMetadata.cost,
+    promptVersion: v.generationMetadata.promptVersion,
+    sourceContext: v.generationMetadata.sourceContext ?? {},
+    warnings: v.generationMetadata.warnings,
+    generatedAt: v.generatedAt,
+    artifactId: v.artifactId,
+    versionId: v.id,
+    version: v.version,
+  };
+}
+
+function mapVersionToLinkedInDraft(sourceId: string, v: ContentVersionDetail): LinkedInDraftResult {
+  return {
+    id: v.id,
+    kind: 'linkedin',
+    socialCalendarItemId: sourceId,
+    content: v.payload.content ?? '',
+    characterCount: v.payload.characterCount ?? 0,
+    wordCount: v.payload.wordCount ?? 0,
+    tone: v.generationOptions?.tone ?? '',
+    length: v.generationOptions?.length ?? '',
+    provider: v.generationMetadata.provider,
+    model: v.generationMetadata.model,
+    usage: v.generationMetadata.usage ?? {},
+    cost: v.generationMetadata.cost,
+    promptVersion: v.generationMetadata.promptVersion,
+    sourceContext: v.generationMetadata.sourceContext ?? {},
+    warnings: v.generationMetadata.warnings,
+    generatedAt: v.generatedAt,
+    artifactId: v.artifactId,
+    versionId: v.id,
+    version: v.version,
+  };
+}
+
+function mapVersionToXDraft(sourceId: string, v: ContentVersionDetail): XDraftResult {
+  return {
+    id: v.id,
+    kind: 'x',
+    socialCalendarItemId: sourceId,
+    mode: (v.payload.mode as XDraftResult['mode']) ?? 'single_post',
+    content: v.payload.content,
+    posts: v.payload.posts,
+    characterCount: v.payload.characterCount,
+    postCharacterCounts: v.payload.postCharacterCounts,
+    wordCount: v.payload.wordCount ?? 0,
+    tone: v.generationOptions?.tone ?? '',
+    provider: v.generationMetadata.provider,
+    model: v.generationMetadata.model,
+    usage: v.generationMetadata.usage ?? {},
+    cost: v.generationMetadata.cost,
+    promptVersion: v.generationMetadata.promptVersion,
+    sourceContext: v.generationMetadata.sourceContext ?? {},
+    warnings: v.generationMetadata.warnings,
+    generatedAt: v.generatedAt,
+    artifactId: v.artifactId,
+    versionId: v.id,
+    version: v.version,
+  };
+}
+
+function mapVersionToFacebookDraft(sourceId: string, v: ContentVersionDetail): FacebookDraftResult {
+  return {
+    id: v.id,
+    kind: 'facebook',
+    socialCalendarItemId: sourceId,
+    content: v.payload.content ?? '',
+    characterCount: v.payload.characterCount ?? 0,
+    wordCount: v.payload.wordCount ?? 0,
+    tone: v.generationOptions?.tone ?? '',
+    length: v.generationOptions?.length ?? '',
+    provider: v.generationMetadata.provider,
+    model: v.generationMetadata.model,
+    usage: v.generationMetadata.usage ?? {},
+    cost: v.generationMetadata.cost,
+    promptVersion: v.generationMetadata.promptVersion,
+    sourceContext: v.generationMetadata.sourceContext ?? {},
+    warnings: v.generationMetadata.warnings,
+    generatedAt: v.generatedAt,
+    artifactId: v.artifactId,
+    versionId: v.id,
+    version: v.version,
+  };
+}
+
+function mapVersionToInstagramCaption(sourceId: string, v: ContentVersionDetail): InstagramCaptionResult {
+  return {
+    id: v.id,
+    kind: 'instagram',
+    socialCalendarItemId: sourceId,
+    content: v.payload.content ?? '',
+    characterCount: v.payload.characterCount ?? 0,
+    wordCount: v.payload.wordCount ?? 0,
+    tone: v.generationOptions?.tone ?? '',
+    length: v.generationOptions?.length ?? '',
+    hashtagCount: v.payload.hashtagCount ?? 0,
+    emojiCount: v.payload.emojiCount ?? 0,
+    provider: v.generationMetadata.provider,
+    model: v.generationMetadata.model,
+    usage: v.generationMetadata.usage ?? {},
+    cost: v.generationMetadata.cost,
+    promptVersion: v.generationMetadata.promptVersion,
+    sourceContext: v.generationMetadata.sourceContext ?? {},
+    warnings: v.generationMetadata.warnings,
+    generatedAt: v.generatedAt,
+    artifactId: v.artifactId,
+    versionId: v.id,
+    version: v.version,
+  };
+}
+
+function mapVersionToNewsletterDraft(sourceType: NewsletterSourceType, sourceId: string, v: ContentVersionDetail): NewsletterDraftResult {
+  return {
+    id: v.id,
+    kind: 'newsletter',
+    sourceType,
+    sourceId,
+    subjectLine: v.payload.subjectLine,
+    preheader: v.payload.preheader,
+    content: v.payload.content ?? '',
+    format: (v.payload.format as NewsletterDraftResult['format']) ?? 'markdown',
+    wordCount: v.payload.wordCount ?? 0,
+    characterCount: v.payload.characterCount ?? 0,
+    tone: v.generationOptions?.tone ?? '',
+    length: v.generationOptions?.length ?? '',
+    provider: v.generationMetadata.provider,
+    model: v.generationMetadata.model,
+    usage: v.generationMetadata.usage ?? {},
+    cost: v.generationMetadata.cost,
+    promptVersion: v.generationMetadata.promptVersion,
+    sourceContext: v.generationMetadata.sourceContext ?? {},
+    warnings: v.generationMetadata.warnings,
+    generatedAt: v.generatedAt,
+    artifactId: v.artifactId,
+    versionId: v.id,
+    version: v.version,
+  };
+}
+
+function mapVersionToVideoScript(sourceId: string, v: ContentVersionDetail): VideoScriptDraftResult {
+  return {
+    id: v.id,
+    kind: 'video_script',
+    videoCalendarItemId: sourceId,
+    title: v.payload.title ?? '',
+    hook: v.payload.hook,
+    script: v.payload.content ?? '',
+    scenes: v.payload.scenes,
+    estimatedWordCount: v.payload.estimatedWordCount ?? 0,
+    estimatedDurationSeconds: v.payload.estimatedDurationSeconds ?? 0,
+    tone: v.generationOptions?.tone ?? '',
+    duration: v.generationOptions?.duration ?? '',
+    format: (v.payload.format as VideoScriptDraftResult['format']) ?? 'markdown',
+    provider: v.generationMetadata.provider,
+    model: v.generationMetadata.model,
+    usage: v.generationMetadata.usage ?? {},
+    cost: v.generationMetadata.cost,
+    promptVersion: v.generationMetadata.promptVersion,
+    sourceContext: v.generationMetadata.sourceContext ?? {},
+    warnings: v.generationMetadata.warnings,
+    generatedAt: v.generatedAt,
+    artifactId: v.artifactId,
+    versionId: v.id,
+    version: v.version,
+  };
 }
 
 export default function CampaignDetailPage() {
@@ -501,6 +841,69 @@ export default function CampaignDetailPage() {
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [organizationId, productId, campaignId]);
+
+  // 15J — one campaign-wide fetch of every persisted artifact + its latest
+  // version, so previously generated drafts survive a page refresh without
+  // an N+1 request per calendar item. Never rebuilds Growth Strategy; this
+  // only reads what content-generation already persisted.
+  useEffect(() => {
+    if (!organizationId || !productId || !campaignId) return;
+    (async () => {
+      try {
+        const artifacts = await apiRequest<ArtifactWithLatestVersion[]>(`${basePath}/content-generation/artifacts`);
+        const blog: Record<string, BlogDraftResult> = {};
+        const linkedin: Record<string, LinkedInDraftResult> = {};
+        const x: Record<string, XDraftResult> = {};
+        const facebook: Record<string, FacebookDraftResult> = {};
+        const instagram: Record<string, InstagramCaptionResult> = {};
+        const newsletter: Record<string, NewsletterDraftResult> = {};
+        const videoScript: Record<string, VideoScriptDraftResult> = {};
+
+        for (const { artifact, latestVersion } of artifacts) {
+          if (!latestVersion) continue;
+          switch (artifact.kind) {
+            case 'blog':
+              blog[artifact.sourceId] = mapVersionToBlogDraft(artifact.sourceId, latestVersion);
+              break;
+            case 'linkedin':
+              linkedin[artifact.sourceId] = mapVersionToLinkedInDraft(artifact.sourceId, latestVersion);
+              break;
+            case 'x':
+              x[artifact.sourceId] = mapVersionToXDraft(artifact.sourceId, latestVersion);
+              break;
+            case 'facebook':
+              facebook[artifact.sourceId] = mapVersionToFacebookDraft(artifact.sourceId, latestVersion);
+              break;
+            case 'instagram':
+              instagram[artifact.sourceId] = mapVersionToInstagramCaption(artifact.sourceId, latestVersion);
+              break;
+            case 'newsletter':
+              newsletter[newsletterKey(artifact.sourceType as NewsletterSourceType, artifact.sourceId)] = mapVersionToNewsletterDraft(
+                artifact.sourceType as NewsletterSourceType,
+                artifact.sourceId,
+                latestVersion,
+              );
+              break;
+            case 'video_script':
+              videoScript[artifact.sourceId] = mapVersionToVideoScript(artifact.sourceId, latestVersion);
+              break;
+          }
+        }
+
+        if (Object.keys(blog).length > 0) setBlogDrafts((prev) => ({ ...blog, ...prev }));
+        if (Object.keys(linkedin).length > 0) setLinkedInDrafts((prev) => ({ ...linkedin, ...prev }));
+        if (Object.keys(x).length > 0) setXDrafts((prev) => ({ ...x, ...prev }));
+        if (Object.keys(facebook).length > 0) setFacebookDrafts((prev) => ({ ...facebook, ...prev }));
+        if (Object.keys(instagram).length > 0) setInstagramCaptions((prev) => ({ ...instagram, ...prev }));
+        if (Object.keys(newsletter).length > 0) setNewsletterDrafts((prev) => ({ ...newsletter, ...prev }));
+        if (Object.keys(videoScript).length > 0) setVideoScripts((prev) => ({ ...videoScript, ...prev }));
+      } catch {
+        // Hydration is a best-effort convenience (drafts surviving a page
+        // refresh) — a failure here must never block the rest of the page.
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId, productId, campaignId]);
 
@@ -779,7 +1182,7 @@ export default function CampaignDetailPage() {
 
   async function handleGenerateBlogDraft(blogCalendarItemId: string, isRegenerate: boolean) {
     if (isRegenerate) {
-      const confirmed = window.confirm('Regenerating will make another AI request and may incur additional cost. Continue?');
+      const confirmed = window.confirm(REGENERATE_CONFIRM_MESSAGE);
       if (!confirmed) return;
     }
     setBlogDraftBusyIds((prev) => ({ ...prev, [blogCalendarItemId]: true }));
@@ -812,7 +1215,7 @@ export default function CampaignDetailPage() {
 
   async function handleGenerateLinkedInDraft(item: SocialCalendarItem, isRegenerate: boolean) {
     if (isRegenerate) {
-      const confirmed = window.confirm('Regenerating will make another AI request and may incur additional cost. Continue?');
+      const confirmed = window.confirm(REGENERATE_CONFIRM_MESSAGE);
       if (!confirmed) return;
     }
     setLinkedInBusyIds((prev) => ({ ...prev, [item.id]: true }));
@@ -854,7 +1257,7 @@ export default function CampaignDetailPage() {
 
   async function handleGenerateXDraft(item: SocialCalendarItem, isRegenerate: boolean) {
     if (isRegenerate) {
-      const confirmed = window.confirm('Regenerating will make another AI request and may incur additional cost. Continue?');
+      const confirmed = window.confirm(REGENERATE_CONFIRM_MESSAGE);
       if (!confirmed) return;
     }
     setXBusyIds((prev) => ({ ...prev, [item.id]: true }));
@@ -891,7 +1294,7 @@ export default function CampaignDetailPage() {
 
   async function handleGenerateFacebookDraft(item: SocialCalendarItem, isRegenerate: boolean) {
     if (isRegenerate) {
-      const confirmed = window.confirm('Regenerating will make another AI request and may incur additional cost. Continue?');
+      const confirmed = window.confirm(REGENERATE_CONFIRM_MESSAGE);
       if (!confirmed) return;
     }
     setFacebookBusyIds((prev) => ({ ...prev, [item.id]: true }));
@@ -934,7 +1337,7 @@ export default function CampaignDetailPage() {
 
   async function handleGenerateInstagramCaption(item: SocialCalendarItem, isRegenerate: boolean) {
     if (isRegenerate) {
-      const confirmed = window.confirm('Regenerating will make another AI request and may incur additional cost. Continue?');
+      const confirmed = window.confirm(REGENERATE_CONFIRM_MESSAGE);
       if (!confirmed) return;
     }
     setInstagramBusyIds((prev) => ({ ...prev, [item.id]: true }));
@@ -979,7 +1382,7 @@ export default function CampaignDetailPage() {
   async function handleGenerateNewsletterDraft(sourceType: NewsletterSourceType, sourceId: string, isRegenerate: boolean) {
     const key = newsletterKey(sourceType, sourceId);
     if (isRegenerate) {
-      const confirmed = window.confirm('Regenerating will make another AI request and may incur additional cost. Continue?');
+      const confirmed = window.confirm(REGENERATE_CONFIRM_MESSAGE);
       if (!confirmed) return;
     }
     setNewsletterBusyKeys((prev) => ({ ...prev, [key]: true }));
@@ -1025,7 +1428,7 @@ export default function CampaignDetailPage() {
 
   async function handleGenerateVideoScript(itemId: string, isRegenerate: boolean) {
     if (isRegenerate) {
-      const confirmed = window.confirm('Regenerating will make another AI request and may incur additional cost. Continue?');
+      const confirmed = window.confirm(REGENERATE_CONFIRM_MESSAGE);
       if (!confirmed) return;
     }
     setVideoScriptBusyIds((prev) => ({ ...prev, [itemId]: true }));
@@ -2278,6 +2681,7 @@ export default function CampaignDetailPage() {
                             </details>
 
                             <NewsletterGenerationPanel
+                              basePath={basePath}
                               draft={newsletterDrafts[newsletterKey('content_pillar', pillar.id)]}
                               busy={!!newsletterBusyKeys[newsletterKey('content_pillar', pillar.id)]}
                               error={newsletterErrors[newsletterKey('content_pillar', pillar.id)] ?? null}
@@ -2495,11 +2899,13 @@ export default function CampaignDetailPage() {
                                       <button className="btn btn-secondary" style={{ marginTop: 6 }} onClick={() => handleCopyBlogDraft(blogDrafts[item.id].content)}>
                                         Copy Draft
                                       </button>
+                                      <ContentVersionHistory basePath={basePath} artifactId={blogDrafts[item.id].artifactId} latestVersion={blogDrafts[item.id].version} />
                                     </div>
                                   )}
                                 </div>
 
                                 <NewsletterGenerationPanel
+                                  basePath={basePath}
                                   draft={newsletterDrafts[newsletterKey('blog_calendar_item', item.id)]}
                                   busy={!!newsletterBusyKeys[newsletterKey('blog_calendar_item', item.id)]}
                                   error={newsletterErrors[newsletterKey('blog_calendar_item', item.id)] ?? null}
@@ -2791,6 +3197,7 @@ export default function CampaignDetailPage() {
                                             <button className="btn btn-secondary" style={{ marginTop: 6 }} onClick={() => handleCopyLinkedInDraft(draft.content)}>
                                               Copy Post
                                             </button>
+                                            <ContentVersionHistory basePath={basePath} artifactId={draft.artifactId} latestVersion={draft.version} />
                                           </div>
                                         )}
                                       </div>
@@ -2921,6 +3328,7 @@ export default function CampaignDetailPage() {
                                                 </button>
                                               </>
                                             )}
+                                            <ContentVersionHistory basePath={basePath} artifactId={draft.artifactId} latestVersion={draft.version} />
                                           </div>
                                         )}
                                       </div>
@@ -3013,6 +3421,7 @@ export default function CampaignDetailPage() {
                                             <button className="btn btn-secondary" style={{ marginTop: 6 }} onClick={() => handleCopyFacebookDraft(draft.content)}>
                                               Copy Post
                                             </button>
+                                            <ContentVersionHistory basePath={basePath} artifactId={draft.artifactId} latestVersion={draft.version} />
                                           </div>
                                         )}
                                       </div>
@@ -3124,6 +3533,7 @@ export default function CampaignDetailPage() {
                                             <button className="btn btn-secondary" style={{ marginTop: 6 }} onClick={() => handleCopyInstagramCaption(draft.content)}>
                                               Copy Caption
                                             </button>
+                                            <ContentVersionHistory basePath={basePath} artifactId={draft.artifactId} latestVersion={draft.version} />
                                           </div>
                                         )}
                                       </div>
@@ -3445,6 +3855,7 @@ export default function CampaignDetailPage() {
                                                 Copy Narration Only
                                               </button>
                                             </div>
+                                            <ContentVersionHistory basePath={basePath} artifactId={draft.artifactId} latestVersion={draft.version} />
                                           </div>
                                         )}
                                       </div>

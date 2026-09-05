@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MongooseModule } from '@nestjs/mongoose';
 import { CampaignsModule } from '../campaigns/campaigns.module';
 import { ContentPlanningModule } from '../content-planning/content-planning.module';
 import { GrowthStrategyModule } from '../growth-strategy/growth-strategy.module';
@@ -10,18 +11,32 @@ import { LinkedInGenerationService } from './adapters/linkedin-generation.servic
 import { NewsletterGenerationService } from './adapters/newsletter-generation.service';
 import { VideoScriptGenerationService } from './adapters/video-script-generation.service';
 import { XGenerationService } from './adapters/x-generation.service';
+import { ContentArtifactsController } from './content-artifacts.controller';
 import { ContentGenerationController } from './content-generation.controller';
 import { ContentGenerationEngineService } from './engine/content-generation-engine.service';
 import { OpenAiContentGenerationProvider } from './providers/openai-content-generation.provider';
 import { ContentPromptBuilderService } from './prompting/content-prompt-builder.service';
+import { ContentArtifact, ContentArtifactSchema } from './schemas/content-artifact.schema';
+import { ContentVersion, ContentVersionSchema } from './schemas/content-version.schema';
+import { ContentVersioningService } from './services/content-versioning.service';
 
 @Module({
-  imports: [ProductsModule, CampaignsModule, GrowthStrategyModule, ContentPlanningModule],
-  controllers: [ContentGenerationController],
+  imports: [
+    ProductsModule,
+    CampaignsModule,
+    GrowthStrategyModule,
+    ContentPlanningModule,
+    MongooseModule.forFeature([
+      { name: ContentArtifact.name, schema: ContentArtifactSchema },
+      { name: ContentVersion.name, schema: ContentVersionSchema },
+    ]),
+  ],
+  controllers: [ContentGenerationController, ContentArtifactsController],
   providers: [
     ContentGenerationEngineService,
     OpenAiContentGenerationProvider,
     ContentPromptBuilderService,
+    ContentVersioningService,
     BlogGenerationService,
     LinkedInGenerationService,
     XGenerationService,
@@ -30,6 +45,6 @@ import { ContentPromptBuilderService } from './prompting/content-prompt-builder.
     NewsletterGenerationService,
     VideoScriptGenerationService,
   ],
-  exports: [ContentGenerationEngineService, ContentPromptBuilderService],
+  exports: [ContentGenerationEngineService, ContentPromptBuilderService, ContentVersioningService],
 })
 export class ContentGenerationModule {}

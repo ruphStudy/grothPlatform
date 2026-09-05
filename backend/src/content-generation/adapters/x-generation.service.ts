@@ -16,7 +16,9 @@ import type { GrowthStrategyOverview } from '../../growth-strategy/types/growth-
 import { ProductsService } from '../../products/products.service';
 import { ContentGenerationEngineService } from '../engine/content-generation-engine.service';
 import { ContentPromptBuilderService } from '../prompting/content-prompt-builder.service';
+import { ContentVersioningService } from '../services/content-versioning.service';
 import { mapEvidenceFromOverview, mapMessagingDirectionsFromOverview, resolveAudienceLabel } from '../shared/content-evidence-mapping.util';
+import { buildGenerationMetadata } from '../shared/content-version-mapping.util';
 import type { ContentPromptBuildInput } from '../types/content-prompt.types';
 import type { XDraftResult, XGenerationOptions, XMode, XTone } from '../types/x-generation.types';
 
@@ -88,6 +90,7 @@ export class XGenerationService {
     private readonly socialCalendarService: SocialCalendarService,
     private readonly promptBuilder: ContentPromptBuilderService,
     private readonly engine: ContentGenerationEngineService,
+    private readonly versioningService: ContentVersioningService,
   ) {}
 
   async generateXDraft(
@@ -231,6 +234,20 @@ export class XGenerationService {
         ? this.buildThreadResult(generation, threadMaxPosts, warnings)
         : this.buildSingleResult(generation, warnings);
 
+    const saved = await this.versioningService.saveGeneratedVersion({
+      organizationId,
+      productId,
+      campaignId,
+      kind: 'x',
+      sourceType: 'social_calendar_item',
+      sourceId: socialCalendarItemId,
+      payload: { mode, ...result },
+      generationMetadata: buildGenerationMetadata(generation, promptBuild.metadata.promptVersion, promptBuild.sourceContext, warnings),
+      generationOptions: { language: options?.language, mode, tone, includeCTA: constraintsIncludeCTA, includeHashtags, maxHashtags, threadMaxPosts },
+      sourceSnapshot: { title: socialItem.title, type: socialItem.type, pillarId: socialItem.pillarId, topicId: socialItem.topicId },
+      userId,
+    });
+
     return {
       id: generation.id,
       kind: 'x',
@@ -246,6 +263,9 @@ export class XGenerationService {
       sourceContext: promptBuild.sourceContext ?? {},
       warnings,
       generatedAt: generation.generatedAt,
+      artifactId: saved.artifactId,
+      versionId: saved.versionId,
+      version: saved.version,
     };
   }
 

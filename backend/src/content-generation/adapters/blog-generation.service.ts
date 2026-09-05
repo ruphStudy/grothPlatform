@@ -17,7 +17,9 @@ import { ProductsService } from '../../products/products.service';
 import { ContentPromptBuilderService } from '../prompting/content-prompt-builder.service';
 import type { ContentPromptBuildInput } from '../types/content-prompt.types';
 import { ContentGenerationEngineService } from '../engine/content-generation-engine.service';
+import { ContentVersioningService } from '../services/content-versioning.service';
 import { mapEvidenceFromOverview, mapMessagingDirectionsFromOverview, resolveAudienceLabel } from '../shared/content-evidence-mapping.util';
+import { buildGenerationMetadata } from '../shared/content-version-mapping.util';
 import type { BlogDraftResult } from '../types/blog-generation.types';
 import type { BlogGenerationOptions } from '../types/blog-generation.types';
 
@@ -58,6 +60,7 @@ export class BlogGenerationService {
     private readonly blogCalendarService: BlogCalendarService,
     private readonly promptBuilder: ContentPromptBuilderService,
     private readonly engine: ContentGenerationEngineService,
+    private readonly versioningService: ContentVersioningService,
   ) {}
 
   async generateBlogDraft(
@@ -176,6 +179,20 @@ export class BlogGenerationService {
     if (wordCount < minWords) warnings.push('Generated draft is shorter than requested.');
     if (wordCount > maxWords) warnings.push('Generated draft is longer than requested.');
 
+    const saved = await this.versioningService.saveGeneratedVersion({
+      organizationId,
+      productId,
+      campaignId,
+      kind: 'blog',
+      sourceType: 'blog_calendar_item',
+      sourceId: blogCalendarItemId,
+      payload: { title: blogItem.title, content, format: outputFormat, wordCount },
+      generationMetadata: buildGenerationMetadata(generation, promptBuild.metadata.promptVersion, promptBuild.sourceContext, warnings),
+      generationOptions: { language: options?.language, outputFormat },
+      sourceSnapshot: { title: blogItem.title, type: blogItem.type, pillarId: blogItem.pillarId, topicId: blogItem.topicId },
+      userId,
+    });
+
     return {
       id: generation.id,
       kind: 'blog',
@@ -192,6 +209,9 @@ export class BlogGenerationService {
       sourceContext: promptBuild.sourceContext ?? {},
       warnings,
       generatedAt: generation.generatedAt,
+      artifactId: saved.artifactId,
+      versionId: saved.versionId,
+      version: saved.version,
     };
   }
 

@@ -15,7 +15,9 @@ import type { GrowthStrategyOverview } from '../../growth-strategy/types/growth-
 import { ProductsService } from '../../products/products.service';
 import { ContentGenerationEngineService } from '../engine/content-generation-engine.service';
 import { ContentPromptBuilderService } from '../prompting/content-prompt-builder.service';
+import { ContentVersioningService } from '../services/content-versioning.service';
 import { mapEvidenceFromOverview, mapMessagingDirectionsFromOverview, resolveAudienceLabel } from '../shared/content-evidence-mapping.util';
+import { buildGenerationMetadata } from '../shared/content-version-mapping.util';
 import type { ContentPromptBuildInput } from '../types/content-prompt.types';
 import type { FacebookDraftResult, FacebookGenerationOptions, FacebookLength, FacebookTone } from '../types/facebook-generation.types';
 
@@ -84,6 +86,7 @@ export class FacebookGenerationService {
     private readonly socialCalendarService: SocialCalendarService,
     private readonly promptBuilder: ContentPromptBuilderService,
     private readonly engine: ContentGenerationEngineService,
+    private readonly versioningService: ContentVersioningService,
   ) {}
 
   async generateFacebookDraft(
@@ -229,6 +232,20 @@ export class FacebookGenerationService {
     if (characterCount > maxChars) warnings.push('Generated Facebook draft exceeds the requested length target.');
     if (characterCount < TOO_SHORT_CHARS) warnings.push('Generated Facebook draft is suspiciously short.');
 
+    const saved = await this.versioningService.saveGeneratedVersion({
+      organizationId,
+      productId,
+      campaignId,
+      kind: 'facebook',
+      sourceType: 'social_calendar_item',
+      sourceId: socialCalendarItemId,
+      payload: { content, characterCount, wordCount },
+      generationMetadata: buildGenerationMetadata(generation, promptBuild.metadata.promptVersion, promptBuild.sourceContext, warnings),
+      generationOptions: { language: options?.language, tone, length, includeCTA: constraintsIncludeCTA, includeHashtags, maxHashtags },
+      sourceSnapshot: { title: socialItem.title, type: socialItem.type, pillarId: socialItem.pillarId, topicId: socialItem.topicId },
+      userId,
+    });
+
     return {
       id: generation.id,
       kind: 'facebook',
@@ -246,6 +263,9 @@ export class FacebookGenerationService {
       sourceContext: promptBuild.sourceContext ?? {},
       warnings,
       generatedAt: generation.generatedAt,
+      artifactId: saved.artifactId,
+      versionId: saved.versionId,
+      version: saved.version,
     };
   }
 

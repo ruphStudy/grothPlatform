@@ -56,4 +56,9 @@ export interface LinkedInDraftResult {
   warnings: string[];
 
   generatedAt: Date;
+
+  // 15J — persisted version identity.
+  artifactId: string;
+  versionId: string;
+  version: number;
 }

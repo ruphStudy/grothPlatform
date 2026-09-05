@@ -17,7 +17,9 @@ import type { GrowthStrategyOverview } from '../../growth-strategy/types/growth-
 import { ProductsService } from '../../products/products.service';
 import { ContentGenerationEngineService } from '../engine/content-generation-engine.service';
 import { ContentPromptBuilderService } from '../prompting/content-prompt-builder.service';
+import { ContentVersioningService } from '../services/content-versioning.service';
 import { mapEvidenceFromOverview, mapMessagingDirectionsFromOverview, resolveAudienceLabel } from '../shared/content-evidence-mapping.util';
+import { buildGenerationMetadata } from '../shared/content-version-mapping.util';
 import type { ContentPromptBuildInput } from '../types/content-prompt.types';
 import type { VideoScriptDraftResult, VideoScriptDuration, VideoScriptGenerationOptions, VideoScriptScene, VideoScriptTone } from '../types/video-script-generation.types';
 
@@ -174,7 +176,9 @@ interface ResolvedSource {
   funnelStage: string;
   audienceSegmentIds: string[];
   keywords: string[];
+  pillarId?: string;
   pillarTitle?: string;
+  topicId?: string;
   topicTitle?: string;
   messagingPillarIds: string[];
   suggestedCTA?: string;
@@ -206,6 +210,7 @@ export class VideoScriptGenerationService {
     private readonly videoCalendarService: VideoCalendarService,
     private readonly promptBuilder: ContentPromptBuilderService,
     private readonly engine: ContentGenerationEngineService,
+    private readonly versioningService: ContentVersioningService,
   ) {}
 
   async generateVideoScript(
@@ -336,7 +341,9 @@ export class VideoScriptGenerationService {
       funnelStage: videoItem.funnelStage,
       audienceSegmentIds: videoItem.audienceSegmentIds,
       keywords: videoItem.keywords,
+      pillarId: videoItem.pillarId,
       pillarTitle: pillar?.title,
+      topicId: videoItem.topicId,
       topicTitle: topic?.title,
       messagingPillarIds: videoItem.messagingPillarIds,
       suggestedCTA: videoItem.suggestedCTA,
@@ -433,6 +440,28 @@ export class VideoScriptGenerationService {
     if (wordCount < minWords) warnings.push('Generated video script is shorter than the requested duration target.');
     if (wordCount > maxWords) warnings.push('Generated video script is longer than the requested duration target.');
 
+    const saved = await this.versioningService.saveGeneratedVersion({
+      organizationId,
+      productId,
+      campaignId,
+      kind: 'video_script',
+      sourceType: 'video_calendar_item',
+      sourceId: videoCalendarItemId,
+      payload: {
+        title: resolvedSource.title,
+        hook: parsed.hook,
+        content: script,
+        scenes: parsed.scenes,
+        format: outputFormat,
+        estimatedWordCount: wordCount,
+        estimatedDurationSeconds,
+      },
+      generationMetadata: buildGenerationMetadata(generation, promptBuild.metadata.promptVersion, promptBuild.sourceContext, warnings),
+      generationOptions: { language: options?.language, tone, duration, outputFormat, includeCTA: constraintsIncludeCTA, includeHook, includeSceneDirections },
+      sourceSnapshot: { title: resolvedSource.title, type: resolvedSource.type, pillarId: resolvedSource.pillarId, topicId: resolvedSource.topicId },
+      userId,
+    });
+
     return {
       id: generation.id,
       kind: 'video_script',
@@ -454,6 +483,9 @@ export class VideoScriptGenerationService {
       sourceContext: promptBuild.sourceContext ?? {},
       warnings,
       generatedAt: generation.generatedAt,
+      artifactId: saved.artifactId,
+      versionId: saved.versionId,
+      version: saved.version,
     };
   }
 

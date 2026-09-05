@@ -16,7 +16,9 @@ import type { GrowthStrategyOverview } from '../../growth-strategy/types/growth-
 import { ProductsService } from '../../products/products.service';
 import { ContentGenerationEngineService } from '../engine/content-generation-engine.service';
 import { ContentPromptBuilderService } from '../prompting/content-prompt-builder.service';
+import { ContentVersioningService } from '../services/content-versioning.service';
 import { mapEvidenceFromOverview, mapMessagingDirectionsFromOverview, resolveAudienceLabel } from '../shared/content-evidence-mapping.util';
+import { buildGenerationMetadata } from '../shared/content-version-mapping.util';
 import type { ContentPromptBuildInput } from '../types/content-prompt.types';
 import type { NewsletterDraftResult, NewsletterGenerationOptions, NewsletterLength, NewsletterSourceType, NewsletterTone } from '../types/newsletter-generation.types';
 
@@ -91,7 +93,9 @@ interface ResolvedSource {
   funnelStage?: string;
   audienceSegmentIds: string[];
   keywords: string[];
+  pillarId?: string;
   pillarTitle?: string;
+  topicId?: string;
   topicTitle?: string;
   messagingPillarIds: string[];
   suggestedCTA?: string;
@@ -122,6 +126,7 @@ export class NewsletterGenerationService {
     private readonly blogCalendarService: BlogCalendarService,
     private readonly promptBuilder: ContentPromptBuilderService,
     private readonly engine: ContentGenerationEngineService,
+    private readonly versioningService: ContentVersioningService,
   ) {}
 
   async generateNewsletterDraft(
@@ -258,6 +263,20 @@ export class NewsletterGenerationService {
     if (wordCount < wordRange.min) warnings.push('Generated newsletter body is shorter than requested.');
     if (wordCount > wordRange.max) warnings.push('Generated newsletter body is longer than requested.');
 
+    const saved = await this.versioningService.saveGeneratedVersion({
+      organizationId,
+      productId,
+      campaignId,
+      kind: 'newsletter',
+      sourceType: resolvedSourceType,
+      sourceId,
+      payload: { subjectLine: parsed.subjectLine, preheader: parsed.preheader, content: body, format: outputFormat, wordCount, characterCount },
+      generationMetadata: buildGenerationMetadata(generation, promptBuild.metadata.promptVersion, promptBuild.sourceContext, warnings),
+      generationOptions: { language: options?.language, tone, length, outputFormat, includeCTA: constraintsIncludeCTA, includeSubjectLine, includePreheader },
+      sourceSnapshot: { title: resolvedSource.title, type: resolvedSource.type, pillarId: resolvedSource.pillarId, topicId: resolvedSource.topicId },
+      userId,
+    });
+
     return {
       id: generation.id,
       kind: 'newsletter',
@@ -279,6 +298,9 @@ export class NewsletterGenerationService {
       sourceContext: promptBuild.sourceContext ?? {},
       warnings,
       generatedAt: generation.generatedAt,
+      artifactId: saved.artifactId,
+      versionId: saved.versionId,
+      version: saved.version,
     };
   }
 
@@ -307,7 +329,9 @@ export class NewsletterGenerationService {
         funnelStage: blogItem.funnelStage,
         audienceSegmentIds: blogItem.audienceSegmentIds,
         keywords: [...(blogItem.primaryKeyword ? [blogItem.primaryKeyword] : []), ...blogItem.supportingKeywords],
+        pillarId: blogItem.pillarId,
         pillarTitle: pillar?.title,
+        topicId: blogItem.topicId,
         topicTitle: topic?.title,
         messagingPillarIds: pillar?.messagingPillarIds ?? [],
         suggestedCTA: blogItem.suggestedCTA,
@@ -326,7 +350,9 @@ export class NewsletterGenerationService {
         funnelStage: topic.funnelStages[0],
         audienceSegmentIds: topic.audienceSegmentIds,
         keywords: topic.keywords,
+        pillarId: pillar?.id,
         pillarTitle: pillar?.title,
+        topicId: topic.id,
         topicTitle: topic.title,
         messagingPillarIds: topic.messagingPillarIds,
         suggestedCTA: undefined,
@@ -351,7 +377,9 @@ export class NewsletterGenerationService {
       funnelStage: pillar.funnelStages[0],
       audienceSegmentIds: pillar.audienceSegmentIds,
       keywords: [...pillar.keywords, ...memberTopics.flatMap((t) => t.keywords)],
+      pillarId: pillar.id,
       pillarTitle: pillar.title,
+      topicId: memberTopics[0]?.id,
       topicTitle: memberTopics[0]?.title,
       messagingPillarIds: pillar.messagingPillarIds,
       suggestedCTA: undefined,
