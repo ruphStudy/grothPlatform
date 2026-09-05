@@ -3,6 +3,7 @@ import type { ContentBrandVoiceSummary, ContentVersionBrandVoiceSnapshot } from 
 import type { ContentFactValidationSummary } from './content-fact-validation.types';
 import type { ContentGroundingSummary, ContentVersionGroundingEvidenceSnapshot } from './content-grounding.types';
 import type { ContentOriginalitySummary } from './content-originality.types';
+import type { ContentQualitySummary } from './content-quality.types';
 import type { ContentReadabilitySummary } from './content-readability.types';
 import type { ContentSeoReviewSummary } from './content-seo-review.types';
 
@@ -114,6 +115,7 @@ export interface SavedVersionResult {
   readability?: ContentReadabilitySummary;
   brandVoice?: ContentBrandVoiceSummary;
   originality?: ContentOriginalitySummary;
+  quality?: ContentQualitySummary;
 }
 
 export interface ContentArtifactResponse {
@@ -144,6 +146,7 @@ export interface ContentVersionSummary {
   readability?: ContentReadabilitySummary;
   brandVoice?: ContentBrandVoiceSummary;
   originality?: ContentOriginalitySummary;
+  quality?: ContentQualitySummary;
 }
 
 export interface ContentVersionDetail extends ContentVersionSummary {

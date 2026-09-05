@@ -53,6 +53,8 @@ import type {
   ContentBrandVoiceSummary,
   ContentOriginalityResult,
   ContentOriginalitySummary,
+  ContentQualityResult,
+  ContentQualitySummary,
   ContentVersionDetail,
   ContentVersionSummary,
 } from '../types';
@@ -393,6 +395,31 @@ function OriginalityBadge({ originality }: { originality: ContentOriginalitySumm
   );
 }
 
+function overallQualityBadgeClass(status: ContentQualitySummary['status']): string {
+  if (status === 'excellent' || status === 'good') return 'quality-good';
+  if (status === 'needs_improvement') return 'quality-limited';
+  return 'quality-empty';
+}
+
+function overallQualityStatusLabel(status: ContentQualitySummary['status']): string {
+  if (status === 'excellent') return 'Excellent';
+  if (status === 'good') return 'Good';
+  if (status === 'needs_improvement') return 'Needs Improvement';
+  return 'Poor';
+}
+
+// Primary Sprint 16 summary (spec section 23) — shown larger and first,
+// ahead of the individual 16A-16F badges.
+function QualityScoreBadge({ quality }: { quality: ContentQualitySummary | undefined }) {
+  if (!quality) return null;
+  return (
+    <span className={`quality-badge ${overallQualityBadgeClass(quality.status)}`} style={{ fontSize: '1.05em', fontWeight: 600 }}>
+      Quality Score: {quality.score} — {overallQualityStatusLabel(quality.status)}
+      {quality.blockerCount > 0 ? ` (${quality.blockerCount} blocker${quality.blockerCount === 1 ? '' : 's'})` : ''}
+    </span>
+  );
+}
+
 function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePath: string; artifactId: string | undefined; latestVersion: number | undefined }) {
   const [open, setOpen] = useState(false);
   const [versions, setVersions] = useState<ContentVersionSummary[] | null>(null);
@@ -431,6 +458,11 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
   const [originalityOpen, setOriginalityOpen] = useState(false);
   const [originalityBusy, setOriginalityBusy] = useState(false);
   const [originalityError, setOriginalityError] = useState<string | null>(null);
+  const [latestQuality, setLatestQuality] = useState<ContentQualitySummary | undefined>(undefined);
+  const [qualityDetail, setQualityDetail] = useState<ContentQualityResult | null>(null);
+  const [qualityOpen, setQualityOpen] = useState(false);
+  const [qualityBusy, setQualityBusy] = useState(false);
+  const [qualityError, setQualityError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!artifactId || !latestVersion) return;
@@ -452,6 +484,9 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
     apiRequest<ContentOriginalityResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${latestVersion}/originality`)
       .then((result) => setLatestOriginality(result ?? undefined))
       .catch(() => setLatestOriginality(undefined));
+    apiRequest<ContentQualityResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${latestVersion}/quality`)
+      .then((result) => setLatestQuality(result ?? undefined))
+      .catch(() => setLatestQuality(undefined));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [artifactId, latestVersion]);
 
@@ -724,6 +759,51 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
     }
   }
 
+  async function loadQuality(version: number) {
+    if (!artifactId) return;
+    setQualityBusy(true);
+    setQualityError(null);
+    try {
+      const result = await apiRequest<ContentQualityResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}/quality`);
+      setQualityDetail(result);
+    } catch (err) {
+      setQualityError(err instanceof ApiError ? err.message : 'Failed to load quality score');
+    } finally {
+      setQualityBusy(false);
+    }
+  }
+
+  async function toggleQuality(version: number) {
+    if (qualityOpen) {
+      setQualityOpen(false);
+      return;
+    }
+    setQualityOpen(true);
+    await loadQuality(version);
+  }
+
+  async function recalculateQuality(version: number) {
+    if (!artifactId) return;
+    setQualityBusy(true);
+    setQualityError(null);
+    try {
+      const result = await apiRequest<ContentQualityResult>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}/quality`, { method: 'POST' });
+      setQualityDetail(result);
+      setQualityOpen(true);
+      const summary = { status: result.status, score: result.score, blockerCount: result.blockers.length };
+      if (selected && selected.version === version) {
+        setSelected({ ...selected, quality: summary });
+      }
+      if (version === latestVersion) {
+        setLatestQuality(summary);
+      }
+    } catch (err) {
+      setQualityError(err instanceof ApiError ? err.message : 'Failed to recalculate quality score');
+    } finally {
+      setQualityBusy(false);
+    }
+  }
+
   async function toggleOpen() {
     if (!artifactId) return;
     if (open) {
@@ -766,6 +846,9 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
     setOriginalityOpen(false);
     setOriginalityDetail(null);
     setOriginalityError(null);
+    setQualityOpen(false);
+    setQualityDetail(null);
+    setQualityError(null);
     try {
       const detail = await apiRequest<ContentVersionDetail>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}`);
       setSelected(detail);
@@ -793,6 +876,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
     <div style={{ marginTop: 8 }}>
       <div className="tag-list">
         <span className="tag">v{latestVersion}</span>
+        <QualityScoreBadge quality={latestQuality} />
         <GroundingBadge grounding={latestGrounding} />
         <FactValidationBadge factValidation={latestFactValidation} />
         <SeoReviewBadge seoReview={latestSeoReview} />
@@ -812,6 +896,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
               {versions.map((v) => (
                 <li key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
                   <span className="tag">v{v.version}</span>
+                  <QualityScoreBadge quality={v.quality} />
                   <GroundingBadge grounding={v.grounding} />
                   <FactValidationBadge factValidation={v.factValidation} />
                   <SeoReviewBadge seoReview={v.seoReview} />
@@ -833,12 +918,19 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
             <div style={{ marginTop: 8, padding: 10, border: '1px solid var(--border-color, #ddd)', borderRadius: 6 }}>
               <div className="tag-list">
                 <span className="tag">Viewing v{selected.version}</span>
+                <QualityScoreBadge quality={selected.quality} />
                 <GroundingBadge grounding={selected.grounding} />
                 <FactValidationBadge factValidation={selected.factValidation} />
                 <SeoReviewBadge seoReview={selected.seoReview} />
                 <ReadabilityBadge readability={selected.readability} />
                 <BrandVoiceBadge brandVoice={selected.brandVoice} />
                 <OriginalityBadge originality={selected.originality} />
+                <button className="btn btn-secondary" onClick={() => toggleQuality(selected.version)}>
+                  {qualityOpen ? 'Hide Quality' : 'View Quality'}
+                </button>
+                <button className="btn btn-secondary" onClick={() => recalculateQuality(selected.version)} disabled={qualityBusy}>
+                  {qualityBusy ? 'Recalculating...' : 'Recalculate Quality'}
+                </button>
                 <button className="btn btn-secondary" onClick={() => setSelected(null)}>
                   View Latest
                 </button>
@@ -882,6 +974,66 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
                   {originalityBusy ? 'Rechecking...' : 'Recheck Originality'}
                 </button>
               </div>
+              {qualityOpen && (
+                <div style={{ marginTop: 8, padding: 8, background: 'var(--surface-muted, #f5f5f5)', borderRadius: 6, border: '1px solid var(--border-color, #ddd)' }}>
+                  {qualityBusy && <Loading />}
+                  <ErrorMessage message={qualityError} />
+                  {!qualityBusy && !qualityDetail && !qualityError && <p className="entity-card-meta">No quality score yet.</p>}
+                  {qualityDetail && (
+                    <>
+                      <div className="tag-list">
+                        <span className="tag" style={{ fontWeight: 600 }}>
+                          Overall: {qualityDetail.score} — {overallQualityStatusLabel(qualityDetail.status)}
+                        </span>
+                      </div>
+                      <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0' }}>
+                        {qualityDetail.dimensions.map((d) => (
+                          <li key={d.type} style={{ padding: '4px 0', borderTop: '1px solid var(--border-color, #ddd)', opacity: d.applicable ? 1 : 0.5 }}>
+                            <span className="tag" style={{ marginRight: 6 }}>{labelize(d.type)}</span>
+                            {d.applicable ? (
+                              <span className="entity-card-meta">{d.score} × {d.weight}% = {d.weightedScore}</span>
+                            ) : (
+                              <span className="entity-card-meta">not applicable</span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                      {qualityDetail.blockers.length > 0 && (
+                        <div style={{ marginTop: 8 }}>
+                          {qualityDetail.blockers.map((b, i) => (
+                            <div key={i} className="content-warning" style={{ marginTop: 4, color: b.severity === 'high' ? 'var(--error, #b00020)' : undefined }}>
+                              Quality blocker: {b.reason}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {qualityDetail.strengths.length > 0 && (
+                        <div style={{ marginTop: 8 }}>
+                          <strong className="entity-card-meta">Strengths</strong>
+                          <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                            {qualityDetail.strengths.map((s, i) => (
+                              <li key={i} className="entity-card-meta">{s}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {qualityDetail.weaknesses.length > 0 && (
+                        <div style={{ marginTop: 8 }}>
+                          <strong className="entity-card-meta">Weaknesses</strong>
+                          <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                            {qualityDetail.weaknesses.map((w, i) => (
+                              <li key={i} className="entity-card-meta">{w}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {qualityDetail.warnings.length > 0 && (
+                        <div className="content-warning" style={{ marginTop: 8 }}>{qualityDetail.warnings.join(' ')}</div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
               {groundingOpen && (
                 <div style={{ marginTop: 8, padding: 8, background: 'var(--surface-muted, #f5f5f5)', borderRadius: 6 }}>
                   {groundingBusy && <Loading />}

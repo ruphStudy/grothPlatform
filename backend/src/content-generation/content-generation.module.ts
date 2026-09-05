@@ -21,6 +21,7 @@ import { ContentFactValidationResult, ContentFactValidationResultSchema } from '
 import { ContentBrandVoiceResult, ContentBrandVoiceResultSchema } from './schemas/content-brand-voice-result.schema';
 import { ContentGroundingResult, ContentGroundingResultSchema } from './schemas/content-grounding-result.schema';
 import { ContentOriginalityResult, ContentOriginalityResultSchema } from './schemas/content-originality-result.schema';
+import { ContentQualityResult, ContentQualityResultSchema } from './schemas/content-quality-result.schema';
 import { ContentReadabilityResult, ContentReadabilityResultSchema } from './schemas/content-readability-result.schema';
 import { ContentSeoReviewResult, ContentSeoReviewResultSchema } from './schemas/content-seo-review-result.schema';
 import { ContentVersion, ContentVersionSchema } from './schemas/content-version.schema';
@@ -28,6 +29,7 @@ import { ContentBrandVoiceService } from './services/content-brand-voice.service
 import { ContentFactValidationService } from './services/content-fact-validation.service';
 import { ContentGroundingService } from './services/content-grounding.service';
 import { ContentOriginalityService } from './services/content-originality.service';
+import { ContentQualityService } from './services/content-quality.service';
 import { ContentReadabilityService } from './services/content-readability.service';
 import { ContentSeoReviewService } from './services/content-seo-review.service';
 import { ContentVersioningService } from './services/content-versioning.service';
@@ -47,6 +49,7 @@ import { ContentVersioningService } from './services/content-versioning.service'
       { name: ContentReadabilityResult.name, schema: ContentReadabilityResultSchema },
       { name: ContentBrandVoiceResult.name, schema: ContentBrandVoiceResultSchema },
       { name: ContentOriginalityResult.name, schema: ContentOriginalityResultSchema },
+      { name: ContentQualityResult.name, schema: ContentQualityResultSchema },
     ]),
   ],
   controllers: [ContentGenerationController, ContentArtifactsController],
@@ -60,6 +63,7 @@ import { ContentVersioningService } from './services/content-versioning.service'
     ContentReadabilityService,
     ContentBrandVoiceService,
     ContentOriginalityService,
+    ContentQualityService,
     ContentVersioningService,
     BlogGenerationService,
     LinkedInGenerationService,
@@ -79,6 +83,7 @@ import { ContentVersioningService } from './services/content-versioning.service'
     ContentReadabilityService,
     ContentBrandVoiceService,
     ContentOriginalityService,
+    ContentQualityService,
   ],
 })
 export class ContentGenerationModule {}

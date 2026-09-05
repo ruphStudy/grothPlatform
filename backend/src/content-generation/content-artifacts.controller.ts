@@ -1,14 +1,16 @@
-import { Controller, Get, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Logger, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CampaignsService } from '../campaigns/campaigns.service';
 import { ContentBrandVoiceService } from './services/content-brand-voice.service';
 import { ContentFactValidationService } from './services/content-fact-validation.service';
 import { ContentGroundingService } from './services/content-grounding.service';
 import { ContentOriginalityService } from './services/content-originality.service';
+import { ContentQualityService } from './services/content-quality.service';
 import { ContentReadabilityService } from './services/content-readability.service';
 import { ContentSeoReviewService } from './services/content-seo-review.service';
 import { ContentVersioningService } from './services/content-versioning.service';
 import { extractGroundableText } from './shared/content-grounding-text.util';
+import type { ContentVersionDetail } from './types/content-versioning.types';
 
 // Read-only history/hydration endpoints. Tenant safety is the cheap
 // Campaign/Product ownership check already used everywhere else in this
@@ -18,6 +20,8 @@ import { extractGroundableText } from './shared/content-grounding-text.util';
 @UseGuards(JwtAuthGuard)
 @Controller('organizations/:organizationId/products/:productId/campaigns/:campaignId/content-generation')
 export class ContentArtifactsController {
+  private readonly logger = new Logger(ContentArtifactsController.name);
+
   constructor(
     private readonly campaignsService: CampaignsService,
     private readonly versioningService: ContentVersioningService,
@@ -27,7 +31,26 @@ export class ContentArtifactsController {
     private readonly readabilityService: ContentReadabilityService,
     private readonly brandVoiceService: ContentBrandVoiceService,
     private readonly originalityService: ContentOriginalityService,
+    private readonly qualityService: ContentQualityService,
   ) {}
+
+  // Keeps Quality (16G) synchronized after any 16A-16F manual recheck (spec
+  // section 20), without ever rerunning the underlying reviews themselves.
+  // Best-effort: a quality recalculation failure must never fail the
+  // recheck response that triggered it.
+  private async recalculateQualityQuietly(versionDetail: ContentVersionDetail, organizationId: string, productId: string, campaignId: string): Promise<void> {
+    try {
+      await this.qualityService.calculateForVersion({
+        contentVersionId: versionDetail.id,
+        artifactId: versionDetail.artifactId,
+        organizationId,
+        productId,
+        campaignId,
+      });
+    } catch (err) {
+      this.logger.warn(`contentVersionId=${versionDetail.id} kind=quality success=false reason=${(err as Error).message}. Content quality score could not be calculated.`);
+    }
+  }
 
   @Get('artifacts')
   async listArtifacts(
@@ -132,7 +155,7 @@ export class ContentArtifactsController {
   ) {
     await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
     const versionDetail = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
-    return this.groundingService.analyzeContentVersion({
+    const result = await this.groundingService.analyzeContentVersion({
       contentVersionId: versionDetail.id,
       artifactId: versionDetail.artifactId,
       organizationId,
@@ -141,6 +164,8 @@ export class ContentArtifactsController {
       text: extractGroundableText(versionDetail.payload),
       evidence: versionDetail.groundingEvidenceSnapshot,
     });
+    await this.recalculateQualityQuietly(versionDetail, organizationId, productId, campaignId);
+    return result;
   }
 
   // Read-only: never rebuilds Growth Strategy. Returns null (not 404) when
@@ -173,7 +198,7 @@ export class ContentArtifactsController {
   ) {
     await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
     const versionDetail = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
-    return this.factValidationService.validateContentVersion({
+    const result = await this.factValidationService.validateContentVersion({
       contentVersionId: versionDetail.id,
       artifactId: versionDetail.artifactId,
       organizationId,
@@ -182,6 +207,8 @@ export class ContentArtifactsController {
       text: extractGroundableText(versionDetail.payload),
       evidence: versionDetail.groundingEvidenceSnapshot,
     });
+    await this.recalculateQualityQuietly(versionDetail, organizationId, productId, campaignId);
+    return result;
   }
 
   // Read-only: never rebuilds Growth Strategy. Returns null (not 404) when
@@ -214,7 +241,7 @@ export class ContentArtifactsController {
   ) {
     await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
     const versionDetail = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
-    return this.seoReviewService.reviewContentVersion({
+    const result = await this.seoReviewService.reviewContentVersion({
       contentVersionId: versionDetail.id,
       artifactId: versionDetail.artifactId,
       organizationId,
@@ -226,6 +253,8 @@ export class ContentArtifactsController {
       evidence: versionDetail.groundingEvidenceSnapshot,
       generationOptions: versionDetail.generationOptions,
     });
+    await this.recalculateQualityQuietly(versionDetail, organizationId, productId, campaignId);
+    return result;
   }
 
   // Read-only: never rebuilds Growth Strategy. Returns null (not 404) when
@@ -258,7 +287,7 @@ export class ContentArtifactsController {
   ) {
     await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
     const versionDetail = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
-    return this.readabilityService.reviewContentVersion({
+    const result = await this.readabilityService.reviewContentVersion({
       contentVersionId: versionDetail.id,
       artifactId: versionDetail.artifactId,
       organizationId,
@@ -268,6 +297,8 @@ export class ContentArtifactsController {
       payload: versionDetail.payload,
       text: this.readabilityService.extractReadableText(versionDetail.kind, versionDetail.payload),
     });
+    await this.recalculateQualityQuietly(versionDetail, organizationId, productId, campaignId);
+    return result;
   }
 
   // Read-only: never rebuilds Growth Strategy. Returns null (not 404) when
@@ -300,7 +331,7 @@ export class ContentArtifactsController {
   ) {
     await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
     const versionDetail = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
-    return this.brandVoiceService.reviewContentVersion({
+    const result = await this.brandVoiceService.reviewContentVersion({
       contentVersionId: versionDetail.id,
       artifactId: versionDetail.artifactId,
       organizationId,
@@ -312,6 +343,8 @@ export class ContentArtifactsController {
       brandVoiceSnapshot: versionDetail.brandVoiceSnapshot,
       generationOptions: versionDetail.generationOptions,
     });
+    await this.recalculateQualityQuietly(versionDetail, organizationId, productId, campaignId);
+    return result;
   }
 
   // Read-only: never rebuilds Growth Strategy. Returns null (not 404) when
@@ -345,7 +378,7 @@ export class ContentArtifactsController {
   ) {
     await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
     const versionDetail = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
-    return this.originalityService.reviewContentVersion({
+    const result = await this.originalityService.reviewContentVersion({
       contentVersionId: versionDetail.id,
       artifactId: versionDetail.artifactId,
       organizationId,
@@ -356,6 +389,48 @@ export class ContentArtifactsController {
       sourceId: versionDetail.sourceId,
       payload: versionDetail.payload,
       text: extractGroundableText(versionDetail.payload),
+    });
+    await this.recalculateQualityQuietly(versionDetail, organizationId, productId, campaignId);
+    return result;
+  }
+
+  // Read-only: never rebuilds Growth Strategy. Returns null (not 404) when
+  // no quality result exists yet for an otherwise-valid version.
+  @Get('artifacts/:artifactId/versions/:version/quality')
+  async getQuality(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+    @Param('artifactId') artifactId: string,
+    @Param('version', ParseIntPipe) version: number,
+  ) {
+    await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
+    const versionDetail = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
+    return this.qualityService.getResult(versionDetail.id);
+  }
+
+  // Manual recalculation: reads the latest persisted 16A-16F results for
+  // this version and re-aggregates them — never reruns any underlying
+  // review, never rebuilds Growth Strategy. No confirmation required since
+  // this never calls a paid API.
+  @Post('artifacts/:artifactId/versions/:version/quality')
+  async recalculateQuality(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+    @Param('artifactId') artifactId: string,
+    @Param('version', ParseIntPipe) version: number,
+  ) {
+    await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
+    const versionDetail = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
+    return this.qualityService.calculateForVersion({
+      contentVersionId: versionDetail.id,
+      artifactId: versionDetail.artifactId,
+      organizationId,
+      productId,
+      campaignId,
     });
   }
 }

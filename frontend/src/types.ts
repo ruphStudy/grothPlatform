@@ -2789,6 +2789,47 @@ export interface ContentOriginalityResult extends ContentOriginalitySummary {
   reviewedAt: string;
 }
 
+export type ContentQualityDimensionType = 'grounding' | 'fact_validation' | 'seo' | 'readability' | 'brand_voice' | 'originality';
+
+export type ContentQualityStatus = 'excellent' | 'good' | 'needs_improvement' | 'poor';
+
+export type ContentQualityBlockerSeverity = 'medium' | 'high';
+
+export interface ContentQualityDimension {
+  type: ContentQualityDimensionType;
+  score: number;
+  weight: number;
+  weightedScore: number;
+  status: string;
+  applicable: boolean;
+}
+
+export interface ContentQualityBlocker {
+  type: string;
+  severity: ContentQualityBlockerSeverity;
+  reason: string;
+}
+
+export interface ContentQualitySummary {
+  status: ContentQualityStatus;
+  score: number;
+  blockerCount: number;
+}
+
+export interface ContentQualityResult extends ContentQualitySummary {
+  contentVersionId: string;
+  artifactId: string;
+  organizationId: string;
+  productId: string;
+  campaignId: string;
+  dimensions: ContentQualityDimension[];
+  blockers: ContentQualityBlocker[];
+  strengths: string[];
+  weaknesses: string[];
+  warnings: string[];
+  calculatedAt: string;
+}
+
 export interface ContentArtifact {
   id: string;
   kind: ContentGenerationKind;
@@ -2817,6 +2858,7 @@ export interface ContentVersionSummary {
   readability?: ContentReadabilitySummary;
   brandVoice?: ContentBrandVoiceSummary;
   originality?: ContentOriginalitySummary;
+  quality?: ContentQualitySummary;
 }
 
 export interface ContentVersionDetail extends ContentVersionSummary {
