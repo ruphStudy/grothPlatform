@@ -16,6 +16,8 @@ import type {
   CampaignStatus,
   CampaignType,
   ContentIdeaResult,
+  ContentTopicTier,
+  TopicPrioritizationResult,
 } from '../types';
 
 const CAMPAIGN_STATUSES: CampaignStatus[] = ['draft', 'planned', 'approved', 'active', 'paused', 'completed', 'archived'];
@@ -259,6 +261,13 @@ export default function CampaignDetailPage() {
   const [ideaFunnelStageFilter, setIdeaFunnelStageFilter] = useState('');
   const [ideaTypeFilter, setIdeaTypeFilter] = useState('');
   const [showAllIdeas, setShowAllIdeas] = useState(false);
+
+  const [topics, setTopics] = useState<TopicPrioritizationResult | null>(null);
+  const [topicsBusy, setTopicsBusy] = useState(false);
+  const [topicsError, setTopicsError] = useState<string | null>(null);
+  const [topicTierFilter, setTopicTierFilter] = useState('');
+  const [topicChannelFilter, setTopicChannelFilter] = useState('');
+  const [topicFunnelStageFilter, setTopicFunnelStageFilter] = useState('');
 
   const basePath = `/organizations/${organizationId}/products/${productId}/campaigns/${campaignId}`;
 
@@ -510,6 +519,19 @@ export default function CampaignDetailPage() {
     }
   }
 
+  async function handlePrioritizeTopics() {
+    setTopicsBusy(true);
+    setTopicsError(null);
+    try {
+      const result = await apiRequest<TopicPrioritizationResult>(`${basePath}/content-planning/topics-preview`, { method: 'POST', body: {} });
+      setTopics(result);
+    } catch (err) {
+      setTopicsError(err instanceof ApiError ? err.message : 'Failed to prioritize content topics');
+    } finally {
+      setTopicsBusy(false);
+    }
+  }
+
   if (loading) {
     return (
       <AppLayout>
@@ -563,6 +585,20 @@ export default function CampaignDetailPage() {
   const visibleIdeas = showAllIdeas ? filteredIdeas : filteredIdeas.slice(0, 12);
   const ideaMissingEvidence = contentIdeas ? dedupe(contentIdeas.missingEvidence) : [];
   const ideaWarnings = contentIdeas ? dedupe(contentIdeas.warnings) : [];
+
+  const ideaTitleById = new Map((contentIdeas?.ideas ?? []).map((i) => [i.id, i.title]));
+  const topicChannels = topics ? dedupe(topics.topics.flatMap((t) => t.channels)) : [];
+  const topicFunnelStages = topics ? dedupe(topics.topics.flatMap((t) => t.funnelStages)) : [];
+  const filteredTopics = topics
+    ? topics.topics
+        .filter((t) => !topicTierFilter || t.tier === topicTierFilter)
+        .filter((t) => !topicChannelFilter || t.channels.includes(topicChannelFilter))
+        .filter((t) => !topicFunnelStageFilter || t.funnelStages.includes(topicFunnelStageFilter))
+    : [];
+  const TOPIC_TIER_ORDER: ContentTopicTier[] = ['primary', 'secondary', 'experimental', 'deferred'];
+  const TOPIC_TIER_VISIBLE_CAP: Record<ContentTopicTier, number> = { primary: Infinity, secondary: 8, experimental: 6, deferred: Infinity };
+  const topicMissingEvidence = topics ? dedupe(topics.missingEvidence) : [];
+  const topicWarnings = topics ? dedupe(topics.warnings) : [];
 
   return (
     <AppLayout>
@@ -1295,6 +1331,183 @@ export default function CampaignDetailPage() {
                       {showAllIdeas ? 'Show fewer ideas' : `Show all ${filteredIdeas.length} ideas`}
                     </button>
                   )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="section">
+          <h3 className="section-title">Topic Prioritization</h3>
+
+          <ErrorMessage message={topicsError} />
+
+          {!topics && !topicsBusy && <p className="muted">No topics have been prioritized yet.</p>}
+
+          <button className="btn btn-primary" onClick={handlePrioritizeTopics} disabled={topicsBusy}>
+            {topicsBusy ? 'Prioritizing topics...' : topics ? 'Reprioritize Topics' : 'Prioritize Topics'}
+          </button>
+
+          {topics && (
+            <div style={{ marginTop: 16 }}>
+              <div className="summary-grid" style={{ marginBottom: 16 }}>
+                <div>
+                  <span className="summary-label">Total Topics</span>
+                  <p>{topics.topics.length}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Primary</span>
+                  <p>{topics.topics.filter((t) => t.tier === 'primary').length}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Secondary</span>
+                  <p>{topics.topics.filter((t) => t.tier === 'secondary').length}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Experimental</span>
+                  <p>{topics.topics.filter((t) => t.tier === 'experimental').length}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Overall Confidence</span>
+                  <p>{topics.confidenceScore}</p>
+                </div>
+              </div>
+
+              {(topicMissingEvidence.length > 0 || topicWarnings.length > 0) && (
+                <div className="content-warning" style={{ marginBottom: 16 }}>
+                  {[...topicMissingEvidence, ...topicWarnings].join(' ')}
+                </div>
+              )}
+
+              {topics.topics.length === 0 ? (
+                <p className="muted">No reliable content topics were detected from the approved campaign and strategy evidence.</p>
+              ) : (
+                <>
+                  <div className="form-inline">
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <select value={topicTierFilter} onChange={(e) => setTopicTierFilter(e.target.value)}>
+                        <option value="">All tiers</option>
+                        {TOPIC_TIER_ORDER.map((t) => (
+                          <option key={t} value={t}>
+                            {labelize(t)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <select value={topicChannelFilter} onChange={(e) => setTopicChannelFilter(e.target.value)}>
+                        <option value="">All channels</option>
+                        {topicChannels.map((c) => (
+                          <option key={c} value={c}>
+                            {labelize(c)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <select value={topicFunnelStageFilter} onChange={(e) => setTopicFunnelStageFilter(e.target.value)}>
+                        <option value="">All funnel stages</option>
+                        {topicFunnelStages.map((s) => (
+                          <option key={s} value={s}>
+                            {labelize(s)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {TOPIC_TIER_ORDER.filter((tier) => filteredTopics.some((t) => t.tier === tier)).map((tier) => {
+                    const tierTopics = filteredTopics.filter((t) => t.tier === tier).sort((a, b) => b.priorityScore - a.priorityScore);
+                    const cap = TOPIC_TIER_VISIBLE_CAP[tier];
+                    const visibleTierTopics = tierTopics.slice(0, cap === Infinity ? tierTopics.length : cap);
+                    const overflowCount = tierTopics.length - visibleTierTopics.length;
+                    return (
+                      <div key={tier} style={{ marginTop: 16 }}>
+                        <h4 style={{ marginBottom: 8 }}>
+                          {labelize(tier)} ({tierTopics.length})
+                        </h4>
+                        <div className="grid-cards">
+                          {visibleTierTopics.map((topic) => (
+                            <Card key={topic.id} className="entity-card">
+                              <div className="entity-card-header">
+                                <h3>{topic.title}</h3>
+                                {tier === 'primary' && <span className="tag">Primary</span>}
+                              </div>
+                              <div className="tag-list">
+                                <span className={`quality-badge ${qualityBadgeClass(scoreQuality(topic.priorityScore))}`}>Priority {topic.priorityScore}</span>
+                                <span className="tag">Confidence {topic.confidenceScore}</span>
+                                <span className="tag">{topic.relatedIdeaIds.length} supporting idea{topic.relatedIdeaIds.length === 1 ? '' : 's'}</span>
+                              </div>
+                              {topic.channels.length > 0 && <div className="entity-card-meta">Channels: {topic.channels.map((c) => labelize(c)).join(', ')}</div>}
+                              {topic.funnelStages.length > 0 && <div className="entity-card-meta">Funnel: {topic.funnelStages.map((s) => labelize(s)).join(', ')}</div>}
+                              {topic.audienceSegmentIds.length > 0 && (
+                                <div className="entity-card-meta">Audience: {topic.audienceSegmentIds.map((id) => audienceLabel(mapping, id)).join(', ')}</div>
+                              )}
+                              <details style={{ marginTop: 6 }}>
+                                <summary className="summary-label" style={{ cursor: 'pointer' }}>
+                                  Details
+                                </summary>
+                                <div style={{ marginTop: 8 }}>
+                                  {topic.keywords.length > 0 && (
+                                    <>
+                                      <span className="summary-label">Keywords</span>
+                                      <div className="tag-list">
+                                        {topic.keywords.map((k, i) => (
+                                          <span className="tag" key={i}>
+                                            {k}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </>
+                                  )}
+                                  {topic.intentTypes.length > 0 && (
+                                    <>
+                                      <span className="summary-label">Intent Types</span>
+                                      <div className="tag-list">
+                                        {topic.intentTypes.map((t, i) => (
+                                          <span className="tag" key={i}>
+                                            {labelize(t)}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </>
+                                  )}
+                                  <span className="summary-label">Supporting Ideas</span>
+                                  <ul className="bullet-list">
+                                    {topic.relatedIdeaIds.map((id) => (
+                                      <li key={id}>{ideaTitleById.get(id) ?? id}</li>
+                                    ))}
+                                  </ul>
+                                  {topic.reasons.length > 0 && (
+                                    <>
+                                      <span className="summary-label">Reasons</span>
+                                      <ul className="bullet-list">
+                                        {topic.reasons.map((r, i) => (
+                                          <li key={i}>{r}</li>
+                                        ))}
+                                      </ul>
+                                    </>
+                                  )}
+                                  {topic.weaknesses.length > 0 && (
+                                    <>
+                                      <span className="summary-label">Weaknesses</span>
+                                      <ul className="bullet-list">
+                                        {topic.weaknesses.map((w, i) => (
+                                          <li key={i}>{w}</li>
+                                        ))}
+                                      </ul>
+                                    </>
+                                  )}
+                                  {topic.warnings.length > 0 && <div className="content-warning" style={{ marginTop: 8 }}>{topic.warnings.join(' ')}</div>}
+                                </div>
+                              </details>
+                            </Card>
+                          ))}
+                        </div>
+                        {overflowCount > 0 && <p className="muted" style={{ marginTop: 8 }}>{overflowCount} more {labelize(tier).toLowerCase()} topic{overflowCount === 1 ? '' : 's'} not shown.</p>}
+                      </div>
+                    );
+                  })}
                 </>
               )}
             </div>
