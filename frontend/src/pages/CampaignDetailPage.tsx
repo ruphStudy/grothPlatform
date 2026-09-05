@@ -15,6 +15,7 @@ import type {
   CampaignSectionReviewStatus,
   CampaignStatus,
   CampaignType,
+  ContentIdeaResult,
 } from '../types';
 
 const CAMPAIGN_STATUSES: CampaignStatus[] = ['draft', 'planned', 'approved', 'active', 'paused', 'completed', 'archived'];
@@ -250,6 +251,14 @@ export default function CampaignDetailPage() {
     () => Object.fromEntries(CAMPAIGN_REVIEW_SECTION_LIST.map((s) => [s.key, { status: 'pending', note: '' }])) as Record<CampaignReviewSection, { status: CampaignSectionReviewStatus; note: string }>,
   );
   const [overallNoteDraft, setOverallNoteDraft] = useState('');
+
+  const [contentIdeas, setContentIdeas] = useState<ContentIdeaResult | null>(null);
+  const [contentIdeasBusy, setContentIdeasBusy] = useState(false);
+  const [contentIdeasError, setContentIdeasError] = useState<string | null>(null);
+  const [ideaChannelFilter, setIdeaChannelFilter] = useState('');
+  const [ideaFunnelStageFilter, setIdeaFunnelStageFilter] = useState('');
+  const [ideaTypeFilter, setIdeaTypeFilter] = useState('');
+  const [showAllIdeas, setShowAllIdeas] = useState(false);
 
   const basePath = `/organizations/${organizationId}/products/${productId}/campaigns/${campaignId}`;
 
@@ -487,6 +496,20 @@ export default function CampaignDetailPage() {
     }
   }
 
+  async function handleGenerateContentIdeas() {
+    setContentIdeasBusy(true);
+    setContentIdeasError(null);
+    try {
+      const result = await apiRequest<ContentIdeaResult>(`${basePath}/content-planning/ideas-preview`, { method: 'POST', body: {} });
+      setContentIdeas(result);
+      setShowAllIdeas(false);
+    } catch (err) {
+      setContentIdeasError(err instanceof ApiError ? err.message : 'Failed to generate content ideas');
+    } finally {
+      setContentIdeasBusy(false);
+    }
+  }
+
   if (loading) {
     return (
       <AppLayout>
@@ -526,6 +549,20 @@ export default function CampaignDetailPage() {
   if (!plan) missingApprovalPrereqs.push('the 30-day plan');
   const hasUnresolvedSectionChanges = review.sectionReviews.some((s) => s.status === 'changes_requested');
   const canApprove = missingApprovalPrereqs.length === 0 && !hasUnresolvedSectionChanges;
+
+  const ideaChannels = contentIdeas ? dedupe(contentIdeas.ideas.map((i) => i.channel)) : [];
+  const ideaFunnelStages = contentIdeas ? dedupe(contentIdeas.ideas.map((i) => i.funnelStage)) : [];
+  const ideaTypes = contentIdeas ? dedupe(contentIdeas.ideas.map((i) => i.type)) : [];
+  const filteredIdeas = contentIdeas
+    ? [...contentIdeas.ideas]
+        .filter((i) => !ideaChannelFilter || i.channel === ideaChannelFilter)
+        .filter((i) => !ideaFunnelStageFilter || i.funnelStage === ideaFunnelStageFilter)
+        .filter((i) => !ideaTypeFilter || i.type === ideaTypeFilter)
+        .sort((a, b) => b.priorityScore - a.priorityScore)
+    : [];
+  const visibleIdeas = showAllIdeas ? filteredIdeas : filteredIdeas.slice(0, 12);
+  const ideaMissingEvidence = contentIdeas ? dedupe(contentIdeas.missingEvidence) : [];
+  const ideaWarnings = contentIdeas ? dedupe(contentIdeas.warnings) : [];
 
   return (
     <AppLayout>
@@ -1090,6 +1127,178 @@ export default function CampaignDetailPage() {
           <button className="btn btn-ghost" onClick={handleRequestChanges} disabled={reviewBusy !== null}>
             {reviewBusy === 'requesting' ? 'Requesting changes...' : 'Request Changes'}
           </button>
+        </div>
+      </Card>
+
+      {/* Content Planning */}
+      <Card className="analysis-card">
+        <div className="analysis-header">
+          <div>
+            <h2 className="card-title">Content Planning</h2>
+            <p className="card-subtitle">Strategic content directions derived from the approved strategy and this campaign's plan.</p>
+          </div>
+        </div>
+
+        <div className="section" style={{ marginTop: 0 }}>
+          <h3 className="section-title">Content Ideas</h3>
+
+          <ErrorMessage message={contentIdeasError} />
+
+          {!contentIdeas && !contentIdeasBusy && <p className="muted">No content ideas have been generated for this campaign yet.</p>}
+
+          <button className="btn btn-primary" onClick={handleGenerateContentIdeas} disabled={contentIdeasBusy}>
+            {contentIdeasBusy ? 'Generating content ideas...' : contentIdeas ? 'Regenerate Content Ideas' : 'Generate Content Ideas'}
+          </button>
+
+          {contentIdeas && (
+            <div style={{ marginTop: 16 }}>
+              <div className="summary-grid" style={{ marginBottom: 16 }}>
+                <div>
+                  <span className="summary-label">Idea Count</span>
+                  <p>{contentIdeas.ideas.length}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Primary Ideas</span>
+                  <p>{contentIdeas.primaryIdeaIds.length}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Overall Confidence</span>
+                  <p>{contentIdeas.confidenceScore}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Channels Represented</span>
+                  <p>{ideaChannels.length ? ideaChannels.map((c) => labelize(c)).join(', ') : '-'}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Funnel Stages Represented</span>
+                  <p>{ideaFunnelStages.length ? ideaFunnelStages.map((s) => labelize(s)).join(', ') : '-'}</p>
+                </div>
+              </div>
+
+              {(ideaMissingEvidence.length > 0 || ideaWarnings.length > 0) && (
+                <div className="content-warning" style={{ marginBottom: 16 }}>
+                  {[...ideaMissingEvidence, ...ideaWarnings].join(' ')}
+                </div>
+              )}
+
+              {contentIdeas.ideas.length === 0 ? (
+                <p className="muted">No reliable content ideas were detected from the current approved strategy and campaign plan.</p>
+              ) : (
+                <>
+                  <div className="form-inline">
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <select value={ideaChannelFilter} onChange={(e) => setIdeaChannelFilter(e.target.value)}>
+                        <option value="">All channels</option>
+                        {ideaChannels.map((c) => (
+                          <option key={c} value={c}>
+                            {labelize(c)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <select value={ideaFunnelStageFilter} onChange={(e) => setIdeaFunnelStageFilter(e.target.value)}>
+                        <option value="">All funnel stages</option>
+                        {ideaFunnelStages.map((s) => (
+                          <option key={s} value={s}>
+                            {labelize(s)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <select value={ideaTypeFilter} onChange={(e) => setIdeaTypeFilter(e.target.value)}>
+                        <option value="">All idea types</option>
+                        {ideaTypes.map((t) => (
+                          <option key={t} value={t}>
+                            {labelize(t)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid-cards" style={{ marginTop: 12 }}>
+                    {visibleIdeas.map((idea) => {
+                      const isPrimary = contentIdeas.primaryIdeaIds.includes(idea.id);
+                      return (
+                        <Card key={idea.id} className="entity-card">
+                          <div className="entity-card-header">
+                            <h3>{idea.title}</h3>
+                            {isPrimary && <span className="tag">Primary</span>}
+                          </div>
+                          <div className="tag-list">
+                            <span className="tag">{labelize(idea.type)}</span>
+                            <span className="tag">{labelize(idea.channel)}</span>
+                            <span className="tag">{labelize(idea.funnelStage)}</span>
+                            <span className={`quality-badge ${qualityBadgeClass(scoreQuality(idea.priorityScore))}`}>Priority {idea.priorityScore}</span>
+                          </div>
+                          <p className="entity-card-meta">{idea.angle}</p>
+                          {idea.audienceSegmentIds.length > 0 && (
+                            <div className="entity-card-meta">Audience: {idea.audienceSegmentIds.map((id) => audienceLabel(mapping, id)).join(', ')}</div>
+                          )}
+                          <details style={{ marginTop: 6 }}>
+                            <summary className="summary-label" style={{ cursor: 'pointer' }}>
+                              Details
+                            </summary>
+                            <div style={{ marginTop: 8 }}>
+                              <span className="summary-label">Objective</span>
+                              <p>{idea.objective}</p>
+                              <span className="summary-label">Format Direction</span>
+                              <p>{labelize(idea.formatDirection)}</p>
+                              {idea.suggestedCTA && (
+                                <>
+                                  <span className="summary-label">Suggested CTA</span>
+                                  <p>{idea.suggestedCTA}</p>
+                                </>
+                              )}
+                              {idea.keywords.length > 0 && (
+                                <>
+                                  <span className="summary-label">Keyword Directions</span>
+                                  <div className="tag-list">
+                                    {idea.keywords.map((k, i) => (
+                                      <span className="tag" key={i}>
+                                        {k}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </>
+                              )}
+                              {(idea.messagingPillarIds.length > 0 || idea.contentPillarIds.length > 0) && (
+                                <>
+                                  <span className="summary-label">Related Pillars</span>
+                                  <p className="entity-card-meta">{[...idea.messagingPillarIds, ...idea.contentPillarIds].join(', ') || '-'}</p>
+                                </>
+                              )}
+                              <span className="summary-label">Confidence</span>
+                              <p>{idea.confidenceScore}</p>
+                              {idea.reasons.length > 0 && (
+                                <>
+                                  <span className="summary-label">Reasons</span>
+                                  <ul className="bullet-list">
+                                    {idea.reasons.map((r, i) => (
+                                      <li key={i}>{r}</li>
+                                    ))}
+                                  </ul>
+                                </>
+                              )}
+                              {idea.warnings.length > 0 && <div className="content-warning" style={{ marginTop: 8 }}>{idea.warnings.join(' ')}</div>}
+                            </div>
+                          </details>
+                        </Card>
+                      );
+                    })}
+                  </div>
+
+                  {filteredIdeas.length > 12 && (
+                    <button className="btn btn-ghost" style={{ marginTop: 12 }} onClick={() => setShowAllIdeas(!showAllIdeas)}>
+                      {showAllIdeas ? 'Show fewer ideas' : `Show all ${filteredIdeas.length} ideas`}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
       </Card>
     </AppLayout>
