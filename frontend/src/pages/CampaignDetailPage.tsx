@@ -24,6 +24,8 @@ import type {
   ContentTopicTier,
   TopicPrioritizationResult,
   RepurposingPlanResult,
+  BlogDraftResult,
+  BlogGenerationOptions,
 } from '../types';
 
 const CAMPAIGN_STATUSES: CampaignStatus[] = ['draft', 'planned', 'approved', 'active', 'paused', 'completed', 'archived'];
@@ -282,6 +284,9 @@ export default function CampaignDetailPage() {
   const [blogCalendar, setBlogCalendar] = useState<BlogCalendarResult | null>(null);
   const [blogCalendarBusy, setBlogCalendarBusy] = useState(false);
   const [blogCalendarError, setBlogCalendarError] = useState<string | null>(null);
+  const [blogDrafts, setBlogDrafts] = useState<Record<string, BlogDraftResult>>({});
+  const [blogDraftBusyIds, setBlogDraftBusyIds] = useState<Record<string, boolean>>({});
+  const [blogDraftErrors, setBlogDraftErrors] = useState<Record<string, string | null>>({});
 
   const [socialCalendar, setSocialCalendar] = useState<SocialCalendarResult | null>(null);
   const [socialCalendarBusy, setSocialCalendarBusy] = useState(false);
@@ -592,6 +597,32 @@ export default function CampaignDetailPage() {
     } finally {
       setBlogCalendarBusy(false);
     }
+  }
+
+  // One click = one paid AI call. Regeneration requires explicit confirmation.
+  async function generateBlogDraft(blogCalendarItemId: string, options?: BlogGenerationOptions): Promise<BlogDraftResult> {
+    return apiRequest<BlogDraftResult>(`${basePath}/content-generation/blog/${blogCalendarItemId}`, { method: 'POST', body: options ?? {} });
+  }
+
+  async function handleGenerateBlogDraft(blogCalendarItemId: string, isRegenerate: boolean) {
+    if (isRegenerate) {
+      const confirmed = window.confirm('Regenerating will make another AI request and may incur additional cost. Continue?');
+      if (!confirmed) return;
+    }
+    setBlogDraftBusyIds((prev) => ({ ...prev, [blogCalendarItemId]: true }));
+    setBlogDraftErrors((prev) => ({ ...prev, [blogCalendarItemId]: null }));
+    try {
+      const result = await generateBlogDraft(blogCalendarItemId);
+      setBlogDrafts((prev) => ({ ...prev, [blogCalendarItemId]: result }));
+    } catch (err) {
+      setBlogDraftErrors((prev) => ({ ...prev, [blogCalendarItemId]: err instanceof ApiError ? err.message : 'Failed to generate blog draft' }));
+    } finally {
+      setBlogDraftBusyIds((prev) => ({ ...prev, [blogCalendarItemId]: false }));
+    }
+  }
+
+  function handleCopyBlogDraft(content: string) {
+    void navigator.clipboard.writeText(content);
   }
 
   async function handleBuildSocialCalendar() {
@@ -1983,6 +2014,51 @@ export default function CampaignDetailPage() {
                                     {item.warnings.length > 0 && <div className="content-warning" style={{ marginTop: 8 }}>{item.warnings.join(' ')}</div>}
                                   </div>
                                 </details>
+
+                                <div style={{ marginTop: 10 }}>
+                                  <ErrorMessage message={blogDraftErrors[item.id] ?? null} />
+                                  {!blogDrafts[item.id] && <p className="entity-card-meta">AI generation uses your configured provider and may incur usage cost.</p>}
+                                  <button
+                                    className="btn btn-secondary"
+                                    onClick={() => handleGenerateBlogDraft(item.id, !!blogDrafts[item.id])}
+                                    disabled={!!blogDraftBusyIds[item.id]}
+                                  >
+                                    {blogDraftBusyIds[item.id] ? 'Generating draft...' : blogDrafts[item.id] ? 'Regenerate Draft' : 'Generate Draft'}
+                                  </button>
+
+                                  {blogDrafts[item.id] && (
+                                    <div style={{ marginTop: 10 }}>
+                                      <div className="tag-list">
+                                        <span className="tag">{blogDrafts[item.id].wordCount} words</span>
+                                        <span className="tag">{blogDrafts[item.id].provider} / {blogDrafts[item.id].model}</span>
+                                        {blogDrafts[item.id].usage.totalTokens !== undefined && <span className="tag">{blogDrafts[item.id].usage.totalTokens} tokens</span>}
+                                        {blogDrafts[item.id].cost && <span className="tag">${blogDrafts[item.id].cost!.estimated.toFixed(4)} {blogDrafts[item.id].cost!.currency}</span>}
+                                        <span className="tag">Prompt {blogDrafts[item.id].promptVersion}</span>
+                                      </div>
+                                      <div className="entity-card-meta">Generated {new Date(blogDrafts[item.id].generatedAt).toLocaleString()}</div>
+                                      {blogDrafts[item.id].warnings.length > 0 && (
+                                        <div className="content-warning" style={{ marginTop: 6 }}>{blogDrafts[item.id].warnings.join(' ')}</div>
+                                      )}
+                                      <pre
+                                        style={{
+                                          marginTop: 8,
+                                          padding: 10,
+                                          whiteSpace: 'pre-wrap',
+                                          wordBreak: 'break-word',
+                                          maxHeight: 320,
+                                          overflowY: 'auto',
+                                          background: 'var(--surface-muted, #f5f5f5)',
+                                          borderRadius: 6,
+                                        }}
+                                      >
+                                        {blogDrafts[item.id].content}
+                                      </pre>
+                                      <button className="btn btn-secondary" style={{ marginTop: 6 }} onClick={() => handleCopyBlogDraft(blogDrafts[item.id].content)}>
+                                        Copy Draft
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           );
