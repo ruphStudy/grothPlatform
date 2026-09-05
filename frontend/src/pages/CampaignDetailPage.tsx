@@ -17,6 +17,7 @@ import type {
   CampaignType,
   ContentIdeaResult,
   BlogCalendarResult,
+  SocialCalendarResult,
   CampaignContentPillarTier,
   ContentPillarPlanResult,
   ContentTopicTier,
@@ -279,6 +280,13 @@ export default function CampaignDetailPage() {
   const [blogCalendar, setBlogCalendar] = useState<BlogCalendarResult | null>(null);
   const [blogCalendarBusy, setBlogCalendarBusy] = useState(false);
   const [blogCalendarError, setBlogCalendarError] = useState<string | null>(null);
+
+  const [socialCalendar, setSocialCalendar] = useState<SocialCalendarResult | null>(null);
+  const [socialCalendarBusy, setSocialCalendarBusy] = useState(false);
+  const [socialCalendarError, setSocialCalendarError] = useState<string | null>(null);
+  const [socialPlatformFilter, setSocialPlatformFilter] = useState('');
+  const [socialTypeFilter, setSocialTypeFilter] = useState('');
+  const [socialFunnelStageFilter, setSocialFunnelStageFilter] = useState('');
 
   const basePath = `/organizations/${organizationId}/products/${productId}/campaigns/${campaignId}`;
 
@@ -569,6 +577,19 @@ export default function CampaignDetailPage() {
     }
   }
 
+  async function handleBuildSocialCalendar() {
+    setSocialCalendarBusy(true);
+    setSocialCalendarError(null);
+    try {
+      const result = await apiRequest<SocialCalendarResult>(`${basePath}/content-planning/social-calendar-preview`, { method: 'POST', body: {} });
+      setSocialCalendar(result);
+    } catch (err) {
+      setSocialCalendarError(err instanceof ApiError ? err.message : 'Failed to build social calendar');
+    } finally {
+      setSocialCalendarBusy(false);
+    }
+  }
+
   if (loading) {
     return (
       <AppLayout>
@@ -646,6 +667,28 @@ export default function CampaignDetailPage() {
   const blogCalendarMissingEvidence = blogCalendar ? dedupe(blogCalendar.missingEvidence) : [];
   const blogCalendarWarnings = blogCalendar ? dedupe(blogCalendar.warnings) : [];
   const blogFunnelStages = blogCalendar ? dedupe(blogCalendar.items.map((i) => i.funnelStage)) : [];
+
+  const blogTitleById = new Map((blogCalendar?.items ?? []).map((i) => [i.id, i.title]));
+  const socialCalendarMissingEvidence = socialCalendar ? dedupe(socialCalendar.missingEvidence) : [];
+  const socialCalendarWarnings = socialCalendar ? dedupe(socialCalendar.warnings) : [];
+  const socialPlatforms = socialCalendar ? dedupe(socialCalendar.items.map((i) => i.platform)) : [];
+  const socialTypes = socialCalendar ? dedupe(socialCalendar.items.map((i) => i.type)) : [];
+  const socialFunnelStages = socialCalendar ? dedupe(socialCalendar.items.map((i) => i.funnelStage)) : [];
+  const filteredSocialWeeks = socialCalendar
+    ? socialCalendar.weeks
+        .map((week) => ({
+          ...week,
+          itemIds: week.itemIds.filter((id) => {
+            const item = socialCalendar.items.find((i) => i.id === id);
+            if (!item) return false;
+            if (socialPlatformFilter && item.platform !== socialPlatformFilter) return false;
+            if (socialTypeFilter && item.type !== socialTypeFilter) return false;
+            if (socialFunnelStageFilter && item.funnelStage !== socialFunnelStageFilter) return false;
+            return true;
+          }),
+        }))
+        .filter((week) => week.itemIds.length > 0)
+    : [];
 
   return (
     <AppLayout>
@@ -1865,6 +1908,203 @@ export default function CampaignDetailPage() {
                     </div>
                   );
                 })
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="section">
+          <h3 className="section-title">Social Calendar</h3>
+
+          <ErrorMessage message={socialCalendarError} />
+
+          {!socialCalendar && !socialCalendarBusy && <p className="muted">No social calendar has been built yet.</p>}
+
+          <button className="btn btn-primary" onClick={handleBuildSocialCalendar} disabled={socialCalendarBusy}>
+            {socialCalendarBusy ? 'Building social calendar...' : socialCalendar ? 'Rebuild Social Calendar' : 'Build Social Calendar'}
+          </button>
+
+          {socialCalendar && (
+            <div style={{ marginTop: 16 }}>
+              <div className="summary-grid" style={{ marginBottom: 16 }}>
+                <div>
+                  <span className="summary-label">Total Items</span>
+                  <p>{socialCalendar.items.length}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Overall Confidence</span>
+                  <p>{socialCalendar.confidenceScore}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Top Priority Items</span>
+                  <p>{socialCalendar.topPriorityItemIds.length}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Weeks Represented</span>
+                  <p>{socialCalendar.weeks.map((w) => `Week ${w.week}`).join(', ') || '-'}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Platforms Represented</span>
+                  <p>{socialPlatforms.length ? socialPlatforms.map((p) => labelize(p)).join(', ') : '-'}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Funnel Stages Represented</span>
+                  <p>{socialFunnelStages.length ? socialFunnelStages.map((s) => labelize(s)).join(', ') : '-'}</p>
+                </div>
+              </div>
+
+              {(socialCalendarMissingEvidence.length > 0 || socialCalendarWarnings.length > 0) && (
+                <div className="content-warning" style={{ marginBottom: 16 }}>
+                  {[...socialCalendarMissingEvidence, ...socialCalendarWarnings].join(' ')}
+                </div>
+              )}
+
+              {socialCalendar.items.length === 0 ? (
+                <p className="muted">No reliable social content directions were detected from the approved campaign and strategy evidence.</p>
+              ) : (
+                <>
+                  <div className="form-inline">
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <select value={socialPlatformFilter} onChange={(e) => setSocialPlatformFilter(e.target.value)}>
+                        <option value="">All platforms</option>
+                        {socialPlatforms.map((p) => (
+                          <option key={p} value={p}>
+                            {labelize(p)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <select value={socialTypeFilter} onChange={(e) => setSocialTypeFilter(e.target.value)}>
+                        <option value="">All content types</option>
+                        {socialTypes.map((t) => (
+                          <option key={t} value={t}>
+                            {labelize(t)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <select value={socialFunnelStageFilter} onChange={(e) => setSocialFunnelStageFilter(e.target.value)}>
+                        <option value="">All funnel stages</option>
+                        {socialFunnelStages.map((s) => (
+                          <option key={s} value={s}>
+                            {labelize(s)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {filteredSocialWeeks.map((week) => {
+                    const weekItems = week.itemIds.map((id) => socialCalendar.items.find((i) => i.id === id)).filter((i): i is NonNullable<typeof i> => !!i);
+                    return (
+                      <div className="calendar-week" key={week.week}>
+                        <div className="calendar-week-header">
+                          <div>
+                            <strong>
+                              Week {week.week} &mdash; {week.theme}
+                            </strong>
+                          </div>
+                          <div className="entity-card-meta">
+                            {weekItems.length} item{weekItems.length === 1 ? '' : 's'} &middot; Confidence {week.confidenceScore}
+                          </div>
+                        </div>
+                        <div className="calendar-days">
+                          {weekItems.map((item) => {
+                            const actualDate = actualDateForDay(campaign.startDate, item.day);
+                            return (
+                              <div className="calendar-day" key={item.id}>
+                                <div className="calendar-day-number">
+                                  Day {item.day}
+                                  {actualDate ? ` · ${actualDate}` : ''}
+                                </div>
+                                <div className="activity-card">
+                                  <div className="activity-card-title">{item.title}</div>
+                                  <div className="tag-list">
+                                    <span className="tag">{labelize(item.type)}</span>
+                                    <span className="tag">{labelize(item.platform)}</span>
+                                    <span className="tag">{labelize(item.recommendedFormat)}</span>
+                                    <span className={`quality-badge ${qualityBadgeClass(scoreQuality(item.priorityScore))}`}>Priority {item.priorityScore}</span>
+                                  </div>
+                                  {item.sourceBlogItemId && (
+                                    <div className="entity-card-meta">Repurposed from Blog Calendar: {blogTitleById.get(item.sourceBlogItemId) ?? item.sourceBlogItemId}</div>
+                                  )}
+                                  {item.audienceSegmentIds.length > 0 && (
+                                    <div className="entity-card-meta">Audience: {item.audienceSegmentIds.map((id) => audienceLabel(mapping, id)).join(', ')}</div>
+                                  )}
+                                  {item.suggestedCTA && <div className="entity-card-meta">CTA: {item.suggestedCTA}</div>}
+                                  <details style={{ marginTop: 6 }}>
+                                    <summary className="summary-label" style={{ cursor: 'pointer' }}>
+                                      Details
+                                    </summary>
+                                    <div style={{ marginTop: 8 }}>
+                                      <span className="summary-label">Angle</span>
+                                      <p>{item.angle}</p>
+                                      {item.messagingPillarIds.length > 0 && (
+                                        <>
+                                          <span className="summary-label">Messaging Pillars</span>
+                                          <p className="entity-card-meta">{item.messagingPillarIds.join(', ')}</p>
+                                        </>
+                                      )}
+                                      {item.keywords.length > 0 && (
+                                        <>
+                                          <span className="summary-label">Keywords</span>
+                                          <div className="tag-list">
+                                            {item.keywords.map((k, i) => (
+                                              <span className="tag" key={i}>
+                                                {k}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </>
+                                      )}
+                                      {item.relatedCampaignActivityIds.length > 0 && (
+                                        <>
+                                          <span className="summary-label">Related Campaign Activities</span>
+                                          <p className="entity-card-meta">{item.relatedCampaignActivityIds.join(', ')}</p>
+                                        </>
+                                      )}
+                                      {item.dependencies.length > 0 && (
+                                        <>
+                                          <span className="summary-label">Dependencies</span>
+                                          <p className="entity-card-meta">{item.dependencies.join(', ')}</p>
+                                        </>
+                                      )}
+                                      {item.successSignals.length > 0 && (
+                                        <>
+                                          <span className="summary-label">Success Signals</span>
+                                          <div className="tag-list">
+                                            {item.successSignals.map((s, i) => (
+                                              <span className="tag" key={i}>
+                                                {s}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </>
+                                      )}
+                                      {item.reasons.length > 0 && (
+                                        <>
+                                          <span className="summary-label">Reasons</span>
+                                          <ul className="bullet-list">
+                                            {item.reasons.map((r, i) => (
+                                              <li key={i}>{r}</li>
+                                            ))}
+                                          </ul>
+                                        </>
+                                      )}
+                                      {item.warnings.length > 0 && <div className="content-warning" style={{ marginTop: 8 }}>{item.warnings.join(' ')}</div>}
+                                    </div>
+                                  </details>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
               )}
             </div>
           )}

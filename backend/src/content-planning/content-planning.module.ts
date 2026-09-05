@@ -6,12 +6,13 @@ import { BlogCalendarService } from './blog-calendar.service';
 import { ContentIdeaService } from './content-idea.service';
 import { ContentPillarPlanService } from './content-pillar-plan.service';
 import { ContentPlanningController } from './content-planning.controller';
+import { SocialCalendarService } from './social-calendar.service';
 import { TopicPrioritizationService } from './topic-prioritization.service';
 
 @Module({
   imports: [ProductsModule, CampaignsModule, GrowthStrategyModule],
   controllers: [ContentPlanningController],
-  providers: [ContentIdeaService, TopicPrioritizationService, ContentPillarPlanService, BlogCalendarService],
-  exports: [ContentIdeaService, TopicPrioritizationService, ContentPillarPlanService, BlogCalendarService],
+  providers: [ContentIdeaService, TopicPrioritizationService, ContentPillarPlanService, BlogCalendarService, SocialCalendarService],
+  exports: [ContentIdeaService, TopicPrioritizationService, ContentPillarPlanService, BlogCalendarService, SocialCalendarService],
 })
 export class ContentPlanningModule {}

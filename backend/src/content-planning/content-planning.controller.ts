@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BlogCalendarService } from './blog-calendar.service';
 import { ContentIdeaService } from './content-idea.service';
 import { ContentPillarPlanService } from './content-pillar-plan.service';
+import { SocialCalendarService } from './social-calendar.service';
 import { TopicPrioritizationService } from './topic-prioritization.service';
 
 @UseGuards(JwtAuthGuard)
@@ -13,6 +14,7 @@ export class ContentPlanningController {
     private readonly topicPrioritizationService: TopicPrioritizationService,
     private readonly contentPillarPlanService: ContentPillarPlanService,
     private readonly blogCalendarService: BlogCalendarService,
+    private readonly socialCalendarService: SocialCalendarService,
   ) {}
 
   @Post('ideas-preview')
@@ -53,5 +55,15 @@ export class ContentPlanningController {
     @Param('campaignId') campaignId: string,
   ) {
     return this.blogCalendarService.buildBlogCalendarForCampaign(organizationId, productId, campaignId, req.user.userId);
+  }
+
+  @Post('social-calendar-preview')
+  buildSocialCalendar(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+  ) {
+    return this.socialCalendarService.buildSocialCalendarForCampaign(organizationId, productId, campaignId, req.user.userId);
   }
 }
