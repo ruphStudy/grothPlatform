@@ -2541,6 +2541,55 @@ export interface ContentGroundingResult extends ContentGroundingSummary {
   checkedAt: string;
 }
 
+export type FactValidationClaimClassification = 'validated' | 'needs_review' | 'invalid' | 'non_factual';
+
+export type ContentFactValidationStatus = 'validated' | 'needs_review' | 'failed_validation';
+
+export type FactValidationClaimSeverity = 'low' | 'medium' | 'high';
+
+export type FactValidationClaimFactType =
+  | 'product_fact'
+  | 'capability'
+  | 'number'
+  | 'pricing'
+  | 'comparison'
+  | 'proof'
+  | 'customer_result'
+  | 'integration'
+  | 'certification'
+  | 'guarantee'
+  | 'market_claim'
+  | 'other';
+
+export interface FactValidationClaim {
+  id: string;
+  text: string;
+  classification: FactValidationClaimClassification;
+  factType: FactValidationClaimFactType;
+  evidenceRefs: string[];
+  reason: string;
+  severity: FactValidationClaimSeverity;
+}
+
+export interface ContentFactValidationSummary {
+  status: ContentFactValidationStatus;
+  score: number;
+  reviewClaimCount: number;
+  failedClaimCount: number;
+}
+
+export interface ContentFactValidationResult extends ContentFactValidationSummary {
+  contentVersionId: string;
+  artifactId: string;
+  organizationId: string;
+  productId: string;
+  campaignId: string;
+  claims: FactValidationClaim[];
+  validatedClaimCount: number;
+  warnings: string[];
+  validatedAt: string;
+}
+
 export interface ContentArtifact {
   id: string;
   kind: ContentGenerationKind;
@@ -2564,6 +2613,7 @@ export interface ContentVersionSummary {
   cost?: ContentVersionCost;
   warningsCount: number;
   grounding?: ContentGroundingSummary;
+  factValidation?: ContentFactValidationSummary;
 }
 
 export interface ContentVersionDetail extends ContentVersionSummary {

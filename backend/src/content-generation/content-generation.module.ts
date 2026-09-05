@@ -17,8 +17,10 @@ import { ContentGenerationEngineService } from './engine/content-generation-engi
 import { OpenAiContentGenerationProvider } from './providers/openai-content-generation.provider';
 import { ContentPromptBuilderService } from './prompting/content-prompt-builder.service';
 import { ContentArtifact, ContentArtifactSchema } from './schemas/content-artifact.schema';
+import { ContentFactValidationResult, ContentFactValidationResultSchema } from './schemas/content-fact-validation-result.schema';
 import { ContentGroundingResult, ContentGroundingResultSchema } from './schemas/content-grounding-result.schema';
 import { ContentVersion, ContentVersionSchema } from './schemas/content-version.schema';
+import { ContentFactValidationService } from './services/content-fact-validation.service';
 import { ContentGroundingService } from './services/content-grounding.service';
 import { ContentVersioningService } from './services/content-versioning.service';
 
@@ -32,6 +34,7 @@ import { ContentVersioningService } from './services/content-versioning.service'
       { name: ContentArtifact.name, schema: ContentArtifactSchema },
       { name: ContentVersion.name, schema: ContentVersionSchema },
       { name: ContentGroundingResult.name, schema: ContentGroundingResultSchema },
+      { name: ContentFactValidationResult.name, schema: ContentFactValidationResultSchema },
     ]),
   ],
   controllers: [ContentGenerationController, ContentArtifactsController],
@@ -40,6 +43,7 @@ import { ContentVersioningService } from './services/content-versioning.service'
     OpenAiContentGenerationProvider,
     ContentPromptBuilderService,
     ContentGroundingService,
+    ContentFactValidationService,
     ContentVersioningService,
     BlogGenerationService,
     LinkedInGenerationService,
@@ -49,6 +53,6 @@ import { ContentVersioningService } from './services/content-versioning.service'
     NewsletterGenerationService,
     VideoScriptGenerationService,
   ],
-  exports: [ContentGenerationEngineService, ContentPromptBuilderService, ContentVersioningService, ContentGroundingService],
+  exports: [ContentGenerationEngineService, ContentPromptBuilderService, ContentVersioningService, ContentGroundingService, ContentFactValidationService],
 })
 export class ContentGenerationModule {}

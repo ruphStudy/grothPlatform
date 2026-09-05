@@ -1,6 +1,7 @@
 import { Controller, Get, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CampaignsService } from '../campaigns/campaigns.service';
+import { ContentFactValidationService } from './services/content-fact-validation.service';
 import { ContentGroundingService } from './services/content-grounding.service';
 import { ContentVersioningService } from './services/content-versioning.service';
 import { extractGroundableText } from './shared/content-grounding-text.util';
@@ -17,6 +18,7 @@ export class ContentArtifactsController {
     private readonly campaignsService: CampaignsService,
     private readonly versioningService: ContentVersioningService,
     private readonly groundingService: ContentGroundingService,
+    private readonly factValidationService: ContentFactValidationService,
   ) {}
 
   @Get('artifacts')
@@ -123,6 +125,47 @@ export class ContentArtifactsController {
     await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
     const versionDetail = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
     return this.groundingService.analyzeContentVersion({
+      contentVersionId: versionDetail.id,
+      artifactId: versionDetail.artifactId,
+      organizationId,
+      productId,
+      campaignId,
+      text: extractGroundableText(versionDetail.payload),
+      evidence: versionDetail.groundingEvidenceSnapshot,
+    });
+  }
+
+  // Read-only: never rebuilds Growth Strategy. Returns null (not 404) when
+  // no fact-validation result exists yet for an otherwise-valid version.
+  @Get('artifacts/:artifactId/versions/:version/fact-validation')
+  async getFactValidation(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+    @Param('artifactId') artifactId: string,
+    @Param('version', ParseIntPipe) version: number,
+  ) {
+    await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
+    const versionDetail = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
+    return this.factValidationService.getResult(versionDetail.id);
+  }
+
+  // Manual recheck: recomputes against this version's own persisted
+  // groundingEvidenceSnapshot — never rebuilds Growth Strategy. No
+  // confirmation required since this never calls a paid API.
+  @Post('artifacts/:artifactId/versions/:version/fact-validation')
+  async recheckFactValidation(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+    @Param('artifactId') artifactId: string,
+    @Param('version', ParseIntPipe) version: number,
+  ) {
+    await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
+    const versionDetail = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
+    return this.factValidationService.validateContentVersion({
       contentVersionId: versionDetail.id,
       artifactId: versionDetail.artifactId,
       organizationId,

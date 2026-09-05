@@ -1,4 +1,5 @@
 import type { ContentGenerationKind } from './content-generation.types';
+import type { ContentFactValidationSummary } from './content-fact-validation.types';
 import type { ContentGroundingSummary, ContentVersionGroundingEvidenceSnapshot } from './content-grounding.types';
 
 export type { ContentVersionGroundingEvidenceSnapshot };
@@ -103,6 +104,7 @@ export interface SavedVersionResult {
   versionId: string;
   version: number;
   grounding?: ContentGroundingSummary;
+  factValidation?: ContentFactValidationSummary;
 }
 
 export interface ContentArtifactResponse {
@@ -128,6 +130,7 @@ export interface ContentVersionSummary {
   cost?: ContentVersionCost;
   warningsCount: number;
   grounding?: ContentGroundingSummary;
+  factValidation?: ContentFactValidationSummary;
 }
 
 export interface ContentVersionDetail extends ContentVersionSummary {

@@ -41,6 +41,8 @@ import type {
   VideoScriptDraftResult,
   VideoScriptGenerationOptions,
   ArtifactWithLatestVersion,
+  ContentFactValidationResult,
+  ContentFactValidationSummary,
   ContentGroundingResult,
   ContentGroundingSummary,
   ContentVersionDetail,
@@ -278,6 +280,27 @@ function GroundingBadge({ grounding }: { grounding: ContentGroundingSummary | un
   );
 }
 
+function factValidationBadgeClass(status: ContentFactValidationSummary['status']): string {
+  if (status === 'validated') return 'quality-good';
+  if (status === 'needs_review') return 'quality-limited';
+  return 'quality-empty';
+}
+
+function factValidationBadgeLabel(status: ContentFactValidationSummary['status']): string {
+  if (status === 'validated') return 'Validated';
+  if (status === 'needs_review') return 'Review';
+  return 'Failed';
+}
+
+function FactValidationBadge({ factValidation }: { factValidation: ContentFactValidationSummary | undefined }) {
+  if (!factValidation) return null;
+  return (
+    <span className={`quality-badge ${factValidationBadgeClass(factValidation.status)}`}>
+      Fact Validation: {factValidation.score} — {factValidationBadgeLabel(factValidation.status)}
+    </span>
+  );
+}
+
 function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePath: string; artifactId: string | undefined; latestVersion: number | undefined }) {
   const [open, setOpen] = useState(false);
   const [versions, setVersions] = useState<ContentVersionSummary[] | null>(null);
@@ -291,12 +314,20 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
   const [groundingOpen, setGroundingOpen] = useState(false);
   const [groundingBusy, setGroundingBusy] = useState(false);
   const [groundingError, setGroundingError] = useState<string | null>(null);
+  const [latestFactValidation, setLatestFactValidation] = useState<ContentFactValidationSummary | undefined>(undefined);
+  const [factValidationDetail, setFactValidationDetail] = useState<ContentFactValidationResult | null>(null);
+  const [factValidationOpen, setFactValidationOpen] = useState(false);
+  const [factValidationBusy, setFactValidationBusy] = useState(false);
+  const [factValidationError, setFactValidationError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!artifactId || !latestVersion) return;
     apiRequest<ContentGroundingResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${latestVersion}/grounding`)
       .then((result) => setLatestGrounding(result ?? undefined))
       .catch(() => setLatestGrounding(undefined));
+    apiRequest<ContentFactValidationResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${latestVersion}/fact-validation`)
+      .then((result) => setLatestFactValidation(result ?? undefined))
+      .catch(() => setLatestFactValidation(undefined));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [artifactId, latestVersion]);
 
@@ -344,6 +375,51 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
     }
   }
 
+  async function loadFactValidation(version: number) {
+    if (!artifactId) return;
+    setFactValidationBusy(true);
+    setFactValidationError(null);
+    try {
+      const result = await apiRequest<ContentFactValidationResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}/fact-validation`);
+      setFactValidationDetail(result);
+    } catch (err) {
+      setFactValidationError(err instanceof ApiError ? err.message : 'Failed to load fact validation');
+    } finally {
+      setFactValidationBusy(false);
+    }
+  }
+
+  async function toggleFactValidation(version: number) {
+    if (factValidationOpen) {
+      setFactValidationOpen(false);
+      return;
+    }
+    setFactValidationOpen(true);
+    await loadFactValidation(version);
+  }
+
+  async function recheckFactValidation(version: number) {
+    if (!artifactId) return;
+    setFactValidationBusy(true);
+    setFactValidationError(null);
+    try {
+      const result = await apiRequest<ContentFactValidationResult>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}/fact-validation`, { method: 'POST' });
+      setFactValidationDetail(result);
+      setFactValidationOpen(true);
+      const summary = { status: result.status, score: result.score, reviewClaimCount: result.reviewClaimCount, failedClaimCount: result.failedClaimCount };
+      if (selected && selected.version === version) {
+        setSelected({ ...selected, factValidation: summary });
+      }
+      if (version === latestVersion) {
+        setLatestFactValidation(summary);
+      }
+    } catch (err) {
+      setFactValidationError(err instanceof ApiError ? err.message : 'Failed to recheck fact validation');
+    } finally {
+      setFactValidationBusy(false);
+    }
+  }
+
   async function toggleOpen() {
     if (!artifactId) return;
     if (open) {
@@ -371,6 +447,9 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
     setGroundingOpen(false);
     setGroundingDetail(null);
     setGroundingError(null);
+    setFactValidationOpen(false);
+    setFactValidationDetail(null);
+    setFactValidationError(null);
     try {
       const detail = await apiRequest<ContentVersionDetail>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}`);
       setSelected(detail);
@@ -399,6 +478,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
       <div className="tag-list">
         <span className="tag">v{latestVersion}</span>
         <GroundingBadge grounding={latestGrounding} />
+        <FactValidationBadge factValidation={latestFactValidation} />
         <button className="btn btn-secondary" onClick={toggleOpen}>
           {open ? 'Hide History' : 'History'}
         </button>
@@ -413,6 +493,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
                 <li key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
                   <span className="tag">v{v.version}</span>
                   <GroundingBadge grounding={v.grounding} />
+                  <FactValidationBadge factValidation={v.factValidation} />
                   <span className="entity-card-meta">{new Date(v.generatedAt).toLocaleString()}</span>
                   {v.wordCount !== undefined && <span className="entity-card-meta">{v.wordCount} words</span>}
                   {v.version === latestVersion && <span className="entity-card-meta">(latest)</span>}
@@ -429,6 +510,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
               <div className="tag-list">
                 <span className="tag">Viewing v{selected.version}</span>
                 <GroundingBadge grounding={selected.grounding} />
+                <FactValidationBadge factValidation={selected.factValidation} />
                 <button className="btn btn-secondary" onClick={() => setSelected(null)}>
                   View Latest
                 </button>
@@ -440,6 +522,12 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
                 </button>
                 <button className="btn btn-secondary" onClick={() => recheckGrounding(selected.version)} disabled={groundingBusy}>
                   {groundingBusy ? 'Rechecking...' : 'Recheck Grounding'}
+                </button>
+                <button className="btn btn-secondary" onClick={() => toggleFactValidation(selected.version)}>
+                  {factValidationOpen ? 'Hide Fact Validation' : 'View Fact Validation'}
+                </button>
+                <button className="btn btn-secondary" onClick={() => recheckFactValidation(selected.version)} disabled={factValidationBusy}>
+                  {factValidationBusy ? 'Rechecking...' : 'Recheck Facts'}
                 </button>
               </div>
               {groundingOpen && (
@@ -477,6 +565,56 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
                                 {c.evidenceRefs.length > 0 && <div className="entity-card-meta">Evidence: {c.evidenceRefs.join('; ')}</div>}
                               </li>
                             ))}
+                        </ul>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+              {factValidationOpen && (
+                <div style={{ marginTop: 8, padding: 8, background: 'var(--surface-muted, #f5f5f5)', borderRadius: 6 }}>
+                  {factValidationBusy && <Loading />}
+                  <ErrorMessage message={factValidationError} />
+                  {!factValidationBusy && !factValidationDetail && !factValidationError && <p className="entity-card-meta">No fact validation result yet.</p>}
+                  {factValidationDetail && (
+                    <>
+                      <div className="tag-list">
+                        <span className="tag">Score {factValidationDetail.score}</span>
+                        <span className="tag">Validated {factValidationDetail.validatedClaimCount}</span>
+                        <span className="tag">Review {factValidationDetail.reviewClaimCount}</span>
+                        <span className="tag">Failed {factValidationDetail.failedClaimCount}</span>
+                      </div>
+                      {factValidationDetail.warnings.length > 0 && (
+                        <div className="content-warning" style={{ marginTop: 6 }}>{factValidationDetail.warnings.join(' ')}</div>
+                      )}
+                      {factValidationDetail.claims.length > 0 && (
+                        <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0' }}>
+                          {factValidationDetail.claims
+                            .filter((c) => c.classification !== 'non_factual')
+                            .map((c) => {
+                              const highRiskInvalid = c.classification === 'invalid' && c.severity === 'high';
+                              return (
+                                <li
+                                  key={c.id}
+                                  style={{
+                                    padding: '6px 0',
+                                    borderTop: '1px solid var(--border-color, #ddd)',
+                                    color: c.classification === 'invalid' ? 'var(--error, #b00020)' : undefined,
+                                    background: highRiskInvalid ? 'var(--error-bg, #fdecea)' : undefined,
+                                  }}
+                                >
+                                  {highRiskInvalid && (
+                                    <div style={{ fontWeight: 600, color: 'var(--error, #b00020)' }}>High-risk unsupported factual claim</div>
+                                  )}
+                                  <span className="tag" style={{ marginRight: 6 }}>{c.classification}</span>
+                                  <span className="tag" style={{ marginRight: 6 }}>{c.factType}</span>
+                                  <span className="tag" style={{ marginRight: 6 }}>{c.severity}</span>
+                                  {c.text}
+                                  <div className="entity-card-meta">{c.reason}</div>
+                                  {c.evidenceRefs.length > 0 && <div className="entity-card-meta">Evidence: {c.evidenceRefs.join('; ')}</div>}
+                                </li>
+                              );
+                            })}
                         </ul>
                       )}
                     </>
