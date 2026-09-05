@@ -47,6 +47,8 @@ import type {
   ContentGroundingSummary,
   ContentSeoReviewResult,
   ContentSeoReviewSummary,
+  ContentReadabilityResult,
+  ContentReadabilitySummary,
   ContentVersionDetail,
   ContentVersionSummary,
 } from '../types';
@@ -324,6 +326,27 @@ function SeoReviewBadge({ seoReview }: { seoReview: ContentSeoReviewSummary | un
   );
 }
 
+function readabilityBadgeClass(status: ContentReadabilitySummary['status']): string {
+  if (status === 'readable') return 'quality-good';
+  if (status === 'needs_improvement') return 'quality-limited';
+  return 'quality-empty';
+}
+
+function readabilityBadgeLabel(status: ContentReadabilitySummary['status']): string {
+  if (status === 'readable') return 'Readable';
+  if (status === 'needs_improvement') return 'Improve';
+  return 'Difficult';
+}
+
+function ReadabilityBadge({ readability }: { readability: ContentReadabilitySummary | undefined }) {
+  if (!readability) return null;
+  return (
+    <span className={`quality-badge ${readabilityBadgeClass(readability.status)}`}>
+      Readability: {readability.score} — {readabilityBadgeLabel(readability.status)}
+    </span>
+  );
+}
+
 function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePath: string; artifactId: string | undefined; latestVersion: number | undefined }) {
   const [open, setOpen] = useState(false);
   const [versions, setVersions] = useState<ContentVersionSummary[] | null>(null);
@@ -347,6 +370,11 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
   const [seoReviewOpen, setSeoReviewOpen] = useState(false);
   const [seoReviewBusy, setSeoReviewBusy] = useState(false);
   const [seoReviewError, setSeoReviewError] = useState<string | null>(null);
+  const [latestReadability, setLatestReadability] = useState<ContentReadabilitySummary | undefined>(undefined);
+  const [readabilityDetail, setReadabilityDetail] = useState<ContentReadabilityResult | null>(null);
+  const [readabilityOpen, setReadabilityOpen] = useState(false);
+  const [readabilityBusy, setReadabilityBusy] = useState(false);
+  const [readabilityError, setReadabilityError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!artifactId || !latestVersion) return;
@@ -359,6 +387,9 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
     apiRequest<ContentSeoReviewResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${latestVersion}/seo-review`)
       .then((result) => setLatestSeoReview(result ?? undefined))
       .catch(() => setLatestSeoReview(undefined));
+    apiRequest<ContentReadabilityResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${latestVersion}/readability`)
+      .then((result) => setLatestReadability(result ?? undefined))
+      .catch(() => setLatestReadability(undefined));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [artifactId, latestVersion]);
 
@@ -496,6 +527,51 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
     }
   }
 
+  async function loadReadability(version: number) {
+    if (!artifactId) return;
+    setReadabilityBusy(true);
+    setReadabilityError(null);
+    try {
+      const result = await apiRequest<ContentReadabilityResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}/readability`);
+      setReadabilityDetail(result);
+    } catch (err) {
+      setReadabilityError(err instanceof ApiError ? err.message : 'Failed to load readability');
+    } finally {
+      setReadabilityBusy(false);
+    }
+  }
+
+  async function toggleReadability(version: number) {
+    if (readabilityOpen) {
+      setReadabilityOpen(false);
+      return;
+    }
+    setReadabilityOpen(true);
+    await loadReadability(version);
+  }
+
+  async function recheckReadability(version: number) {
+    if (!artifactId) return;
+    setReadabilityBusy(true);
+    setReadabilityError(null);
+    try {
+      const result = await apiRequest<ContentReadabilityResult>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}/readability`, { method: 'POST' });
+      setReadabilityDetail(result);
+      setReadabilityOpen(true);
+      const summary = { status: result.status, score: result.score, warningCount: result.warningCount, failedCount: result.failedCount };
+      if (selected && selected.version === version) {
+        setSelected({ ...selected, readability: summary });
+      }
+      if (version === latestVersion) {
+        setLatestReadability(summary);
+      }
+    } catch (err) {
+      setReadabilityError(err instanceof ApiError ? err.message : 'Failed to recheck readability');
+    } finally {
+      setReadabilityBusy(false);
+    }
+  }
+
   async function toggleOpen() {
     if (!artifactId) return;
     if (open) {
@@ -529,6 +605,9 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
     setSeoReviewOpen(false);
     setSeoReviewDetail(null);
     setSeoReviewError(null);
+    setReadabilityOpen(false);
+    setReadabilityDetail(null);
+    setReadabilityError(null);
     try {
       const detail = await apiRequest<ContentVersionDetail>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}`);
       setSelected(detail);
@@ -559,6 +638,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
         <GroundingBadge grounding={latestGrounding} />
         <FactValidationBadge factValidation={latestFactValidation} />
         <SeoReviewBadge seoReview={latestSeoReview} />
+        <ReadabilityBadge readability={latestReadability} />
         <button className="btn btn-secondary" onClick={toggleOpen}>
           {open ? 'Hide History' : 'History'}
         </button>
@@ -575,6 +655,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
                   <GroundingBadge grounding={v.grounding} />
                   <FactValidationBadge factValidation={v.factValidation} />
                   <SeoReviewBadge seoReview={v.seoReview} />
+                  <ReadabilityBadge readability={v.readability} />
                   <span className="entity-card-meta">{new Date(v.generatedAt).toLocaleString()}</span>
                   {v.wordCount !== undefined && <span className="entity-card-meta">{v.wordCount} words</span>}
                   {v.version === latestVersion && <span className="entity-card-meta">(latest)</span>}
@@ -593,6 +674,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
                 <GroundingBadge grounding={selected.grounding} />
                 <FactValidationBadge factValidation={selected.factValidation} />
                 <SeoReviewBadge seoReview={selected.seoReview} />
+                <ReadabilityBadge readability={selected.readability} />
                 <button className="btn btn-secondary" onClick={() => setSelected(null)}>
                   View Latest
                 </button>
@@ -616,6 +698,12 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
                 </button>
                 <button className="btn btn-secondary" onClick={() => recheckSeoReview(selected.version)} disabled={seoReviewBusy}>
                   {seoReviewBusy ? 'Rechecking...' : 'Recheck SEO'}
+                </button>
+                <button className="btn btn-secondary" onClick={() => toggleReadability(selected.version)}>
+                  {readabilityOpen ? 'Hide Readability' : 'View Readability'}
+                </button>
+                <button className="btn btn-secondary" onClick={() => recheckReadability(selected.version)} disabled={readabilityBusy}>
+                  {readabilityBusy ? 'Rechecking...' : 'Recheck Readability'}
                 </button>
               </div>
               {groundingOpen && (
@@ -728,6 +816,50 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
                       {seoReviewDetail.checks.length > 0 && (
                         <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0' }}>
                           {seoReviewDetail.checks
+                            .filter((c) => c.classification !== 'not_applicable')
+                            .map((c) => (
+                              <li
+                                key={c.id}
+                                style={{
+                                  padding: '6px 0',
+                                  borderTop: '1px solid var(--border-color, #ddd)',
+                                  color: c.classification === 'failed' ? 'var(--error, #b00020)' : undefined,
+                                }}
+                              >
+                                <span className="tag" style={{ marginRight: 6 }}>{c.classification}</span>
+                                <span className="tag" style={{ marginRight: 6 }}>{c.type}</span>
+                                <div className="entity-card-meta">{c.reason}</div>
+                                {c.evidence && c.evidence.length > 0 && <div className="entity-card-meta">Evidence: {c.evidence.join('; ')}</div>}
+                              </li>
+                            ))}
+                        </ul>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+              {readabilityOpen && (
+                <div style={{ marginTop: 8, padding: 8, background: 'var(--surface-muted, #f5f5f5)', borderRadius: 6 }}>
+                  {readabilityBusy && <Loading />}
+                  <ErrorMessage message={readabilityError} />
+                  {!readabilityBusy && !readabilityDetail && !readabilityError && <p className="entity-card-meta">No readability result yet.</p>}
+                  {readabilityDetail && (
+                    <>
+                      <div className="tag-list">
+                        <span className="tag">Score {readabilityDetail.score}</span>
+                        <span className="tag">Passed {readabilityDetail.passedCount}</span>
+                        <span className="tag">Warning {readabilityDetail.warningCount}</span>
+                        <span className="tag">Failed {readabilityDetail.failedCount}</span>
+                        <span className="tag">{readabilityDetail.metrics.sentenceCount} sentences</span>
+                        <span className="tag">{readabilityDetail.metrics.paragraphCount} paragraphs</span>
+                        <span className="tag">Avg {readabilityDetail.metrics.averageSentenceWords} words/sentence</span>
+                      </div>
+                      {readabilityDetail.warnings.length > 0 && (
+                        <div className="content-warning" style={{ marginTop: 6 }}>{readabilityDetail.warnings.join(' ')}</div>
+                      )}
+                      {readabilityDetail.checks.length > 0 && (
+                        <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0' }}>
+                          {readabilityDetail.checks
                             .filter((c) => c.classification !== 'not_applicable')
                             .map((c) => (
                               <li

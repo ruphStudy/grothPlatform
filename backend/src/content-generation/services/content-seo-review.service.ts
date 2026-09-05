@@ -4,7 +4,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { randomUUID } from 'crypto';
 import { Model, Types } from 'mongoose';
 import { ContentSeoReviewResult, ContentSeoReviewResultDocument } from '../schemas/content-seo-review-result.schema';
-import { matchEvidence, normalizeText, splitSentences } from '../shared/content-claim-parsing.util';
+import { findRepeatedNormalizedSentences, matchEvidence, normalizeText, splitSentences } from '../shared/content-claim-parsing.util';
 import type { ContentGenerationKind } from '../types/content-generation.types';
 import type { ContentVersionGroundingEvidenceSnapshot } from '../types/content-grounding.types';
 import type {
@@ -282,9 +282,7 @@ export class ContentSeoReviewService {
       .map((s) => normalizeText(s))
       .filter((s) => s.length > 15);
     if (sentences.length < 2) return this.check('excessive_repetition', 'passed', 'Not enough content to assess repetition.');
-    const counts = new Map<string, number>();
-    for (const s of sentences) counts.set(s, (counts.get(s) ?? 0) + 1);
-    const repeated = [...counts.entries()].filter(([, count]) => count > 1).map(([s]) => s);
+    const repeated = findRepeatedNormalizedSentences(text);
     if (repeated.length > 0) return this.check('excessive_repetition', 'failed', `Found ${repeated.length} repeated sentence(s)/paragraph(s).`, repeated.slice(0, 3));
     return this.check('excessive_repetition', 'passed', 'No significant repeated sentences or paragraphs detected.');
   }

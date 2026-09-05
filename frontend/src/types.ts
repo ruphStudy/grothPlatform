@@ -2637,6 +2637,66 @@ export interface ContentSeoReviewResult extends ContentSeoReviewSummary {
   reviewedAt: string;
 }
 
+export type ReadabilityCheckType =
+  | 'sentence_length'
+  | 'paragraph_length'
+  | 'sentence_variety'
+  | 'paragraph_structure'
+  | 'heading_support'
+  | 'list_usage'
+  | 'repetition'
+  | 'complexity'
+  | 'passive_voice'
+  | 'scannability'
+  | 'opening_clarity'
+  | 'closing_clarity'
+  | 'other';
+
+export type ReadabilityCheckClassification = 'passed' | 'warning' | 'failed' | 'not_applicable';
+
+export type ContentReadabilityStatus = 'readable' | 'needs_improvement' | 'difficult';
+
+export interface ReadabilityCheck {
+  id: string;
+  type: ReadabilityCheckType;
+  classification: ReadabilityCheckClassification;
+  score?: number;
+  reason: string;
+  evidence?: string[];
+}
+
+export interface ContentReadabilityMetrics {
+  wordCount: number;
+  sentenceCount: number;
+  paragraphCount: number;
+  averageSentenceWords: number;
+  averageParagraphWords: number;
+  longSentenceCount: number;
+  veryLongSentenceCount: number;
+  longParagraphCount: number;
+  passiveVoiceApproxCount?: number;
+}
+
+export interface ContentReadabilitySummary {
+  status: ContentReadabilityStatus;
+  score: number;
+  warningCount: number;
+  failedCount: number;
+}
+
+export interface ContentReadabilityResult extends ContentReadabilitySummary {
+  contentVersionId: string;
+  artifactId: string;
+  organizationId: string;
+  productId: string;
+  campaignId: string;
+  checks: ReadabilityCheck[];
+  passedCount: number;
+  metrics: ContentReadabilityMetrics;
+  warnings: string[];
+  reviewedAt: string;
+}
+
 export interface ContentArtifact {
   id: string;
   kind: ContentGenerationKind;
@@ -2662,6 +2722,7 @@ export interface ContentVersionSummary {
   grounding?: ContentGroundingSummary;
   factValidation?: ContentFactValidationSummary;
   seoReview?: ContentSeoReviewSummary;
+  readability?: ContentReadabilitySummary;
 }
 
 export interface ContentVersionDetail extends ContentVersionSummary {

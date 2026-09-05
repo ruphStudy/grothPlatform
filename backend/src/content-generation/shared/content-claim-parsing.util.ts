@@ -132,3 +132,15 @@ export function matchEvidence(claimText: string, evidenceItems: string[]): Match
   if (bestOverlap >= 2 && bestRatio >= 0.3) return { strength: 'partial', refs: bestItem ? [bestItem] : [] };
   return { strength: 'none', refs: [] };
 }
+
+// Shared by 16C (SEO review) and 16D (readability review): normalized
+// sentences/paragraphs that appear more than once. `minLength` filters out
+// short fragments (greetings, single-word lines) that repeat harmlessly.
+export function findRepeatedNormalizedSentences(text: string, minLength = 15): string[] {
+  const sentences = splitSentences(text)
+    .map((s) => normalizeText(s))
+    .filter((s) => s.length > minLength);
+  const counts = new Map<string, number>();
+  for (const s of sentences) counts.set(s, (counts.get(s) ?? 0) + 1);
+  return [...counts.entries()].filter(([, count]) => count > 1).map(([s]) => s);
+}

@@ -19,10 +19,12 @@ import { ContentPromptBuilderService } from './prompting/content-prompt-builder.
 import { ContentArtifact, ContentArtifactSchema } from './schemas/content-artifact.schema';
 import { ContentFactValidationResult, ContentFactValidationResultSchema } from './schemas/content-fact-validation-result.schema';
 import { ContentGroundingResult, ContentGroundingResultSchema } from './schemas/content-grounding-result.schema';
+import { ContentReadabilityResult, ContentReadabilityResultSchema } from './schemas/content-readability-result.schema';
 import { ContentSeoReviewResult, ContentSeoReviewResultSchema } from './schemas/content-seo-review-result.schema';
 import { ContentVersion, ContentVersionSchema } from './schemas/content-version.schema';
 import { ContentFactValidationService } from './services/content-fact-validation.service';
 import { ContentGroundingService } from './services/content-grounding.service';
+import { ContentReadabilityService } from './services/content-readability.service';
 import { ContentSeoReviewService } from './services/content-seo-review.service';
 import { ContentVersioningService } from './services/content-versioning.service';
 
@@ -38,6 +40,7 @@ import { ContentVersioningService } from './services/content-versioning.service'
       { name: ContentGroundingResult.name, schema: ContentGroundingResultSchema },
       { name: ContentFactValidationResult.name, schema: ContentFactValidationResultSchema },
       { name: ContentSeoReviewResult.name, schema: ContentSeoReviewResultSchema },
+      { name: ContentReadabilityResult.name, schema: ContentReadabilityResultSchema },
     ]),
   ],
   controllers: [ContentGenerationController, ContentArtifactsController],
@@ -48,6 +51,7 @@ import { ContentVersioningService } from './services/content-versioning.service'
     ContentGroundingService,
     ContentFactValidationService,
     ContentSeoReviewService,
+    ContentReadabilityService,
     ContentVersioningService,
     BlogGenerationService,
     LinkedInGenerationService,
@@ -57,6 +61,14 @@ import { ContentVersioningService } from './services/content-versioning.service'
     NewsletterGenerationService,
     VideoScriptGenerationService,
   ],
-  exports: [ContentGenerationEngineService, ContentPromptBuilderService, ContentVersioningService, ContentGroundingService, ContentFactValidationService, ContentSeoReviewService],
+  exports: [
+    ContentGenerationEngineService,
+    ContentPromptBuilderService,
+    ContentVersioningService,
+    ContentGroundingService,
+    ContentFactValidationService,
+    ContentSeoReviewService,
+    ContentReadabilityService,
+  ],
 })
 export class ContentGenerationModule {}

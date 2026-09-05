@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CampaignsService } from '../campaigns/campaigns.service';
 import { ContentFactValidationService } from './services/content-fact-validation.service';
 import { ContentGroundingService } from './services/content-grounding.service';
+import { ContentReadabilityService } from './services/content-readability.service';
 import { ContentSeoReviewService } from './services/content-seo-review.service';
 import { ContentVersioningService } from './services/content-versioning.service';
 import { extractGroundableText } from './shared/content-grounding-text.util';
@@ -21,6 +22,7 @@ export class ContentArtifactsController {
     private readonly groundingService: ContentGroundingService,
     private readonly factValidationService: ContentFactValidationService,
     private readonly seoReviewService: ContentSeoReviewService,
+    private readonly readabilityService: ContentReadabilityService,
   ) {}
 
   @Get('artifacts')
@@ -219,6 +221,48 @@ export class ContentArtifactsController {
       text: extractGroundableText(versionDetail.payload),
       evidence: versionDetail.groundingEvidenceSnapshot,
       generationOptions: versionDetail.generationOptions,
+    });
+  }
+
+  // Read-only: never rebuilds Growth Strategy. Returns null (not 404) when
+  // no readability result exists yet for an otherwise-valid version.
+  @Get('artifacts/:artifactId/versions/:version/readability')
+  async getReadability(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+    @Param('artifactId') artifactId: string,
+    @Param('version', ParseIntPipe) version: number,
+  ) {
+    await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
+    const versionDetail = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
+    return this.readabilityService.getResult(versionDetail.id);
+  }
+
+  // Manual recheck: recomputes against this version's own persisted payload
+  // — never rebuilds Growth Strategy. No confirmation required since this
+  // never calls a paid API.
+  @Post('artifacts/:artifactId/versions/:version/readability')
+  async recheckReadability(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+    @Param('artifactId') artifactId: string,
+    @Param('version', ParseIntPipe) version: number,
+  ) {
+    await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
+    const versionDetail = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
+    return this.readabilityService.reviewContentVersion({
+      contentVersionId: versionDetail.id,
+      artifactId: versionDetail.artifactId,
+      organizationId,
+      productId,
+      campaignId,
+      kind: versionDetail.kind,
+      payload: versionDetail.payload,
+      text: this.readabilityService.extractReadableText(versionDetail.kind, versionDetail.payload),
     });
   }
 }
