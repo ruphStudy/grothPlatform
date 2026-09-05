@@ -31,6 +31,8 @@ import type {
   SocialCalendarItem,
   XDraftResult,
   XGenerationOptions,
+  FacebookDraftResult,
+  FacebookGenerationOptions,
 } from '../types';
 
 const CAMPAIGN_STATUSES: CampaignStatus[] = ['draft', 'planned', 'approved', 'active', 'paused', 'completed', 'archived'];
@@ -307,6 +309,10 @@ export default function CampaignDetailPage() {
   const [xBusyIds, setXBusyIds] = useState<Record<string, boolean>>({});
   const [xErrors, setXErrors] = useState<Record<string, string | null>>({});
   const [xOptionsById, setXOptionsById] = useState<Record<string, XGenerationOptions>>({});
+  const [facebookDrafts, setFacebookDrafts] = useState<Record<string, FacebookDraftResult>>({});
+  const [facebookBusyIds, setFacebookBusyIds] = useState<Record<string, boolean>>({});
+  const [facebookErrors, setFacebookErrors] = useState<Record<string, string | null>>({});
+  const [facebookOptionsById, setFacebookOptionsById] = useState<Record<string, FacebookGenerationOptions>>({});
 
   const [videoCalendar, setVideoCalendar] = useState<VideoCalendarResult | null>(null);
   const [videoCalendarBusy, setVideoCalendarBusy] = useState(false);
@@ -715,6 +721,39 @@ export default function CampaignDetailPage() {
 
   function handleCopyXThread(posts: string[]) {
     void navigator.clipboard.writeText(posts.join('\n\n'));
+  }
+
+  function getFacebookOptions(item: SocialCalendarItem): FacebookGenerationOptions {
+    return facebookOptionsById[item.id] ?? { tone: 'conversational', length: 'medium', includeCTA: !!item.suggestedCTA, includeHashtags: false, maxHashtags: 2 };
+  }
+
+  function updateFacebookOptions(item: SocialCalendarItem, patch: Partial<FacebookGenerationOptions>) {
+    setFacebookOptionsById((prev) => ({ ...prev, [item.id]: { ...getFacebookOptions(item), ...patch } }));
+  }
+
+  async function generateFacebookDraft(socialCalendarItemId: string, options?: FacebookGenerationOptions): Promise<FacebookDraftResult> {
+    return apiRequest<FacebookDraftResult>(`${basePath}/content-generation/facebook/${socialCalendarItemId}`, { method: 'POST', body: options ?? {} });
+  }
+
+  async function handleGenerateFacebookDraft(item: SocialCalendarItem, isRegenerate: boolean) {
+    if (isRegenerate) {
+      const confirmed = window.confirm('Regenerating will make another AI request and may incur additional cost. Continue?');
+      if (!confirmed) return;
+    }
+    setFacebookBusyIds((prev) => ({ ...prev, [item.id]: true }));
+    setFacebookErrors((prev) => ({ ...prev, [item.id]: null }));
+    try {
+      const result = await generateFacebookDraft(item.id, getFacebookOptions(item));
+      setFacebookDrafts((prev) => ({ ...prev, [item.id]: result }));
+    } catch (err) {
+      setFacebookErrors((prev) => ({ ...prev, [item.id]: err instanceof ApiError ? err.message : 'Failed to generate Facebook draft' }));
+    } finally {
+      setFacebookBusyIds((prev) => ({ ...prev, [item.id]: false }));
+    }
+  }
+
+  function handleCopyFacebookDraft(content: string) {
+    void navigator.clipboard.writeText(content);
   }
 
   async function handleBuildSocialCalendar() {
@@ -2562,6 +2601,98 @@ export default function CampaignDetailPage() {
                                                 </button>
                                               </>
                                             )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
+
+                                  {(() => {
+                                    const isFacebookEligible = item.platform !== 'linkedin' && item.platform !== 'instagram' && item.platform !== 'x';
+                                    if (!isFacebookEligible) return null;
+                                    const fbOptions = getFacebookOptions(item);
+                                    const draft = facebookDrafts[item.id];
+                                    return (
+                                      <div style={{ marginTop: 10 }}>
+                                        {item.platform === 'generic_social' && (
+                                          <p className="entity-card-meta">Facebook is being chosen as the generation target; this social item was planned generically.</p>
+                                        )}
+                                        <ErrorMessage message={facebookErrors[item.id] ?? null} />
+                                        {!draft && <p className="entity-card-meta">AI generation uses your configured provider and may incur usage cost.</p>}
+
+                                        <div className="form-inline">
+                                          <div className="field" style={{ marginBottom: 0 }}>
+                                            <select value={fbOptions.tone} onChange={(e) => updateFacebookOptions(item, { tone: e.target.value as FacebookGenerationOptions['tone'] })}>
+                                              <option value="professional">Professional</option>
+                                              <option value="conversational">Conversational</option>
+                                              <option value="friendly">Friendly</option>
+                                              <option value="educational">Educational</option>
+                                              <option value="thought_leadership">Thought Leadership</option>
+                                            </select>
+                                          </div>
+                                          <div className="field" style={{ marginBottom: 0 }}>
+                                            <select value={fbOptions.length} onChange={(e) => updateFacebookOptions(item, { length: e.target.value as FacebookGenerationOptions['length'] })}>
+                                              <option value="short">Short</option>
+                                              <option value="medium">Medium</option>
+                                              <option value="long">Long</option>
+                                            </select>
+                                          </div>
+                                          <label className="entity-card-meta" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <input type="checkbox" checked={!!fbOptions.includeCTA} onChange={(e) => updateFacebookOptions(item, { includeCTA: e.target.checked })} />
+                                            Include CTA
+                                          </label>
+                                          <label className="entity-card-meta" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <input type="checkbox" checked={!!fbOptions.includeHashtags} onChange={(e) => updateFacebookOptions(item, { includeHashtags: e.target.checked })} />
+                                            Include hashtags
+                                          </label>
+                                          {fbOptions.includeHashtags && (
+                                            <div className="field" style={{ marginBottom: 0 }}>
+                                              <select value={fbOptions.maxHashtags} onChange={(e) => updateFacebookOptions(item, { maxHashtags: Number(e.target.value) })}>
+                                                {[1, 2, 3, 4, 5].map((n) => (
+                                                  <option key={n} value={n}>
+                                                    Max {n} hashtag{n === 1 ? '' : 's'}
+                                                  </option>
+                                                ))}
+                                              </select>
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        <button className="btn btn-secondary" onClick={() => handleGenerateFacebookDraft(item, !!draft)} disabled={!!facebookBusyIds[item.id]}>
+                                          {facebookBusyIds[item.id] ? 'Generating draft...' : draft ? 'Regenerate Facebook' : 'Generate Facebook'}
+                                        </button>
+
+                                        {draft && (
+                                          <div style={{ marginTop: 10 }}>
+                                            <div className="tag-list">
+                                              <span className="tag">{draft.characterCount} chars</span>
+                                              <span className="tag">{draft.wordCount} words</span>
+                                              <span className="tag">{labelize(draft.tone)}</span>
+                                              <span className="tag">{labelize(draft.length)}</span>
+                                              <span className="tag">{draft.provider} / {draft.model}</span>
+                                              {draft.usage.totalTokens !== undefined && <span className="tag">{draft.usage.totalTokens} tokens</span>}
+                                              {draft.cost && <span className="tag">${draft.cost.estimated.toFixed(4)} {draft.cost.currency}</span>}
+                                              <span className="tag">Prompt {draft.promptVersion}</span>
+                                            </div>
+                                            <div className="entity-card-meta">Generated {new Date(draft.generatedAt).toLocaleString()}</div>
+                                            {draft.warnings.length > 0 && <div className="content-warning" style={{ marginTop: 6 }}>{draft.warnings.join(' ')}</div>}
+                                            <pre
+                                              style={{
+                                                marginTop: 8,
+                                                padding: 10,
+                                                whiteSpace: 'pre-wrap',
+                                                wordBreak: 'break-word',
+                                                maxHeight: 320,
+                                                overflowY: 'auto',
+                                                background: 'var(--surface-muted, #f5f5f5)',
+                                                borderRadius: 6,
+                                              }}
+                                            >
+                                              {draft.content}
+                                            </pre>
+                                            <button className="btn btn-secondary" style={{ marginTop: 6 }} onClick={() => handleCopyFacebookDraft(draft.content)}>
+                                              Copy Post
+                                            </button>
                                           </div>
                                         )}
                                       </div>

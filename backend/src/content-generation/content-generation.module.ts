@@ -4,6 +4,7 @@ import { ContentPlanningModule } from '../content-planning/content-planning.modu
 import { GrowthStrategyModule } from '../growth-strategy/growth-strategy.module';
 import { ProductsModule } from '../products/products.module';
 import { BlogGenerationService } from './adapters/blog-generation.service';
+import { FacebookGenerationService } from './adapters/facebook-generation.service';
 import { LinkedInGenerationService } from './adapters/linkedin-generation.service';
 import { XGenerationService } from './adapters/x-generation.service';
 import { ContentGenerationController } from './content-generation.controller';
@@ -14,7 +15,7 @@ import { ContentPromptBuilderService } from './prompting/content-prompt-builder.
 @Module({
   imports: [ProductsModule, CampaignsModule, GrowthStrategyModule, ContentPlanningModule],
   controllers: [ContentGenerationController],
-  providers: [ContentGenerationEngineService, OpenAiContentGenerationProvider, ContentPromptBuilderService, BlogGenerationService, LinkedInGenerationService, XGenerationService],
+  providers: [ContentGenerationEngineService, OpenAiContentGenerationProvider, ContentPromptBuilderService, BlogGenerationService, LinkedInGenerationService, XGenerationService, FacebookGenerationService],
   exports: [ContentGenerationEngineService, ContentPromptBuilderService],
 })
 export class ContentGenerationModule {}
