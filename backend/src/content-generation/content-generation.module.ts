@@ -17,7 +17,9 @@ import { ContentGenerationEngineService } from './engine/content-generation-engi
 import { OpenAiContentGenerationProvider } from './providers/openai-content-generation.provider';
 import { ContentPromptBuilderService } from './prompting/content-prompt-builder.service';
 import { ContentArtifact, ContentArtifactSchema } from './schemas/content-artifact.schema';
+import { ContentGroundingResult, ContentGroundingResultSchema } from './schemas/content-grounding-result.schema';
 import { ContentVersion, ContentVersionSchema } from './schemas/content-version.schema';
+import { ContentGroundingService } from './services/content-grounding.service';
 import { ContentVersioningService } from './services/content-versioning.service';
 
 @Module({
@@ -29,6 +31,7 @@ import { ContentVersioningService } from './services/content-versioning.service'
     MongooseModule.forFeature([
       { name: ContentArtifact.name, schema: ContentArtifactSchema },
       { name: ContentVersion.name, schema: ContentVersionSchema },
+      { name: ContentGroundingResult.name, schema: ContentGroundingResultSchema },
     ]),
   ],
   controllers: [ContentGenerationController, ContentArtifactsController],
@@ -36,6 +39,7 @@ import { ContentVersioningService } from './services/content-versioning.service'
     ContentGenerationEngineService,
     OpenAiContentGenerationProvider,
     ContentPromptBuilderService,
+    ContentGroundingService,
     ContentVersioningService,
     BlogGenerationService,
     LinkedInGenerationService,
@@ -45,6 +49,6 @@ import { ContentVersioningService } from './services/content-versioning.service'
     NewsletterGenerationService,
     VideoScriptGenerationService,
   ],
-  exports: [ContentGenerationEngineService, ContentPromptBuilderService, ContentVersioningService],
+  exports: [ContentGenerationEngineService, ContentPromptBuilderService, ContentVersioningService, ContentGroundingService],
 })
 export class ContentGenerationModule {}

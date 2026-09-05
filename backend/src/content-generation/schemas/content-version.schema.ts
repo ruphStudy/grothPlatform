@@ -212,6 +212,68 @@ export class ContentVersionSourceSnapshot {
 }
 export const ContentVersionSourceSnapshotSchema = SchemaFactory.createForClass(ContentVersionSourceSnapshot);
 
+// Denormalized evidence boundary captured at generation time — used by
+// Sprint 16A grounding so a version can be (re)grounded against the exact
+// evidence that produced it, without rebuilding Growth Strategy on read.
+// Optional: versions saved before Sprint 16A will not have this.
+@Schema({ _id: false })
+export class ContentVersionGroundingEvidenceSnapshot {
+  @Prop({ type: String })
+  productName?: string;
+
+  @Prop({ type: String })
+  productCategory?: string;
+
+  @Prop({ type: String })
+  productDescription?: string;
+
+  @Prop({ type: String })
+  valueProposition?: string;
+
+  @Prop({ type: [String], default: [] })
+  capabilities: string[];
+
+  @Prop({ type: [String], default: [] })
+  useCases: string[];
+
+  @Prop({ type: [String], default: [] })
+  differentiators: string[];
+
+  @Prop({ type: [String], default: [] })
+  pains: string[];
+
+  @Prop({ type: [String], default: [] })
+  goals: string[];
+
+  @Prop({ type: [String], default: [] })
+  objections: string[];
+
+  @Prop({ type: [String], default: [] })
+  proofPoints: string[];
+
+  @Prop({ type: [String], default: [] })
+  facts: string[];
+
+  @Prop({ type: String })
+  campaignGoal?: string;
+
+  @Prop({ type: String })
+  funnelStage?: string;
+
+  @Prop({ type: String })
+  suggestedCTA?: string;
+
+  @Prop({ type: [String], default: [] })
+  keywords: string[];
+
+  @Prop({ type: String })
+  topic?: string;
+
+  @Prop({ type: String })
+  pillar?: string;
+}
+export const ContentVersionGroundingEvidenceSnapshotSchema = SchemaFactory.createForClass(ContentVersionGroundingEvidenceSnapshot);
+
 // Immutable generation snapshot — once saved, payload/generationMetadata/
 // generationOptions/version are never updated. Only ContentArtifact's
 // latest pointers change on regeneration.
@@ -252,6 +314,9 @@ export class ContentVersion {
 
   @Prop({ type: ContentVersionSourceSnapshotSchema })
   sourceSnapshot?: ContentVersionSourceSnapshot;
+
+  @Prop({ type: ContentVersionGroundingEvidenceSnapshotSchema })
+  groundingEvidenceSnapshot?: ContentVersionGroundingEvidenceSnapshot;
 
   @Prop({ type: Types.ObjectId, ref: 'User' })
   createdBy?: Types.ObjectId;

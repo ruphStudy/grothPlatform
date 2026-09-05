@@ -1,10 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { ContentVersionPersistenceError } from '../errors/content-generation.errors';
 import { ContentArtifact, ContentArtifactDocument } from '../schemas/content-artifact.schema';
 import { ContentVersion, ContentVersionDocument } from '../schemas/content-version.schema';
+import { ContentGroundingService } from './content-grounding.service';
+import { extractGroundableText } from '../shared/content-grounding-text.util';
 import type { ContentGenerationKind } from '../types/content-generation.types';
 import type {
   ArtifactWithLatestVersion,
@@ -43,10 +45,13 @@ export interface ArtifactFilter {
  */
 @Injectable()
 export class ContentVersioningService {
+  private readonly logger = new Logger(ContentVersioningService.name);
+
   constructor(
     private readonly configService: ConfigService,
     @InjectModel(ContentArtifact.name) private readonly artifactModel: Model<ContentArtifactDocument>,
     @InjectModel(ContentVersion.name) private readonly versionModel: Model<ContentVersionDocument>,
+    private readonly groundingService: ContentGroundingService,
   ) {}
 
   async saveGeneratedVersion(input: SaveGeneratedVersionInput): Promise<SavedVersionResult> {
@@ -78,6 +83,7 @@ export class ContentVersioningService {
         generationMetadata: input.generationMetadata,
         generationOptions: input.generationOptions,
         sourceSnapshot: input.sourceSnapshot,
+        groundingEvidenceSnapshot: input.groundingEvidenceSnapshot,
         createdBy: userId,
       });
     } catch {
@@ -86,7 +92,26 @@ export class ContentVersioningService {
 
     await this.artifactModel.updateOne({ _id: artifact._id }, { $set: { latestVersionId: versionDoc._id } });
 
-    return { artifactId: artifact._id.toString(), versionId: versionDoc._id.toString(), version };
+    // Deterministic, no-paid-API grounding runs automatically after every
+    // successful save. A failure here must never discard the generated
+    // version — it's logged and surfaced as a warning instead.
+    let grounding: SavedVersionResult['grounding'];
+    try {
+      const result = await this.groundingService.analyzeContentVersion({
+        contentVersionId: versionDoc._id.toString(),
+        artifactId: artifact._id.toString(),
+        organizationId: input.organizationId,
+        productId: input.productId,
+        campaignId: input.campaignId,
+        text: extractGroundableText(input.payload),
+        evidence: input.groundingEvidenceSnapshot,
+      });
+      grounding = { status: result.status, score: result.score, unsupportedClaimCount: result.unsupportedClaimCount, uncertainClaimCount: result.uncertainClaimCount };
+    } catch (err) {
+      this.logger.warn(`contentVersionId=${versionDoc._id.toString()} kind=grounding success=false reason=${(err as Error).message}`);
+    }
+
+    return { artifactId: artifact._id.toString(), versionId: versionDoc._id.toString(), version, grounding };
   }
 
   async listArtifacts(organizationId: string, productId: string, campaignId: string, filter?: ArtifactFilter): Promise<ContentArtifactResponse[]> {
@@ -133,14 +158,18 @@ export class ContentVersioningService {
     if (options?.beforeVersion !== undefined) query.version = { $lt: options.beforeVersion };
 
     const versions = await this.versionModel.find(query).sort({ version: -1 }).limit(limit).exec();
-    return versions.map((v) => this.toVersionSummary(v));
+    const summaries = versions.map((v) => this.toVersionSummary(v));
+    const groundingByVersionId = await this.groundingService.getSummariesByVersionIds(summaries.map((s) => s.id));
+    return summaries.map((s) => ({ ...s, grounding: groundingByVersionId.get(s.id) }));
   }
 
   async getVersion(organizationId: string, productId: string, campaignId: string, artifactId: string, version: number): Promise<ContentVersionDetail> {
     const artifact = await this.getArtifactById(organizationId, productId, campaignId, artifactId);
     const versionDoc = await this.versionModel.findOne({ artifactId: artifact._id, version });
     if (!versionDoc) throw new NotFoundException('Content version not found.');
-    return this.toVersionDetail(versionDoc);
+    const detail = this.toVersionDetail(versionDoc);
+    const grounding = await this.groundingService.getSummary(detail.id);
+    return { ...detail, grounding };
   }
 
   async getLatestByCriteria(organizationId: string, productId: string, campaignId: string, kind: ContentGenerationKind, sourceType: string, sourceId: string): Promise<ArtifactWithLatestVersion | null> {
@@ -155,7 +184,9 @@ export class ContentVersioningService {
     if (!artifact || !artifact.latestVersionId) return null;
     const versionDoc = await this.versionModel.findById(artifact.latestVersionId);
     if (!versionDoc) return null;
-    return { artifact: this.toArtifactResponse(artifact), latestVersion: this.toVersionDetail(versionDoc) };
+    const detail = this.toVersionDetail(versionDoc);
+    const grounding = await this.groundingService.getSummary(detail.id);
+    return { artifact: this.toArtifactResponse(artifact), latestVersion: { ...detail, grounding } };
   }
 
   async listLatestForCampaign(organizationId: string, productId: string, campaignId: string, filter?: ArtifactFilter): Promise<ArtifactWithLatestVersion[]> {
@@ -163,10 +194,13 @@ export class ContentVersioningService {
     const latestVersionIds = artifacts.map((a) => a.latestVersionId).filter((id): id is Types.ObjectId => !!id);
     const versions = await this.versionModel.find({ _id: { $in: latestVersionIds } }).exec();
     const versionById = new Map(versions.map((v) => [v._id.toString(), v]));
+    const groundingByVersionId = await this.groundingService.getSummariesByVersionIds(versions.map((v) => v._id.toString()));
 
     return artifacts.map((artifact) => {
       const versionDoc = artifact.latestVersionId ? versionById.get(artifact.latestVersionId.toString()) : undefined;
-      return { artifact: this.toArtifactResponse(artifact), latestVersion: versionDoc ? this.toVersionDetail(versionDoc) : undefined };
+      if (!versionDoc) return { artifact: this.toArtifactResponse(artifact), latestVersion: undefined };
+      const detail = this.toVersionDetail(versionDoc);
+      return { artifact: this.toArtifactResponse(artifact), latestVersion: { ...detail, grounding: groundingByVersionId.get(detail.id) } };
     });
   }
 

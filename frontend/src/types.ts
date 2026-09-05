@@ -2489,6 +2489,58 @@ export interface ContentVersionSourceSnapshot {
   topicId?: string;
 }
 
+export interface ContentVersionGroundingEvidenceSnapshot {
+  productName?: string;
+  productCategory?: string;
+  productDescription?: string;
+  valueProposition?: string;
+  capabilities: string[];
+  useCases: string[];
+  differentiators: string[];
+  pains: string[];
+  goals: string[];
+  objections: string[];
+  proofPoints: string[];
+  facts: string[];
+  campaignGoal?: string;
+  funnelStage?: string;
+  suggestedCTA?: string;
+  keywords: string[];
+  topic?: string;
+  pillar?: string;
+}
+
+export type GroundingClaimClassification = 'supported' | 'unsupported' | 'uncertain' | 'non_factual';
+
+export type ContentGroundingStatus = 'grounded' | 'partially_grounded' | 'insufficient_evidence';
+
+export interface GroundingClaim {
+  id: string;
+  text: string;
+  classification: GroundingClaimClassification;
+  evidenceRefs: string[];
+  reason: string;
+}
+
+export interface ContentGroundingSummary {
+  status: ContentGroundingStatus;
+  score: number;
+  unsupportedClaimCount: number;
+  uncertainClaimCount: number;
+}
+
+export interface ContentGroundingResult extends ContentGroundingSummary {
+  contentVersionId: string;
+  artifactId: string;
+  organizationId: string;
+  productId: string;
+  campaignId: string;
+  claims: GroundingClaim[];
+  supportedClaimCount: number;
+  warnings: string[];
+  checkedAt: string;
+}
+
 export interface ContentArtifact {
   id: string;
   kind: ContentGenerationKind;
@@ -2511,6 +2563,7 @@ export interface ContentVersionSummary {
   characterCount?: number;
   cost?: ContentVersionCost;
   warningsCount: number;
+  grounding?: ContentGroundingSummary;
 }
 
 export interface ContentVersionDetail extends ContentVersionSummary {
@@ -2521,6 +2574,7 @@ export interface ContentVersionDetail extends ContentVersionSummary {
   generationMetadata: ContentVersionGenerationMetadata;
   generationOptions?: ContentVersionGenerationOptions;
   sourceSnapshot?: ContentVersionSourceSnapshot;
+  groundingEvidenceSnapshot?: ContentVersionGroundingEvidenceSnapshot;
   isCurrentPlanningVersion?: boolean;
 }
 

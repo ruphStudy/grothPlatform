@@ -41,6 +41,8 @@ import type {
   VideoScriptDraftResult,
   VideoScriptGenerationOptions,
   ArtifactWithLatestVersion,
+  ContentGroundingResult,
+  ContentGroundingSummary,
   ContentVersionDetail,
   ContentVersionSummary,
 } from '../types';
@@ -255,6 +257,27 @@ const REGENERATE_CONFIRM_MESSAGE = 'Regenerating will create a new version (the 
 // widget's own local state — it never replaces the live `draft` shown by
 // the panel above it, so regenerating always creates latest+1 and never
 // branches from whatever version happens to be open here.
+function groundingBadgeClass(status: ContentGroundingSummary['status']): string {
+  if (status === 'grounded') return 'quality-good';
+  if (status === 'partially_grounded') return 'quality-limited';
+  return 'quality-empty';
+}
+
+function groundingBadgeLabel(status: ContentGroundingSummary['status']): string {
+  if (status === 'grounded') return 'Grounded';
+  if (status === 'partially_grounded') return 'Partial';
+  return 'Needs Review';
+}
+
+function GroundingBadge({ grounding }: { grounding: ContentGroundingSummary | undefined }) {
+  if (!grounding) return null;
+  return (
+    <span className={`quality-badge ${groundingBadgeClass(grounding.status)}`}>
+      Grounding: {grounding.score} — {groundingBadgeLabel(grounding.status)}
+    </span>
+  );
+}
+
 function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePath: string; artifactId: string | undefined; latestVersion: number | undefined }) {
   const [open, setOpen] = useState(false);
   const [versions, setVersions] = useState<ContentVersionSummary[] | null>(null);
@@ -263,6 +286,63 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
   const [selected, setSelected] = useState<ContentVersionDetail | null>(null);
   const [selectedBusy, setSelectedBusy] = useState(false);
   const [selectedError, setSelectedError] = useState<string | null>(null);
+  const [latestGrounding, setLatestGrounding] = useState<ContentGroundingSummary | undefined>(undefined);
+  const [groundingDetail, setGroundingDetail] = useState<ContentGroundingResult | null>(null);
+  const [groundingOpen, setGroundingOpen] = useState(false);
+  const [groundingBusy, setGroundingBusy] = useState(false);
+  const [groundingError, setGroundingError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!artifactId || !latestVersion) return;
+    apiRequest<ContentGroundingResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${latestVersion}/grounding`)
+      .then((result) => setLatestGrounding(result ?? undefined))
+      .catch(() => setLatestGrounding(undefined));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [artifactId, latestVersion]);
+
+  async function loadGrounding(version: number) {
+    if (!artifactId) return;
+    setGroundingBusy(true);
+    setGroundingError(null);
+    try {
+      const result = await apiRequest<ContentGroundingResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}/grounding`);
+      setGroundingDetail(result);
+    } catch (err) {
+      setGroundingError(err instanceof ApiError ? err.message : 'Failed to load grounding');
+    } finally {
+      setGroundingBusy(false);
+    }
+  }
+
+  async function toggleGrounding(version: number) {
+    if (groundingOpen) {
+      setGroundingOpen(false);
+      return;
+    }
+    setGroundingOpen(true);
+    await loadGrounding(version);
+  }
+
+  async function recheckGrounding(version: number) {
+    if (!artifactId) return;
+    setGroundingBusy(true);
+    setGroundingError(null);
+    try {
+      const result = await apiRequest<ContentGroundingResult>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}/grounding`, { method: 'POST' });
+      setGroundingDetail(result);
+      setGroundingOpen(true);
+      if (selected && selected.version === version) {
+        setSelected({ ...selected, grounding: { status: result.status, score: result.score, unsupportedClaimCount: result.unsupportedClaimCount, uncertainClaimCount: result.uncertainClaimCount } });
+      }
+      if (version === latestVersion) {
+        setLatestGrounding({ status: result.status, score: result.score, unsupportedClaimCount: result.unsupportedClaimCount, uncertainClaimCount: result.uncertainClaimCount });
+      }
+    } catch (err) {
+      setGroundingError(err instanceof ApiError ? err.message : 'Failed to recheck grounding');
+    } finally {
+      setGroundingBusy(false);
+    }
+  }
 
   async function toggleOpen() {
     if (!artifactId) return;
@@ -288,6 +368,9 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
     if (!artifactId) return;
     setSelectedBusy(true);
     setSelectedError(null);
+    setGroundingOpen(false);
+    setGroundingDetail(null);
+    setGroundingError(null);
     try {
       const detail = await apiRequest<ContentVersionDetail>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}`);
       setSelected(detail);
@@ -315,6 +398,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
     <div style={{ marginTop: 8 }}>
       <div className="tag-list">
         <span className="tag">v{latestVersion}</span>
+        <GroundingBadge grounding={latestGrounding} />
         <button className="btn btn-secondary" onClick={toggleOpen}>
           {open ? 'Hide History' : 'History'}
         </button>
@@ -328,6 +412,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
               {versions.map((v) => (
                 <li key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
                   <span className="tag">v{v.version}</span>
+                  <GroundingBadge grounding={v.grounding} />
                   <span className="entity-card-meta">{new Date(v.generatedAt).toLocaleString()}</span>
                   {v.wordCount !== undefined && <span className="entity-card-meta">{v.wordCount} words</span>}
                   {v.version === latestVersion && <span className="entity-card-meta">(latest)</span>}
@@ -343,13 +428,61 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
             <div style={{ marginTop: 8, padding: 10, border: '1px solid var(--border-color, #ddd)', borderRadius: 6 }}>
               <div className="tag-list">
                 <span className="tag">Viewing v{selected.version}</span>
+                <GroundingBadge grounding={selected.grounding} />
                 <button className="btn btn-secondary" onClick={() => setSelected(null)}>
                   View Latest
                 </button>
                 <button className="btn btn-secondary" onClick={() => copyVersion(selected)}>
                   Copy
                 </button>
+                <button className="btn btn-secondary" onClick={() => toggleGrounding(selected.version)}>
+                  {groundingOpen ? 'Hide Grounding' : 'View Grounding'}
+                </button>
+                <button className="btn btn-secondary" onClick={() => recheckGrounding(selected.version)} disabled={groundingBusy}>
+                  {groundingBusy ? 'Rechecking...' : 'Recheck Grounding'}
+                </button>
               </div>
+              {groundingOpen && (
+                <div style={{ marginTop: 8, padding: 8, background: 'var(--surface-muted, #f5f5f5)', borderRadius: 6 }}>
+                  {groundingBusy && <Loading />}
+                  <ErrorMessage message={groundingError} />
+                  {!groundingBusy && !groundingDetail && !groundingError && <p className="entity-card-meta">No grounding result yet.</p>}
+                  {groundingDetail && (
+                    <>
+                      <div className="tag-list">
+                        <span className="tag">Score {groundingDetail.score}</span>
+                        <span className="tag">Supported {groundingDetail.supportedClaimCount}</span>
+                        <span className="tag">Unsupported {groundingDetail.unsupportedClaimCount}</span>
+                        <span className="tag">Uncertain {groundingDetail.uncertainClaimCount}</span>
+                      </div>
+                      {groundingDetail.warnings.length > 0 && (
+                        <div className="content-warning" style={{ marginTop: 6 }}>{groundingDetail.warnings.join(' ')}</div>
+                      )}
+                      {groundingDetail.claims.length > 0 && (
+                        <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0' }}>
+                          {groundingDetail.claims
+                            .filter((c) => c.classification !== 'non_factual')
+                            .map((c) => (
+                              <li
+                                key={c.id}
+                                style={{
+                                  padding: '6px 0',
+                                  borderTop: '1px solid var(--border-color, #ddd)',
+                                  color: c.classification === 'unsupported' ? 'var(--error, #b00020)' : undefined,
+                                }}
+                              >
+                                <span className="tag" style={{ marginRight: 6 }}>{c.classification}</span>
+                                {c.text}
+                                <div className="entity-card-meta">{c.reason}</div>
+                                {c.evidenceRefs.length > 0 && <div className="entity-card-meta">Evidence: {c.evidenceRefs.join('; ')}</div>}
+                              </li>
+                            ))}
+                        </ul>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
               {selected.payload.title && <p style={{ marginTop: 6 }}><strong>{selected.payload.title}</strong></p>}
               {selected.payload.subjectLine && <p>Subject: {selected.payload.subjectLine}</p>}
               {selected.payload.hook && <p>Hook: {selected.payload.hook}</p>}

@@ -1,7 +1,8 @@
 import type { CampaignAudienceChannelMapping } from '../../campaigns/types/campaign-audience-channel.types';
 import type { GrowthStrategyOverview } from '../../growth-strategy/types/growth-strategy-overview.types';
 import type { StrategySignal, StrategySignalCategory } from '../../growth-strategy/types/strategy-signal.types';
-import type { ContentPromptEvidence } from '../types/content-prompt.types';
+import type { ContentVersionGroundingEvidenceSnapshot } from '../types/content-grounding.types';
+import type { ContentPromptBuildInput, ContentPromptEvidence } from '../types/content-prompt.types';
 
 // Shared by every content-type adapter (blog, LinkedIn, and later 15E-15I):
 // maps the Growth Strategy overview's signals/messaging into prompt-safe
@@ -42,4 +43,32 @@ export function mapMessagingDirectionsFromOverview(overview: GrowthStrategyOverv
 
 export function resolveAudienceLabel(mapping: CampaignAudienceChannelMapping | undefined, id: string): string {
   return mapping?.audiences.find((a) => a.audienceSegmentId === id)?.label ?? id;
+}
+
+// Sprint 16A: denormalizes the exact evidence boundary handed to the prompt
+// so a ContentVersion can be (re)grounded later without rebuilding Growth
+// Strategy. Never includes confidence/priority scores or hypothetical
+// strategy wording — only the same evidence/content-direction fields the
+// prompt itself received.
+export function buildGroundingEvidenceSnapshot(input: ContentPromptBuildInput): ContentVersionGroundingEvidenceSnapshot {
+  return {
+    productName: input.product.name,
+    productCategory: input.product.category,
+    productDescription: input.product.shortDescription,
+    valueProposition: input.product.valueProposition,
+    capabilities: input.evidence?.capabilities ?? [],
+    useCases: input.evidence?.useCases ?? [],
+    differentiators: input.evidence?.differentiators ?? [],
+    pains: input.evidence?.pains ?? [],
+    goals: input.evidence?.goals ?? [],
+    objections: input.evidence?.objections ?? [],
+    proofPoints: input.evidence?.proofPoints ?? [],
+    facts: input.evidence?.facts ?? [],
+    campaignGoal: input.campaign?.goal,
+    funnelStage: input.campaign?.funnelStage,
+    suggestedCTA: input.content.suggestedCTA,
+    keywords: input.content.keywords ?? [],
+    topic: input.content.topic,
+    pillar: input.content.pillar,
+  };
 }

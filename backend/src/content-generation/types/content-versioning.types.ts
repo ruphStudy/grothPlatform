@@ -1,4 +1,7 @@
 import type { ContentGenerationKind } from './content-generation.types';
+import type { ContentGroundingSummary, ContentVersionGroundingEvidenceSnapshot } from './content-grounding.types';
+
+export type { ContentVersionGroundingEvidenceSnapshot };
 
 export interface ContentVersionUsage {
   inputTokens?: number;
@@ -91,6 +94,7 @@ export interface SaveGeneratedVersionInput {
   generationMetadata: ContentVersionGenerationMetadata;
   generationOptions?: ContentVersionGenerationOptions;
   sourceSnapshot?: ContentVersionSourceSnapshot;
+  groundingEvidenceSnapshot?: ContentVersionGroundingEvidenceSnapshot;
   userId?: string;
 }
 
@@ -98,6 +102,7 @@ export interface SavedVersionResult {
   artifactId: string;
   versionId: string;
   version: number;
+  grounding?: ContentGroundingSummary;
 }
 
 export interface ContentArtifactResponse {
@@ -122,6 +127,7 @@ export interface ContentVersionSummary {
   characterCount?: number;
   cost?: ContentVersionCost;
   warningsCount: number;
+  grounding?: ContentGroundingSummary;
 }
 
 export interface ContentVersionDetail extends ContentVersionSummary {
@@ -132,6 +138,7 @@ export interface ContentVersionDetail extends ContentVersionSummary {
   generationMetadata: ContentVersionGenerationMetadata;
   generationOptions?: ContentVersionGenerationOptions;
   sourceSnapshot?: ContentVersionSourceSnapshot;
+  groundingEvidenceSnapshot?: ContentVersionGroundingEvidenceSnapshot;
 }
 
 export interface ArtifactWithLatestVersion {

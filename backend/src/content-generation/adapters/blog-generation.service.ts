@@ -18,7 +18,7 @@ import { ContentPromptBuilderService } from '../prompting/content-prompt-builder
 import type { ContentPromptBuildInput } from '../types/content-prompt.types';
 import { ContentGenerationEngineService } from '../engine/content-generation-engine.service';
 import { ContentVersioningService } from '../services/content-versioning.service';
-import { mapEvidenceFromOverview, mapMessagingDirectionsFromOverview, resolveAudienceLabel } from '../shared/content-evidence-mapping.util';
+import { buildGroundingEvidenceSnapshot, mapEvidenceFromOverview, mapMessagingDirectionsFromOverview, resolveAudienceLabel } from '../shared/content-evidence-mapping.util';
 import { buildGenerationMetadata } from '../shared/content-version-mapping.util';
 import type { BlogDraftResult } from '../types/blog-generation.types';
 import type { BlogGenerationOptions } from '../types/blog-generation.types';
@@ -190,6 +190,7 @@ export class BlogGenerationService {
       generationMetadata: buildGenerationMetadata(generation, promptBuild.metadata.promptVersion, promptBuild.sourceContext, warnings),
       generationOptions: { language: options?.language, outputFormat },
       sourceSnapshot: { title: blogItem.title, type: blogItem.type, pillarId: blogItem.pillarId, topicId: blogItem.topicId },
+      groundingEvidenceSnapshot: buildGroundingEvidenceSnapshot(promptInput),
       userId,
     });
 

@@ -17,7 +17,7 @@ import { ProductsService } from '../../products/products.service';
 import { ContentGenerationEngineService } from '../engine/content-generation-engine.service';
 import { ContentPromptBuilderService } from '../prompting/content-prompt-builder.service';
 import { ContentVersioningService } from '../services/content-versioning.service';
-import { mapEvidenceFromOverview, mapMessagingDirectionsFromOverview, resolveAudienceLabel } from '../shared/content-evidence-mapping.util';
+import { buildGroundingEvidenceSnapshot, mapEvidenceFromOverview, mapMessagingDirectionsFromOverview, resolveAudienceLabel } from '../shared/content-evidence-mapping.util';
 import { buildGenerationMetadata } from '../shared/content-version-mapping.util';
 import type { ContentPromptBuildInput } from '../types/content-prompt.types';
 import type { NewsletterDraftResult, NewsletterGenerationOptions, NewsletterLength, NewsletterSourceType, NewsletterTone } from '../types/newsletter-generation.types';
@@ -274,6 +274,7 @@ export class NewsletterGenerationService {
       generationMetadata: buildGenerationMetadata(generation, promptBuild.metadata.promptVersion, promptBuild.sourceContext, warnings),
       generationOptions: { language: options?.language, tone, length, outputFormat, includeCTA: constraintsIncludeCTA, includeSubjectLine, includePreheader },
       sourceSnapshot: { title: resolvedSource.title, type: resolvedSource.type, pillarId: resolvedSource.pillarId, topicId: resolvedSource.topicId },
+      groundingEvidenceSnapshot: buildGroundingEvidenceSnapshot(promptInput),
       userId,
     });
 

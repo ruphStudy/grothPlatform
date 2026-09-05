@@ -16,7 +16,7 @@ import { ProductsService } from '../../products/products.service';
 import { ContentGenerationEngineService } from '../engine/content-generation-engine.service';
 import { ContentPromptBuilderService } from '../prompting/content-prompt-builder.service';
 import { ContentVersioningService } from '../services/content-versioning.service';
-import { mapEvidenceFromOverview, mapMessagingDirectionsFromOverview, resolveAudienceLabel } from '../shared/content-evidence-mapping.util';
+import { buildGroundingEvidenceSnapshot, mapEvidenceFromOverview, mapMessagingDirectionsFromOverview, resolveAudienceLabel } from '../shared/content-evidence-mapping.util';
 import { buildGenerationMetadata } from '../shared/content-version-mapping.util';
 import type { ContentPromptBuildInput } from '../types/content-prompt.types';
 import type { LinkedInDraftResult, LinkedInGenerationOptions, LinkedInLength, LinkedInTone } from '../types/linkedin-generation.types';
@@ -243,6 +243,7 @@ export class LinkedInGenerationService {
       generationMetadata: buildGenerationMetadata(generation, promptBuild.metadata.promptVersion, promptBuild.sourceContext, warnings),
       generationOptions: { language: options?.language, tone, length, includeCTA: constraintsIncludeCTA, includeHashtags, maxHashtags },
       sourceSnapshot: { title: socialItem.title, type: socialItem.type, pillarId: socialItem.pillarId, topicId: socialItem.topicId },
+      groundingEvidenceSnapshot: buildGroundingEvidenceSnapshot(promptInput),
       userId,
     });
 
