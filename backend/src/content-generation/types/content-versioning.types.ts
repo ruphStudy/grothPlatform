@@ -1,6 +1,7 @@
 import type { ContentGenerationKind } from './content-generation.types';
 import type { ContentFactValidationSummary } from './content-fact-validation.types';
 import type { ContentGroundingSummary, ContentVersionGroundingEvidenceSnapshot } from './content-grounding.types';
+import type { ContentSeoReviewSummary } from './content-seo-review.types';
 
 export type { ContentVersionGroundingEvidenceSnapshot };
 
@@ -105,6 +106,7 @@ export interface SavedVersionResult {
   version: number;
   grounding?: ContentGroundingSummary;
   factValidation?: ContentFactValidationSummary;
+  seoReview?: ContentSeoReviewSummary;
 }
 
 export interface ContentArtifactResponse {
@@ -131,6 +133,7 @@ export interface ContentVersionSummary {
   warningsCount: number;
   grounding?: ContentGroundingSummary;
   factValidation?: ContentFactValidationSummary;
+  seoReview?: ContentSeoReviewSummary;
 }
 
 export interface ContentVersionDetail extends ContentVersionSummary {

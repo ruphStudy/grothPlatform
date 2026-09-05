@@ -45,6 +45,8 @@ import type {
   ContentFactValidationSummary,
   ContentGroundingResult,
   ContentGroundingSummary,
+  ContentSeoReviewResult,
+  ContentSeoReviewSummary,
   ContentVersionDetail,
   ContentVersionSummary,
 } from '../types';
@@ -301,6 +303,27 @@ function FactValidationBadge({ factValidation }: { factValidation: ContentFactVa
   );
 }
 
+function seoReviewBadgeClass(status: ContentSeoReviewSummary['status']): string {
+  if (status === 'optimized') return 'quality-good';
+  if (status === 'needs_improvement') return 'quality-limited';
+  return 'quality-empty';
+}
+
+function seoReviewBadgeLabel(status: ContentSeoReviewSummary['status']): string {
+  if (status === 'optimized') return 'Optimized';
+  if (status === 'needs_improvement') return 'Improve';
+  return 'Poor';
+}
+
+function SeoReviewBadge({ seoReview }: { seoReview: ContentSeoReviewSummary | undefined }) {
+  if (!seoReview) return null;
+  return (
+    <span className={`quality-badge ${seoReviewBadgeClass(seoReview.status)}`}>
+      SEO: {seoReview.score} — {seoReviewBadgeLabel(seoReview.status)}
+    </span>
+  );
+}
+
 function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePath: string; artifactId: string | undefined; latestVersion: number | undefined }) {
   const [open, setOpen] = useState(false);
   const [versions, setVersions] = useState<ContentVersionSummary[] | null>(null);
@@ -319,6 +342,11 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
   const [factValidationOpen, setFactValidationOpen] = useState(false);
   const [factValidationBusy, setFactValidationBusy] = useState(false);
   const [factValidationError, setFactValidationError] = useState<string | null>(null);
+  const [latestSeoReview, setLatestSeoReview] = useState<ContentSeoReviewSummary | undefined>(undefined);
+  const [seoReviewDetail, setSeoReviewDetail] = useState<ContentSeoReviewResult | null>(null);
+  const [seoReviewOpen, setSeoReviewOpen] = useState(false);
+  const [seoReviewBusy, setSeoReviewBusy] = useState(false);
+  const [seoReviewError, setSeoReviewError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!artifactId || !latestVersion) return;
@@ -328,6 +356,9 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
     apiRequest<ContentFactValidationResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${latestVersion}/fact-validation`)
       .then((result) => setLatestFactValidation(result ?? undefined))
       .catch(() => setLatestFactValidation(undefined));
+    apiRequest<ContentSeoReviewResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${latestVersion}/seo-review`)
+      .then((result) => setLatestSeoReview(result ?? undefined))
+      .catch(() => setLatestSeoReview(undefined));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [artifactId, latestVersion]);
 
@@ -420,6 +451,51 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
     }
   }
 
+  async function loadSeoReview(version: number) {
+    if (!artifactId) return;
+    setSeoReviewBusy(true);
+    setSeoReviewError(null);
+    try {
+      const result = await apiRequest<ContentSeoReviewResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}/seo-review`);
+      setSeoReviewDetail(result);
+    } catch (err) {
+      setSeoReviewError(err instanceof ApiError ? err.message : 'Failed to load SEO review');
+    } finally {
+      setSeoReviewBusy(false);
+    }
+  }
+
+  async function toggleSeoReview(version: number) {
+    if (seoReviewOpen) {
+      setSeoReviewOpen(false);
+      return;
+    }
+    setSeoReviewOpen(true);
+    await loadSeoReview(version);
+  }
+
+  async function recheckSeoReview(version: number) {
+    if (!artifactId) return;
+    setSeoReviewBusy(true);
+    setSeoReviewError(null);
+    try {
+      const result = await apiRequest<ContentSeoReviewResult>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}/seo-review`, { method: 'POST' });
+      setSeoReviewDetail(result);
+      setSeoReviewOpen(true);
+      const summary = { status: result.status, score: result.score, warningCount: result.warningCount, failedCount: result.failedCount };
+      if (selected && selected.version === version) {
+        setSelected({ ...selected, seoReview: summary });
+      }
+      if (version === latestVersion) {
+        setLatestSeoReview(summary);
+      }
+    } catch (err) {
+      setSeoReviewError(err instanceof ApiError ? err.message : 'Failed to recheck SEO review');
+    } finally {
+      setSeoReviewBusy(false);
+    }
+  }
+
   async function toggleOpen() {
     if (!artifactId) return;
     if (open) {
@@ -450,6 +526,9 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
     setFactValidationOpen(false);
     setFactValidationDetail(null);
     setFactValidationError(null);
+    setSeoReviewOpen(false);
+    setSeoReviewDetail(null);
+    setSeoReviewError(null);
     try {
       const detail = await apiRequest<ContentVersionDetail>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}`);
       setSelected(detail);
@@ -479,6 +558,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
         <span className="tag">v{latestVersion}</span>
         <GroundingBadge grounding={latestGrounding} />
         <FactValidationBadge factValidation={latestFactValidation} />
+        <SeoReviewBadge seoReview={latestSeoReview} />
         <button className="btn btn-secondary" onClick={toggleOpen}>
           {open ? 'Hide History' : 'History'}
         </button>
@@ -494,6 +574,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
                   <span className="tag">v{v.version}</span>
                   <GroundingBadge grounding={v.grounding} />
                   <FactValidationBadge factValidation={v.factValidation} />
+                  <SeoReviewBadge seoReview={v.seoReview} />
                   <span className="entity-card-meta">{new Date(v.generatedAt).toLocaleString()}</span>
                   {v.wordCount !== undefined && <span className="entity-card-meta">{v.wordCount} words</span>}
                   {v.version === latestVersion && <span className="entity-card-meta">(latest)</span>}
@@ -511,6 +592,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
                 <span className="tag">Viewing v{selected.version}</span>
                 <GroundingBadge grounding={selected.grounding} />
                 <FactValidationBadge factValidation={selected.factValidation} />
+                <SeoReviewBadge seoReview={selected.seoReview} />
                 <button className="btn btn-secondary" onClick={() => setSelected(null)}>
                   View Latest
                 </button>
@@ -528,6 +610,12 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
                 </button>
                 <button className="btn btn-secondary" onClick={() => recheckFactValidation(selected.version)} disabled={factValidationBusy}>
                   {factValidationBusy ? 'Rechecking...' : 'Recheck Facts'}
+                </button>
+                <button className="btn btn-secondary" onClick={() => toggleSeoReview(selected.version)}>
+                  {seoReviewOpen ? 'Hide SEO Review' : 'View SEO Review'}
+                </button>
+                <button className="btn btn-secondary" onClick={() => recheckSeoReview(selected.version)} disabled={seoReviewBusy}>
+                  {seoReviewBusy ? 'Rechecking...' : 'Recheck SEO'}
                 </button>
               </div>
               {groundingOpen && (
@@ -615,6 +703,47 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion }: { basePa
                                 </li>
                               );
                             })}
+                        </ul>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+              {seoReviewOpen && (
+                <div style={{ marginTop: 8, padding: 8, background: 'var(--surface-muted, #f5f5f5)', borderRadius: 6 }}>
+                  {seoReviewBusy && <Loading />}
+                  <ErrorMessage message={seoReviewError} />
+                  {!seoReviewBusy && !seoReviewDetail && !seoReviewError && <p className="entity-card-meta">No SEO review result yet.</p>}
+                  {seoReviewDetail && (
+                    <>
+                      <div className="tag-list">
+                        <span className="tag">Score {seoReviewDetail.score}</span>
+                        <span className="tag">Passed {seoReviewDetail.passedCount}</span>
+                        <span className="tag">Warning {seoReviewDetail.warningCount}</span>
+                        <span className="tag">Failed {seoReviewDetail.failedCount}</span>
+                      </div>
+                      {seoReviewDetail.warnings.length > 0 && (
+                        <div className="content-warning" style={{ marginTop: 6 }}>{seoReviewDetail.warnings.join(' ')}</div>
+                      )}
+                      {seoReviewDetail.checks.length > 0 && (
+                        <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0' }}>
+                          {seoReviewDetail.checks
+                            .filter((c) => c.classification !== 'not_applicable')
+                            .map((c) => (
+                              <li
+                                key={c.id}
+                                style={{
+                                  padding: '6px 0',
+                                  borderTop: '1px solid var(--border-color, #ddd)',
+                                  color: c.classification === 'failed' ? 'var(--error, #b00020)' : undefined,
+                                }}
+                              >
+                                <span className="tag" style={{ marginRight: 6 }}>{c.classification}</span>
+                                <span className="tag" style={{ marginRight: 6 }}>{c.type}</span>
+                                <div className="entity-card-meta">{c.reason}</div>
+                                {c.evidence && c.evidence.length > 0 && <div className="entity-card-meta">Evidence: {c.evidence.join('; ')}</div>}
+                              </li>
+                            ))}
                         </ul>
                       )}
                     </>

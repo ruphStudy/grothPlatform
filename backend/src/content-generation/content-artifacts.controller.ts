@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CampaignsService } from '../campaigns/campaigns.service';
 import { ContentFactValidationService } from './services/content-fact-validation.service';
 import { ContentGroundingService } from './services/content-grounding.service';
+import { ContentSeoReviewService } from './services/content-seo-review.service';
 import { ContentVersioningService } from './services/content-versioning.service';
 import { extractGroundableText } from './shared/content-grounding-text.util';
 
@@ -19,6 +20,7 @@ export class ContentArtifactsController {
     private readonly versioningService: ContentVersioningService,
     private readonly groundingService: ContentGroundingService,
     private readonly factValidationService: ContentFactValidationService,
+    private readonly seoReviewService: ContentSeoReviewService,
   ) {}
 
   @Get('artifacts')
@@ -173,6 +175,50 @@ export class ContentArtifactsController {
       campaignId,
       text: extractGroundableText(versionDetail.payload),
       evidence: versionDetail.groundingEvidenceSnapshot,
+    });
+  }
+
+  // Read-only: never rebuilds Growth Strategy. Returns null (not 404) when
+  // no SEO review result exists yet for an otherwise-valid version.
+  @Get('artifacts/:artifactId/versions/:version/seo-review')
+  async getSeoReview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+    @Param('artifactId') artifactId: string,
+    @Param('version', ParseIntPipe) version: number,
+  ) {
+    await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
+    const versionDetail = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
+    return this.seoReviewService.getResult(versionDetail.id);
+  }
+
+  // Manual recheck: recomputes against this version's own persisted
+  // groundingEvidenceSnapshot — never rebuilds Growth Strategy. No
+  // confirmation required since this never calls a paid API.
+  @Post('artifacts/:artifactId/versions/:version/seo-review')
+  async recheckSeoReview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+    @Param('artifactId') artifactId: string,
+    @Param('version', ParseIntPipe) version: number,
+  ) {
+    await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
+    const versionDetail = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
+    return this.seoReviewService.reviewContentVersion({
+      contentVersionId: versionDetail.id,
+      artifactId: versionDetail.artifactId,
+      organizationId,
+      productId,
+      campaignId,
+      kind: versionDetail.kind,
+      payload: versionDetail.payload,
+      text: extractGroundableText(versionDetail.payload),
+      evidence: versionDetail.groundingEvidenceSnapshot,
+      generationOptions: versionDetail.generationOptions,
     });
   }
 }

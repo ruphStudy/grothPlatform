@@ -7,6 +7,7 @@ import { ContentArtifact, ContentArtifactDocument } from '../schemas/content-art
 import { ContentVersion, ContentVersionDocument } from '../schemas/content-version.schema';
 import { ContentFactValidationService } from './content-fact-validation.service';
 import { ContentGroundingService } from './content-grounding.service';
+import { ContentSeoReviewService } from './content-seo-review.service';
 import { extractGroundableText } from '../shared/content-grounding-text.util';
 import type { ContentGenerationKind } from '../types/content-generation.types';
 import type {
@@ -54,6 +55,7 @@ export class ContentVersioningService {
     @InjectModel(ContentVersion.name) private readonly versionModel: Model<ContentVersionDocument>,
     private readonly groundingService: ContentGroundingService,
     private readonly factValidationService: ContentFactValidationService,
+    private readonly seoReviewService: ContentSeoReviewService,
   ) {}
 
   async saveGeneratedVersion(input: SaveGeneratedVersionInput): Promise<SavedVersionResult> {
@@ -131,7 +133,28 @@ export class ContentVersioningService {
       this.logger.warn(`contentVersionId=${versionDoc._id.toString()} kind=fact_validation success=false reason=${(err as Error).message}`);
     }
 
-    return { artifactId: artifact._id.toString(), versionId: versionDoc._id.toString(), version, grounding, factValidation };
+    // Same no-paid-API guarantee: a failure here must never discard the
+    // generated version.
+    let seoReview: SavedVersionResult['seoReview'];
+    try {
+      const result = await this.seoReviewService.reviewContentVersion({
+        contentVersionId: versionDoc._id.toString(),
+        artifactId: artifact._id.toString(),
+        organizationId: input.organizationId,
+        productId: input.productId,
+        campaignId: input.campaignId,
+        kind: input.kind,
+        payload: input.payload,
+        text: extractGroundableText(input.payload),
+        evidence: input.groundingEvidenceSnapshot,
+        generationOptions: input.generationOptions,
+      });
+      seoReview = { status: result.status, score: result.score, warningCount: result.warningCount, failedCount: result.failedCount };
+    } catch (err) {
+      this.logger.warn(`contentVersionId=${versionDoc._id.toString()} kind=seo_review success=false reason=${(err as Error).message}`);
+    }
+
+    return { artifactId: artifact._id.toString(), versionId: versionDoc._id.toString(), version, grounding, factValidation, seoReview };
   }
 
   async listArtifacts(organizationId: string, productId: string, campaignId: string, filter?: ArtifactFilter): Promise<ContentArtifactResponse[]> {
@@ -180,11 +203,12 @@ export class ContentVersioningService {
     const versions = await this.versionModel.find(query).sort({ version: -1 }).limit(limit).exec();
     const summaries = versions.map((v) => this.toVersionSummary(v));
     const versionIds = summaries.map((s) => s.id);
-    const [groundingByVersionId, factValidationByVersionId] = await Promise.all([
+    const [groundingByVersionId, factValidationByVersionId, seoReviewByVersionId] = await Promise.all([
       this.groundingService.getSummariesByVersionIds(versionIds),
       this.factValidationService.getSummariesByVersionIds(versionIds),
+      this.seoReviewService.getSummariesByVersionIds(versionIds),
     ]);
-    return summaries.map((s) => ({ ...s, grounding: groundingByVersionId.get(s.id), factValidation: factValidationByVersionId.get(s.id) }));
+    return summaries.map((s) => ({ ...s, grounding: groundingByVersionId.get(s.id), factValidation: factValidationByVersionId.get(s.id), seoReview: seoReviewByVersionId.get(s.id) }));
   }
 
   async getVersion(organizationId: string, productId: string, campaignId: string, artifactId: string, version: number): Promise<ContentVersionDetail> {
@@ -192,8 +216,12 @@ export class ContentVersioningService {
     const versionDoc = await this.versionModel.findOne({ artifactId: artifact._id, version });
     if (!versionDoc) throw new NotFoundException('Content version not found.');
     const detail = this.toVersionDetail(versionDoc);
-    const [grounding, factValidation] = await Promise.all([this.groundingService.getSummary(detail.id), this.factValidationService.getSummary(detail.id)]);
-    return { ...detail, grounding, factValidation };
+    const [grounding, factValidation, seoReview] = await Promise.all([
+      this.groundingService.getSummary(detail.id),
+      this.factValidationService.getSummary(detail.id),
+      this.seoReviewService.getSummary(detail.id),
+    ]);
+    return { ...detail, grounding, factValidation, seoReview };
   }
 
   async getLatestByCriteria(organizationId: string, productId: string, campaignId: string, kind: ContentGenerationKind, sourceType: string, sourceId: string): Promise<ArtifactWithLatestVersion | null> {
@@ -209,8 +237,12 @@ export class ContentVersioningService {
     const versionDoc = await this.versionModel.findById(artifact.latestVersionId);
     if (!versionDoc) return null;
     const detail = this.toVersionDetail(versionDoc);
-    const [grounding, factValidation] = await Promise.all([this.groundingService.getSummary(detail.id), this.factValidationService.getSummary(detail.id)]);
-    return { artifact: this.toArtifactResponse(artifact), latestVersion: { ...detail, grounding, factValidation } };
+    const [grounding, factValidation, seoReview] = await Promise.all([
+      this.groundingService.getSummary(detail.id),
+      this.factValidationService.getSummary(detail.id),
+      this.seoReviewService.getSummary(detail.id),
+    ]);
+    return { artifact: this.toArtifactResponse(artifact), latestVersion: { ...detail, grounding, factValidation, seoReview } };
   }
 
   async listLatestForCampaign(organizationId: string, productId: string, campaignId: string, filter?: ArtifactFilter): Promise<ArtifactWithLatestVersion[]> {
@@ -219,16 +251,20 @@ export class ContentVersioningService {
     const versions = await this.versionModel.find({ _id: { $in: latestVersionIds } }).exec();
     const versionById = new Map(versions.map((v) => [v._id.toString(), v]));
     const versionIds = versions.map((v) => v._id.toString());
-    const [groundingByVersionId, factValidationByVersionId] = await Promise.all([
+    const [groundingByVersionId, factValidationByVersionId, seoReviewByVersionId] = await Promise.all([
       this.groundingService.getSummariesByVersionIds(versionIds),
       this.factValidationService.getSummariesByVersionIds(versionIds),
+      this.seoReviewService.getSummariesByVersionIds(versionIds),
     ]);
 
     return artifacts.map((artifact) => {
       const versionDoc = artifact.latestVersionId ? versionById.get(artifact.latestVersionId.toString()) : undefined;
       if (!versionDoc) return { artifact: this.toArtifactResponse(artifact), latestVersion: undefined };
       const detail = this.toVersionDetail(versionDoc);
-      return { artifact: this.toArtifactResponse(artifact), latestVersion: { ...detail, grounding: groundingByVersionId.get(detail.id), factValidation: factValidationByVersionId.get(detail.id) } };
+      return {
+        artifact: this.toArtifactResponse(artifact),
+        latestVersion: { ...detail, grounding: groundingByVersionId.get(detail.id), factValidation: factValidationByVersionId.get(detail.id), seoReview: seoReviewByVersionId.get(detail.id) },
+      };
     });
   }
 

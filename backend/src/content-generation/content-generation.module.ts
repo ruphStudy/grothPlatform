@@ -19,9 +19,11 @@ import { ContentPromptBuilderService } from './prompting/content-prompt-builder.
 import { ContentArtifact, ContentArtifactSchema } from './schemas/content-artifact.schema';
 import { ContentFactValidationResult, ContentFactValidationResultSchema } from './schemas/content-fact-validation-result.schema';
 import { ContentGroundingResult, ContentGroundingResultSchema } from './schemas/content-grounding-result.schema';
+import { ContentSeoReviewResult, ContentSeoReviewResultSchema } from './schemas/content-seo-review-result.schema';
 import { ContentVersion, ContentVersionSchema } from './schemas/content-version.schema';
 import { ContentFactValidationService } from './services/content-fact-validation.service';
 import { ContentGroundingService } from './services/content-grounding.service';
+import { ContentSeoReviewService } from './services/content-seo-review.service';
 import { ContentVersioningService } from './services/content-versioning.service';
 
 @Module({
@@ -35,6 +37,7 @@ import { ContentVersioningService } from './services/content-versioning.service'
       { name: ContentVersion.name, schema: ContentVersionSchema },
       { name: ContentGroundingResult.name, schema: ContentGroundingResultSchema },
       { name: ContentFactValidationResult.name, schema: ContentFactValidationResultSchema },
+      { name: ContentSeoReviewResult.name, schema: ContentSeoReviewResultSchema },
     ]),
   ],
   controllers: [ContentGenerationController, ContentArtifactsController],
@@ -44,6 +47,7 @@ import { ContentVersioningService } from './services/content-versioning.service'
     ContentPromptBuilderService,
     ContentGroundingService,
     ContentFactValidationService,
+    ContentSeoReviewService,
     ContentVersioningService,
     BlogGenerationService,
     LinkedInGenerationService,
@@ -53,6 +57,6 @@ import { ContentVersioningService } from './services/content-versioning.service'
     NewsletterGenerationService,
     VideoScriptGenerationService,
   ],
-  exports: [ContentGenerationEngineService, ContentPromptBuilderService, ContentVersioningService, ContentGroundingService, ContentFactValidationService],
+  exports: [ContentGenerationEngineService, ContentPromptBuilderService, ContentVersioningService, ContentGroundingService, ContentFactValidationService, ContentSeoReviewService],
 })
 export class ContentGenerationModule {}

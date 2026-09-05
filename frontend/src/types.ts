@@ -2590,6 +2590,53 @@ export interface ContentFactValidationResult extends ContentFactValidationSummar
   validatedAt: string;
 }
 
+export type SeoReviewCheckType =
+  | 'title'
+  | 'keyword_usage'
+  | 'keyword_stuffing'
+  | 'heading_structure'
+  | 'introduction'
+  | 'content_depth'
+  | 'topic_alignment'
+  | 'funnel_alignment'
+  | 'cta_alignment'
+  | 'duplicate_heading'
+  | 'excessive_repetition'
+  | 'metadata_readiness'
+  | 'other';
+
+export type SeoReviewCheckClassification = 'passed' | 'warning' | 'failed' | 'not_applicable';
+
+export type ContentSeoReviewStatus = 'optimized' | 'needs_improvement' | 'poor';
+
+export interface SeoReviewCheck {
+  id: string;
+  type: SeoReviewCheckType;
+  classification: SeoReviewCheckClassification;
+  score?: number;
+  reason: string;
+  evidence?: string[];
+}
+
+export interface ContentSeoReviewSummary {
+  status: ContentSeoReviewStatus;
+  score: number;
+  warningCount: number;
+  failedCount: number;
+}
+
+export interface ContentSeoReviewResult extends ContentSeoReviewSummary {
+  contentVersionId: string;
+  artifactId: string;
+  organizationId: string;
+  productId: string;
+  campaignId: string;
+  checks: SeoReviewCheck[];
+  passedCount: number;
+  warnings: string[];
+  reviewedAt: string;
+}
+
 export interface ContentArtifact {
   id: string;
   kind: ContentGenerationKind;
@@ -2614,6 +2661,7 @@ export interface ContentVersionSummary {
   warningsCount: number;
   grounding?: ContentGroundingSummary;
   factValidation?: ContentFactValidationSummary;
+  seoReview?: ContentSeoReviewSummary;
 }
 
 export interface ContentVersionDetail extends ContentVersionSummary {
