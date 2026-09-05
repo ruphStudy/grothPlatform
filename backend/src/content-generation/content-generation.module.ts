@@ -8,6 +8,7 @@ import { FacebookGenerationService } from './adapters/facebook-generation.servic
 import { InstagramGenerationService } from './adapters/instagram-generation.service';
 import { LinkedInGenerationService } from './adapters/linkedin-generation.service';
 import { NewsletterGenerationService } from './adapters/newsletter-generation.service';
+import { VideoScriptGenerationService } from './adapters/video-script-generation.service';
 import { XGenerationService } from './adapters/x-generation.service';
 import { ContentGenerationController } from './content-generation.controller';
 import { ContentGenerationEngineService } from './engine/content-generation-engine.service';
@@ -27,6 +28,7 @@ import { ContentPromptBuilderService } from './prompting/content-prompt-builder.
     FacebookGenerationService,
     InstagramGenerationService,
     NewsletterGenerationService,
+    VideoScriptGenerationService,
   ],
   exports: [ContentGenerationEngineService, ContentPromptBuilderService],
 })

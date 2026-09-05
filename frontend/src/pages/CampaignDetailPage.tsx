@@ -38,6 +38,8 @@ import type {
   NewsletterDraftResult,
   NewsletterGenerationOptions,
   NewsletterSourceType,
+  VideoScriptDraftResult,
+  VideoScriptGenerationOptions,
 } from '../types';
 
 const CAMPAIGN_STATUSES: CampaignStatus[] = ['draft', 'planned', 'approved', 'active', 'paused', 'completed', 'archived'];
@@ -461,6 +463,10 @@ export default function CampaignDetailPage() {
   const [newsletterBusyKeys, setNewsletterBusyKeys] = useState<Record<string, boolean>>({});
   const [newsletterErrors, setNewsletterErrors] = useState<Record<string, string | null>>({});
   const [newsletterOptionsByKey, setNewsletterOptionsByKey] = useState<Record<string, NewsletterGenerationOptions>>({});
+  const [videoScripts, setVideoScripts] = useState<Record<string, VideoScriptDraftResult>>({});
+  const [videoScriptBusyIds, setVideoScriptBusyIds] = useState<Record<string, boolean>>({});
+  const [videoScriptErrors, setVideoScriptErrors] = useState<Record<string, string | null>>({});
+  const [videoScriptOptionsById, setVideoScriptOptionsById] = useState<Record<string, VideoScriptGenerationOptions>>({});
 
   const [videoCalendar, setVideoCalendar] = useState<VideoCalendarResult | null>(null);
   const [videoCalendarBusy, setVideoCalendarBusy] = useState(false);
@@ -1003,6 +1009,47 @@ export default function CampaignDetailPage() {
     parts.push('');
     parts.push(draft.content);
     void navigator.clipboard.writeText(parts.join('\n'));
+  }
+
+  function getVideoScriptOptions(itemId: string): VideoScriptGenerationOptions {
+    return videoScriptOptionsById[itemId] ?? { tone: 'conversational', duration: 'medium', includeHook: true, includeSceneDirections: true, includeCTA: undefined, outputFormat: 'markdown' };
+  }
+
+  function updateVideoScriptOptions(itemId: string, patch: Partial<VideoScriptGenerationOptions>) {
+    setVideoScriptOptionsById((prev) => ({ ...prev, [itemId]: { ...getVideoScriptOptions(itemId), ...patch } }));
+  }
+
+  async function generateVideoScript(videoCalendarItemId: string, options?: VideoScriptGenerationOptions): Promise<VideoScriptDraftResult> {
+    return apiRequest<VideoScriptDraftResult>(`${basePath}/content-generation/video-script/${videoCalendarItemId}`, { method: 'POST', body: options ?? {} });
+  }
+
+  async function handleGenerateVideoScript(itemId: string, isRegenerate: boolean) {
+    if (isRegenerate) {
+      const confirmed = window.confirm('Regenerating will make another AI request and may incur additional cost. Continue?');
+      if (!confirmed) return;
+    }
+    setVideoScriptBusyIds((prev) => ({ ...prev, [itemId]: true }));
+    setVideoScriptErrors((prev) => ({ ...prev, [itemId]: null }));
+    try {
+      const result = await generateVideoScript(itemId, getVideoScriptOptions(itemId));
+      setVideoScripts((prev) => ({ ...prev, [itemId]: result }));
+    } catch (err) {
+      setVideoScriptErrors((prev) => ({ ...prev, [itemId]: err instanceof ApiError ? err.message : 'Failed to generate video script' }));
+    } finally {
+      setVideoScriptBusyIds((prev) => ({ ...prev, [itemId]: false }));
+    }
+  }
+
+  function narrationOnly(draft: VideoScriptDraftResult): string {
+    return draft.scenes && draft.scenes.length > 0 ? draft.scenes.map((s) => s.narration).join('\n\n') : draft.script;
+  }
+
+  function handleCopyVideoScript(draft: VideoScriptDraftResult) {
+    void navigator.clipboard.writeText(draft.script);
+  }
+
+  function handleCopyVideoNarrationOnly(draft: VideoScriptDraftResult) {
+    void navigator.clipboard.writeText(narrationOnly(draft));
   }
 
   async function handleBuildSocialCalendar() {
@@ -3283,6 +3330,126 @@ export default function CampaignDetailPage() {
                                       {item.warnings.length > 0 && <div className="content-warning" style={{ marginTop: 8 }}>{item.warnings.join(' ')}</div>}
                                     </div>
                                   </details>
+
+                                  {(() => {
+                                    const draft = videoScripts[item.id];
+                                    const scriptOptions = getVideoScriptOptions(item.id);
+                                    return (
+                                      <div style={{ marginTop: 10 }}>
+                                        <ErrorMessage message={videoScriptErrors[item.id] ?? null} />
+                                        {!draft && <p className="entity-card-meta">AI generation uses your configured provider and may incur usage cost.</p>}
+
+                                        <div className="form-inline">
+                                          <div className="field" style={{ marginBottom: 0 }}>
+                                            <select value={scriptOptions.tone} onChange={(e) => updateVideoScriptOptions(item.id, { tone: e.target.value as VideoScriptGenerationOptions['tone'] })}>
+                                              <option value="professional">Professional</option>
+                                              <option value="conversational">Conversational</option>
+                                              <option value="educational">Educational</option>
+                                              <option value="energetic">Energetic</option>
+                                              <option value="thought_leadership">Thought Leadership</option>
+                                            </select>
+                                          </div>
+                                          <div className="field" style={{ marginBottom: 0 }}>
+                                            <select value={scriptOptions.duration} onChange={(e) => updateVideoScriptOptions(item.id, { duration: e.target.value as VideoScriptGenerationOptions['duration'] })}>
+                                              <option value="short">Short</option>
+                                              <option value="medium">Medium</option>
+                                              <option value="long">Long</option>
+                                            </select>
+                                          </div>
+                                          <div className="field" style={{ marginBottom: 0 }}>
+                                            <select
+                                              value={scriptOptions.outputFormat}
+                                              onChange={(e) => updateVideoScriptOptions(item.id, { outputFormat: e.target.value as VideoScriptGenerationOptions['outputFormat'] })}
+                                            >
+                                              <option value="markdown">Markdown</option>
+                                              <option value="plain_text">Plain Text</option>
+                                            </select>
+                                          </div>
+                                          <label className="entity-card-meta" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <input type="checkbox" checked={!!scriptOptions.includeHook} onChange={(e) => updateVideoScriptOptions(item.id, { includeHook: e.target.checked })} />
+                                            Include hook
+                                          </label>
+                                          <label className="entity-card-meta" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <input
+                                              type="checkbox"
+                                              checked={!!scriptOptions.includeSceneDirections}
+                                              onChange={(e) => updateVideoScriptOptions(item.id, { includeSceneDirections: e.target.checked })}
+                                            />
+                                            Include scene directions
+                                          </label>
+                                          <label className="entity-card-meta" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <input type="checkbox" checked={!!scriptOptions.includeCTA} onChange={(e) => updateVideoScriptOptions(item.id, { includeCTA: e.target.checked })} />
+                                            Include CTA
+                                          </label>
+                                        </div>
+
+                                        <button className="btn btn-secondary" onClick={() => handleGenerateVideoScript(item.id, !!draft)} disabled={!!videoScriptBusyIds[item.id]}>
+                                          {videoScriptBusyIds[item.id] ? 'Generating script...' : draft ? 'Regenerate Script' : 'Generate Script'}
+                                        </button>
+
+                                        {draft && (
+                                          <div style={{ marginTop: 10 }}>
+                                            <div className="tag-list">
+                                              <span className="tag">{draft.estimatedWordCount} words</span>
+                                              <span className="tag">~{draft.estimatedDurationSeconds}s</span>
+                                              <span className="tag">{labelize(draft.tone)}</span>
+                                              <span className="tag">{labelize(draft.duration)}</span>
+                                              <span className="tag">{draft.provider} / {draft.model}</span>
+                                              {draft.usage.totalTokens !== undefined && <span className="tag">{draft.usage.totalTokens} tokens</span>}
+                                              {draft.cost && <span className="tag">${draft.cost.estimated.toFixed(4)} {draft.cost.currency}</span>}
+                                              <span className="tag">Prompt {draft.promptVersion}</span>
+                                            </div>
+                                            <div className="entity-card-meta">Generated {new Date(draft.generatedAt).toLocaleString()}</div>
+                                            {draft.warnings.length > 0 && <div className="content-warning" style={{ marginTop: 6 }}>{draft.warnings.join(' ')}</div>}
+
+                                            <span className="summary-label" style={{ marginTop: 8, display: 'block' }}>
+                                              {draft.title}
+                                            </span>
+                                            {draft.hook && (
+                                              <>
+                                                <span className="summary-label">Hook</span>
+                                                <p>{draft.hook}</p>
+                                              </>
+                                            )}
+
+                                            {draft.scenes && draft.scenes.length > 0 ? (
+                                              draft.scenes.map((scene) => (
+                                                <div key={scene.order} style={{ marginTop: 8 }}>
+                                                  <span className="summary-label">Scene {scene.order}</span>
+                                                  <p>{scene.narration}</p>
+                                                  {scene.visualDirection && <div className="entity-card-meta">Visual: {scene.visualDirection}</div>}
+                                                </div>
+                                              ))
+                                            ) : (
+                                              <pre
+                                                style={{
+                                                  marginTop: 8,
+                                                  padding: 10,
+                                                  whiteSpace: 'pre-wrap',
+                                                  wordBreak: 'break-word',
+                                                  maxHeight: 320,
+                                                  overflowY: 'auto',
+                                                  background: 'var(--surface-muted, #f5f5f5)',
+                                                  borderRadius: 6,
+                                                }}
+                                              >
+                                                {draft.script}
+                                              </pre>
+                                            )}
+
+                                            <div className="tag-list" style={{ marginTop: 6 }}>
+                                              <button className="btn btn-secondary" onClick={() => handleCopyVideoScript(draft)}>
+                                                Copy Script
+                                              </button>
+                                              <button className="btn btn-secondary" onClick={() => handleCopyVideoNarrationOnly(draft)}>
+                                                Copy Narration Only
+                                              </button>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               </div>
                             );
