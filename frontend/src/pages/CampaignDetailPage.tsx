@@ -33,6 +33,8 @@ import type {
   XGenerationOptions,
   FacebookDraftResult,
   FacebookGenerationOptions,
+  InstagramCaptionResult,
+  InstagramGenerationOptions,
 } from '../types';
 
 const CAMPAIGN_STATUSES: CampaignStatus[] = ['draft', 'planned', 'approved', 'active', 'paused', 'completed', 'archived'];
@@ -313,6 +315,10 @@ export default function CampaignDetailPage() {
   const [facebookBusyIds, setFacebookBusyIds] = useState<Record<string, boolean>>({});
   const [facebookErrors, setFacebookErrors] = useState<Record<string, string | null>>({});
   const [facebookOptionsById, setFacebookOptionsById] = useState<Record<string, FacebookGenerationOptions>>({});
+  const [instagramCaptions, setInstagramCaptions] = useState<Record<string, InstagramCaptionResult>>({});
+  const [instagramBusyIds, setInstagramBusyIds] = useState<Record<string, boolean>>({});
+  const [instagramErrors, setInstagramErrors] = useState<Record<string, string | null>>({});
+  const [instagramOptionsById, setInstagramOptionsById] = useState<Record<string, InstagramGenerationOptions>>({});
 
   const [videoCalendar, setVideoCalendar] = useState<VideoCalendarResult | null>(null);
   const [videoCalendarBusy, setVideoCalendarBusy] = useState(false);
@@ -754,6 +760,56 @@ export default function CampaignDetailPage() {
 
   function handleCopyFacebookDraft(content: string) {
     void navigator.clipboard.writeText(content);
+  }
+
+  function getInstagramOptions(item: SocialCalendarItem): InstagramGenerationOptions {
+    return (
+      instagramOptionsById[item.id] ?? {
+        tone: 'conversational',
+        length: 'medium',
+        includeCTA: !!item.suggestedCTA,
+        includeHashtags: false,
+        maxHashtags: 5,
+        includeEmojis: false,
+        maxEmojis: 2,
+      }
+    );
+  }
+
+  function updateInstagramOptions(item: SocialCalendarItem, patch: Partial<InstagramGenerationOptions>) {
+    setInstagramOptionsById((prev) => ({ ...prev, [item.id]: { ...getInstagramOptions(item), ...patch } }));
+  }
+
+  async function generateInstagramCaption(socialCalendarItemId: string, options?: InstagramGenerationOptions): Promise<InstagramCaptionResult> {
+    return apiRequest<InstagramCaptionResult>(`${basePath}/content-generation/instagram/${socialCalendarItemId}`, { method: 'POST', body: options ?? {} });
+  }
+
+  async function handleGenerateInstagramCaption(item: SocialCalendarItem, isRegenerate: boolean) {
+    if (isRegenerate) {
+      const confirmed = window.confirm('Regenerating will make another AI request and may incur additional cost. Continue?');
+      if (!confirmed) return;
+    }
+    setInstagramBusyIds((prev) => ({ ...prev, [item.id]: true }));
+    setInstagramErrors((prev) => ({ ...prev, [item.id]: null }));
+    try {
+      const result = await generateInstagramCaption(item.id, getInstagramOptions(item));
+      setInstagramCaptions((prev) => ({ ...prev, [item.id]: result }));
+    } catch (err) {
+      setInstagramErrors((prev) => ({ ...prev, [item.id]: err instanceof ApiError ? err.message : 'Failed to generate Instagram caption' }));
+    } finally {
+      setInstagramBusyIds((prev) => ({ ...prev, [item.id]: false }));
+    }
+  }
+
+  function handleCopyInstagramCaption(content: string) {
+    void navigator.clipboard.writeText(content);
+  }
+
+  // Non-text-post formats never mean GIP generated an image/carousel/Reel
+  // asset — only ever the accompanying caption copy.
+  function instagramFormatNote(recommendedFormat: string): string | null {
+    if (recommendedFormat === 'text_post' || recommendedFormat === 'short_post') return null;
+    return `Caption for ${labelize(recommendedFormat)}`;
   }
 
   async function handleBuildSocialCalendar() {
@@ -2692,6 +2748,117 @@ export default function CampaignDetailPage() {
                                             </pre>
                                             <button className="btn btn-secondary" style={{ marginTop: 6 }} onClick={() => handleCopyFacebookDraft(draft.content)}>
                                               Copy Post
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
+
+                                  {(() => {
+                                    const isInstagramEligible = item.platform !== 'linkedin' && item.platform !== 'facebook' && item.platform !== 'x';
+                                    if (!isInstagramEligible) return null;
+                                    const igOptions = getInstagramOptions(item);
+                                    const draft = instagramCaptions[item.id];
+                                    const formatNote = instagramFormatNote(item.recommendedFormat);
+                                    return (
+                                      <div style={{ marginTop: 10 }}>
+                                        {item.platform === 'generic_social' && (
+                                          <p className="entity-card-meta">Instagram is being chosen as the generation target; this social item was planned generically.</p>
+                                        )}
+                                        {formatNote && <p className="entity-card-meta">{formatNote}</p>}
+                                        <ErrorMessage message={instagramErrors[item.id] ?? null} />
+                                        {!draft && <p className="entity-card-meta">AI generation uses your configured provider and may incur usage cost.</p>}
+
+                                        <div className="form-inline">
+                                          <div className="field" style={{ marginBottom: 0 }}>
+                                            <select value={igOptions.tone} onChange={(e) => updateInstagramOptions(item, { tone: e.target.value as InstagramGenerationOptions['tone'] })}>
+                                              <option value="conversational">Conversational</option>
+                                              <option value="friendly">Friendly</option>
+                                              <option value="professional">Professional</option>
+                                              <option value="educational">Educational</option>
+                                              <option value="inspirational">Inspirational</option>
+                                            </select>
+                                          </div>
+                                          <div className="field" style={{ marginBottom: 0 }}>
+                                            <select value={igOptions.length} onChange={(e) => updateInstagramOptions(item, { length: e.target.value as InstagramGenerationOptions['length'] })}>
+                                              <option value="short">Short</option>
+                                              <option value="medium">Medium</option>
+                                              <option value="long">Long</option>
+                                            </select>
+                                          </div>
+                                          <label className="entity-card-meta" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <input type="checkbox" checked={!!igOptions.includeCTA} onChange={(e) => updateInstagramOptions(item, { includeCTA: e.target.checked })} />
+                                            Include CTA
+                                          </label>
+                                          <label className="entity-card-meta" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <input type="checkbox" checked={!!igOptions.includeHashtags} onChange={(e) => updateInstagramOptions(item, { includeHashtags: e.target.checked })} />
+                                            Include hashtags
+                                          </label>
+                                          {igOptions.includeHashtags && (
+                                            <div className="field" style={{ marginBottom: 0 }}>
+                                              <select value={igOptions.maxHashtags} onChange={(e) => updateInstagramOptions(item, { maxHashtags: Number(e.target.value) })}>
+                                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                                                  <option key={n} value={n}>
+                                                    Max {n} hashtag{n === 1 ? '' : 's'}
+                                                  </option>
+                                                ))}
+                                              </select>
+                                            </div>
+                                          )}
+                                          <label className="entity-card-meta" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <input type="checkbox" checked={!!igOptions.includeEmojis} onChange={(e) => updateInstagramOptions(item, { includeEmojis: e.target.checked })} />
+                                            Include emojis
+                                          </label>
+                                          {igOptions.includeEmojis && (
+                                            <div className="field" style={{ marginBottom: 0 }}>
+                                              <select value={igOptions.maxEmojis} onChange={(e) => updateInstagramOptions(item, { maxEmojis: Number(e.target.value) })}>
+                                                {[1, 2, 3, 4, 5].map((n) => (
+                                                  <option key={n} value={n}>
+                                                    Max {n} emoji{n === 1 ? '' : 's'}
+                                                  </option>
+                                                ))}
+                                              </select>
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        <button className="btn btn-secondary" onClick={() => handleGenerateInstagramCaption(item, !!draft)} disabled={!!instagramBusyIds[item.id]}>
+                                          {instagramBusyIds[item.id] ? 'Generating caption...' : draft ? 'Regenerate Instagram' : 'Generate Instagram'}
+                                        </button>
+
+                                        {draft && (
+                                          <div style={{ marginTop: 10 }}>
+                                            <div className="tag-list">
+                                              <span className="tag">{draft.characterCount} chars</span>
+                                              <span className="tag">{draft.wordCount} words</span>
+                                              <span className="tag">{draft.hashtagCount} hashtags</span>
+                                              <span className="tag">{draft.emojiCount} emojis</span>
+                                              <span className="tag">{labelize(draft.tone)}</span>
+                                              <span className="tag">{labelize(draft.length)}</span>
+                                              <span className="tag">{draft.provider} / {draft.model}</span>
+                                              {draft.usage.totalTokens !== undefined && <span className="tag">{draft.usage.totalTokens} tokens</span>}
+                                              {draft.cost && <span className="tag">${draft.cost.estimated.toFixed(4)} {draft.cost.currency}</span>}
+                                              <span className="tag">Prompt {draft.promptVersion}</span>
+                                            </div>
+                                            <div className="entity-card-meta">Generated {new Date(draft.generatedAt).toLocaleString()}</div>
+                                            {draft.warnings.length > 0 && <div className="content-warning" style={{ marginTop: 6 }}>{draft.warnings.join(' ')}</div>}
+                                            <pre
+                                              style={{
+                                                marginTop: 8,
+                                                padding: 10,
+                                                whiteSpace: 'pre-wrap',
+                                                wordBreak: 'break-word',
+                                                maxHeight: 320,
+                                                overflowY: 'auto',
+                                                background: 'var(--surface-muted, #f5f5f5)',
+                                                borderRadius: 6,
+                                              }}
+                                            >
+                                              {draft.content}
+                                            </pre>
+                                            <button className="btn btn-secondary" style={{ marginTop: 6 }} onClick={() => handleCopyInstagramCaption(draft.content)}>
+                                              Copy Caption
                                             </button>
                                           </div>
                                         )}
