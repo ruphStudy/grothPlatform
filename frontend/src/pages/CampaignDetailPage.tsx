@@ -26,6 +26,9 @@ import type {
   RepurposingPlanResult,
   BlogDraftResult,
   BlogGenerationOptions,
+  LinkedInDraftResult,
+  LinkedInGenerationOptions,
+  SocialCalendarItem,
 } from '../types';
 
 const CAMPAIGN_STATUSES: CampaignStatus[] = ['draft', 'planned', 'approved', 'active', 'paused', 'completed', 'archived'];
@@ -294,6 +297,10 @@ export default function CampaignDetailPage() {
   const [socialPlatformFilter, setSocialPlatformFilter] = useState('');
   const [socialTypeFilter, setSocialTypeFilter] = useState('');
   const [socialFunnelStageFilter, setSocialFunnelStageFilter] = useState('');
+  const [linkedInDrafts, setLinkedInDrafts] = useState<Record<string, LinkedInDraftResult>>({});
+  const [linkedInBusyIds, setLinkedInBusyIds] = useState<Record<string, boolean>>({});
+  const [linkedInErrors, setLinkedInErrors] = useState<Record<string, string | null>>({});
+  const [linkedInOptionsById, setLinkedInOptionsById] = useState<Record<string, LinkedInGenerationOptions>>({});
 
   const [videoCalendar, setVideoCalendar] = useState<VideoCalendarResult | null>(null);
   const [videoCalendarBusy, setVideoCalendarBusy] = useState(false);
@@ -622,6 +629,39 @@ export default function CampaignDetailPage() {
   }
 
   function handleCopyBlogDraft(content: string) {
+    void navigator.clipboard.writeText(content);
+  }
+
+  function getLinkedInOptions(item: SocialCalendarItem): LinkedInGenerationOptions {
+    return linkedInOptionsById[item.id] ?? { tone: 'professional', length: 'medium', includeCTA: !!item.suggestedCTA, includeHashtags: false, maxHashtags: 3 };
+  }
+
+  function updateLinkedInOptions(item: SocialCalendarItem, patch: Partial<LinkedInGenerationOptions>) {
+    setLinkedInOptionsById((prev) => ({ ...prev, [item.id]: { ...getLinkedInOptions(item), ...patch } }));
+  }
+
+  async function generateLinkedInDraft(socialCalendarItemId: string, options?: LinkedInGenerationOptions): Promise<LinkedInDraftResult> {
+    return apiRequest<LinkedInDraftResult>(`${basePath}/content-generation/linkedin/${socialCalendarItemId}`, { method: 'POST', body: options ?? {} });
+  }
+
+  async function handleGenerateLinkedInDraft(item: SocialCalendarItem, isRegenerate: boolean) {
+    if (isRegenerate) {
+      const confirmed = window.confirm('Regenerating will make another AI request and may incur additional cost. Continue?');
+      if (!confirmed) return;
+    }
+    setLinkedInBusyIds((prev) => ({ ...prev, [item.id]: true }));
+    setLinkedInErrors((prev) => ({ ...prev, [item.id]: null }));
+    try {
+      const result = await generateLinkedInDraft(item.id, getLinkedInOptions(item));
+      setLinkedInDrafts((prev) => ({ ...prev, [item.id]: result }));
+    } catch (err) {
+      setLinkedInErrors((prev) => ({ ...prev, [item.id]: err instanceof ApiError ? err.message : 'Failed to generate LinkedIn draft' }));
+    } finally {
+      setLinkedInBusyIds((prev) => ({ ...prev, [item.id]: false }));
+    }
+  }
+
+  function handleCopyLinkedInDraft(content: string) {
     void navigator.clipboard.writeText(content);
   }
 
@@ -2255,6 +2295,96 @@ export default function CampaignDetailPage() {
                                       {item.warnings.length > 0 && <div className="content-warning" style={{ marginTop: 8 }}>{item.warnings.join(' ')}</div>}
                                     </div>
                                   </details>
+
+                                  {(() => {
+                                    const isLinkedInEligible = item.platform !== 'facebook' && item.platform !== 'instagram' && item.platform !== 'x';
+                                    if (!isLinkedInEligible) return null;
+                                    const linkedInOptions = getLinkedInOptions(item);
+                                    const draft = linkedInDrafts[item.id];
+                                    return (
+                                      <div style={{ marginTop: 10 }}>
+                                        {item.platform === 'generic_social' && (
+                                          <p className="entity-card-meta">LinkedIn is being chosen as the generation target; this social item was planned generically.</p>
+                                        )}
+                                        <ErrorMessage message={linkedInErrors[item.id] ?? null} />
+                                        {!draft && <p className="entity-card-meta">AI generation uses your configured provider and may incur usage cost.</p>}
+
+                                        <div className="form-inline">
+                                          <div className="field" style={{ marginBottom: 0 }}>
+                                            <select value={linkedInOptions.tone} onChange={(e) => updateLinkedInOptions(item, { tone: e.target.value as LinkedInGenerationOptions['tone'] })}>
+                                              <option value="professional">Professional</option>
+                                              <option value="conversational">Conversational</option>
+                                              <option value="thought_leadership">Thought Leadership</option>
+                                            </select>
+                                          </div>
+                                          <div className="field" style={{ marginBottom: 0 }}>
+                                            <select value={linkedInOptions.length} onChange={(e) => updateLinkedInOptions(item, { length: e.target.value as LinkedInGenerationOptions['length'] })}>
+                                              <option value="short">Short</option>
+                                              <option value="medium">Medium</option>
+                                              <option value="long">Long</option>
+                                            </select>
+                                          </div>
+                                          <label className="entity-card-meta" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <input type="checkbox" checked={!!linkedInOptions.includeCTA} onChange={(e) => updateLinkedInOptions(item, { includeCTA: e.target.checked })} />
+                                            Include CTA
+                                          </label>
+                                          <label className="entity-card-meta" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <input type="checkbox" checked={!!linkedInOptions.includeHashtags} onChange={(e) => updateLinkedInOptions(item, { includeHashtags: e.target.checked })} />
+                                            Include hashtags
+                                          </label>
+                                          {linkedInOptions.includeHashtags && (
+                                            <div className="field" style={{ marginBottom: 0 }}>
+                                              <select value={linkedInOptions.maxHashtags} onChange={(e) => updateLinkedInOptions(item, { maxHashtags: Number(e.target.value) })}>
+                                                {[1, 2, 3, 4, 5].map((n) => (
+                                                  <option key={n} value={n}>
+                                                    Max {n} hashtag{n === 1 ? '' : 's'}
+                                                  </option>
+                                                ))}
+                                              </select>
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        <button className="btn btn-secondary" onClick={() => handleGenerateLinkedInDraft(item, !!draft)} disabled={!!linkedInBusyIds[item.id]}>
+                                          {linkedInBusyIds[item.id] ? 'Generating draft...' : draft ? 'Regenerate LinkedIn Draft' : 'Generate LinkedIn'}
+                                        </button>
+
+                                        {draft && (
+                                          <div style={{ marginTop: 10 }}>
+                                            <div className="tag-list">
+                                              <span className="tag">{draft.characterCount} chars</span>
+                                              <span className="tag">{draft.wordCount} words</span>
+                                              <span className="tag">{labelize(draft.tone)}</span>
+                                              <span className="tag">{labelize(draft.length)}</span>
+                                              <span className="tag">{draft.provider} / {draft.model}</span>
+                                              {draft.usage.totalTokens !== undefined && <span className="tag">{draft.usage.totalTokens} tokens</span>}
+                                              {draft.cost && <span className="tag">${draft.cost.estimated.toFixed(4)} {draft.cost.currency}</span>}
+                                              <span className="tag">Prompt {draft.promptVersion}</span>
+                                            </div>
+                                            <div className="entity-card-meta">Generated {new Date(draft.generatedAt).toLocaleString()}</div>
+                                            {draft.warnings.length > 0 && <div className="content-warning" style={{ marginTop: 6 }}>{draft.warnings.join(' ')}</div>}
+                                            <pre
+                                              style={{
+                                                marginTop: 8,
+                                                padding: 10,
+                                                whiteSpace: 'pre-wrap',
+                                                wordBreak: 'break-word',
+                                                maxHeight: 320,
+                                                overflowY: 'auto',
+                                                background: 'var(--surface-muted, #f5f5f5)',
+                                                borderRadius: 6,
+                                              }}
+                                            >
+                                              {draft.content}
+                                            </pre>
+                                            <button className="btn btn-secondary" style={{ marginTop: 6 }} onClick={() => handleCopyLinkedInDraft(draft.content)}>
+                                              Copy Post
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               </div>
                             );

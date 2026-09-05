@@ -13,11 +13,11 @@ import type { ContentTopic } from '../../content-planning/types/topic-prioritiza
 import { GrowthStrategyReviewService } from '../../growth-strategy/growth-strategy-review.service';
 import { GrowthStrategyService } from '../../growth-strategy/growth-strategy.service';
 import type { GrowthStrategyOverview } from '../../growth-strategy/types/growth-strategy-overview.types';
-import type { StrategySignal, StrategySignalCategory } from '../../growth-strategy/types/strategy-signal.types';
 import { ProductsService } from '../../products/products.service';
 import { ContentPromptBuilderService } from '../prompting/content-prompt-builder.service';
-import type { ContentPromptBuildInput, ContentPromptEvidence } from '../types/content-prompt.types';
+import type { ContentPromptBuildInput } from '../types/content-prompt.types';
 import { ContentGenerationEngineService } from '../engine/content-generation-engine.service';
+import { mapEvidenceFromOverview, mapMessagingDirectionsFromOverview, resolveAudienceLabel } from '../shared/content-evidence-mapping.util';
 import type { BlogDraftResult } from '../types/blog-generation.types';
 import type { BlogGenerationOptions } from '../types/blog-generation.types';
 
@@ -234,15 +234,15 @@ export class BlogGenerationService {
         angle: blogItem.angle,
         objective: blogItem.objective,
         funnelStage: blogItem.funnelStage,
-        audience: blogItem.audienceSegmentIds.map((id) => this.audienceLabel(campaign, id)),
+        audience: blogItem.audienceSegmentIds.map((id) => resolveAudienceLabel(campaign.audienceChannelMapping, id)),
         keywords: [...(blogItem.primaryKeyword ? [blogItem.primaryKeyword] : []), ...blogItem.supportingKeywords],
         pillar: pillar?.title,
         topic: topic?.title,
-        messagingDirections: this.mapMessagingDirections(overview, blogItem, pillar),
+        messagingDirections: mapMessagingDirectionsFromOverview(overview, blogItem.audienceSegmentIds, blogItem.funnelStage, pillar?.messagingPillarIds ?? []),
         suggestedCTA: blogItem.suggestedCTA,
         formatDirection: blogItem.type,
       },
-      evidence: this.mapEvidence(overview, blogItem),
+      evidence: mapEvidenceFromOverview(overview, blogItem.audienceSegmentIds),
       constraints: {
         language,
         minWords,
@@ -255,48 +255,6 @@ export class BlogGenerationService {
         campaignPlanningVersion: campaign.planningMetadata.version,
         sourceIds: [blogCalendarItemId],
       },
-    };
-  }
-
-  private audienceLabel(campaign: CampaignResponse, id: string): string {
-    return campaign.audienceChannelMapping?.audiences.find((a) => a.audienceSegmentId === id)?.label ?? id;
-  }
-
-  private mapMessagingDirections(overview: GrowthStrategyOverview, blogItem: BlogCalendarItem, pillar: CampaignContentPillar | undefined): string[] {
-    const directions: string[] = [];
-    for (const audienceMessage of overview.messaging.audienceMessages) {
-      if (blogItem.audienceSegmentIds.includes(audienceMessage.audienceSegmentId)) directions.push(audienceMessage.valueMessage);
-    }
-    for (const funnelMessage of overview.messaging.funnelMessages) {
-      if (funnelMessage.stage === blogItem.funnelStage) directions.push(...funnelMessage.messageThemes);
-    }
-    if (pillar) {
-      for (const messagingPillarId of pillar.messagingPillarIds) {
-        const messagingPillar = overview.messaging.pillars.find((p) => p.id === messagingPillarId);
-        if (messagingPillar) directions.push(messagingPillar.theme);
-      }
-    }
-    return directions;
-  }
-
-  // No genuine proof-point or verified-fact text exists upstream today
-  // (Growth Strategy's overview exposes proof *needs*/gaps, not evidenced
-  // proof) — both stay empty rather than fabricating pseudo-evidence from
-  // a gap signal. 15B already handles empty evidence categories safely.
-  private mapEvidence(overview: GrowthStrategyOverview, blogItem: BlogCalendarItem): ContentPromptEvidence {
-    const signals = overview.signals.signals;
-    const matchesAudience = (s: StrategySignal) => !s.relatedSegmentIds || s.relatedSegmentIds.length === 0 || s.relatedSegmentIds.some((id) => blogItem.audienceSegmentIds.includes(id));
-    const byCategory = (category: StrategySignalCategory) => signals.filter((s) => s.category === category && matchesAudience(s)).map((s) => s.value);
-
-    return {
-      pains: byCategory('pain'),
-      goals: byCategory('jtbd'),
-      objections: overview.messaging.audienceMessages.filter((m) => blogItem.audienceSegmentIds.includes(m.audienceSegmentId)).flatMap((m) => m.objectionFocus),
-      differentiators: byCategory('differentiation'),
-      capabilities: byCategory('product'),
-      proofPoints: [],
-      useCases: signals.filter(matchesAudience).flatMap((s) => s.relatedUseCases ?? []),
-      facts: [],
     };
   }
 
