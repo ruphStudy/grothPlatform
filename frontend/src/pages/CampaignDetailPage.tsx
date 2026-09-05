@@ -18,6 +18,7 @@ import type {
   ContentIdeaResult,
   BlogCalendarResult,
   SocialCalendarResult,
+  VideoCalendarResult,
   CampaignContentPillarTier,
   ContentPillarPlanResult,
   ContentTopicTier,
@@ -287,6 +288,13 @@ export default function CampaignDetailPage() {
   const [socialPlatformFilter, setSocialPlatformFilter] = useState('');
   const [socialTypeFilter, setSocialTypeFilter] = useState('');
   const [socialFunnelStageFilter, setSocialFunnelStageFilter] = useState('');
+
+  const [videoCalendar, setVideoCalendar] = useState<VideoCalendarResult | null>(null);
+  const [videoCalendarBusy, setVideoCalendarBusy] = useState(false);
+  const [videoCalendarError, setVideoCalendarError] = useState<string | null>(null);
+  const [videoTypeFilter, setVideoTypeFilter] = useState('');
+  const [videoFormatFilter, setVideoFormatFilter] = useState('');
+  const [videoFunnelStageFilter, setVideoFunnelStageFilter] = useState('');
 
   const basePath = `/organizations/${organizationId}/products/${productId}/campaigns/${campaignId}`;
 
@@ -590,6 +598,19 @@ export default function CampaignDetailPage() {
     }
   }
 
+  async function handleBuildVideoCalendar() {
+    setVideoCalendarBusy(true);
+    setVideoCalendarError(null);
+    try {
+      const result = await apiRequest<VideoCalendarResult>(`${basePath}/content-planning/video-calendar-preview`, { method: 'POST', body: {} });
+      setVideoCalendar(result);
+    } catch (err) {
+      setVideoCalendarError(err instanceof ApiError ? err.message : 'Failed to build video calendar');
+    } finally {
+      setVideoCalendarBusy(false);
+    }
+  }
+
   if (loading) {
     return (
       <AppLayout>
@@ -684,6 +705,28 @@ export default function CampaignDetailPage() {
             if (socialPlatformFilter && item.platform !== socialPlatformFilter) return false;
             if (socialTypeFilter && item.type !== socialTypeFilter) return false;
             if (socialFunnelStageFilter && item.funnelStage !== socialFunnelStageFilter) return false;
+            return true;
+          }),
+        }))
+        .filter((week) => week.itemIds.length > 0)
+    : [];
+
+  const socialTitleById = new Map((socialCalendar?.items ?? []).map((i) => [i.id, i.title]));
+  const videoCalendarMissingEvidence = videoCalendar ? dedupe(videoCalendar.missingEvidence) : [];
+  const videoCalendarWarnings = videoCalendar ? dedupe(videoCalendar.warnings) : [];
+  const videoTypes = videoCalendar ? dedupe(videoCalendar.items.map((i) => i.type)) : [];
+  const videoFormats = videoCalendar ? dedupe(videoCalendar.items.map((i) => i.formatDirection)) : [];
+  const videoFunnelStages = videoCalendar ? dedupe(videoCalendar.items.map((i) => i.funnelStage)) : [];
+  const filteredVideoWeeks = videoCalendar
+    ? videoCalendar.weeks
+        .map((week) => ({
+          ...week,
+          itemIds: week.itemIds.filter((id) => {
+            const item = videoCalendar.items.find((i) => i.id === id);
+            if (!item) return false;
+            if (videoTypeFilter && item.type !== videoTypeFilter) return false;
+            if (videoFormatFilter && item.formatDirection !== videoFormatFilter) return false;
+            if (videoFunnelStageFilter && item.funnelStage !== videoFunnelStageFilter) return false;
             return true;
           }),
         }))
@@ -2029,6 +2072,207 @@ export default function CampaignDetailPage() {
                                   </div>
                                   {item.sourceBlogItemId && (
                                     <div className="entity-card-meta">Repurposed from Blog Calendar: {blogTitleById.get(item.sourceBlogItemId) ?? item.sourceBlogItemId}</div>
+                                  )}
+                                  {item.audienceSegmentIds.length > 0 && (
+                                    <div className="entity-card-meta">Audience: {item.audienceSegmentIds.map((id) => audienceLabel(mapping, id)).join(', ')}</div>
+                                  )}
+                                  {item.suggestedCTA && <div className="entity-card-meta">CTA: {item.suggestedCTA}</div>}
+                                  <details style={{ marginTop: 6 }}>
+                                    <summary className="summary-label" style={{ cursor: 'pointer' }}>
+                                      Details
+                                    </summary>
+                                    <div style={{ marginTop: 8 }}>
+                                      <span className="summary-label">Angle</span>
+                                      <p>{item.angle}</p>
+                                      {item.messagingPillarIds.length > 0 && (
+                                        <>
+                                          <span className="summary-label">Messaging Pillars</span>
+                                          <p className="entity-card-meta">{item.messagingPillarIds.join(', ')}</p>
+                                        </>
+                                      )}
+                                      {item.keywords.length > 0 && (
+                                        <>
+                                          <span className="summary-label">Keywords</span>
+                                          <div className="tag-list">
+                                            {item.keywords.map((k, i) => (
+                                              <span className="tag" key={i}>
+                                                {k}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </>
+                                      )}
+                                      {item.relatedCampaignActivityIds.length > 0 && (
+                                        <>
+                                          <span className="summary-label">Related Campaign Activities</span>
+                                          <p className="entity-card-meta">{item.relatedCampaignActivityIds.join(', ')}</p>
+                                        </>
+                                      )}
+                                      {item.dependencies.length > 0 && (
+                                        <>
+                                          <span className="summary-label">Dependencies</span>
+                                          <p className="entity-card-meta">{item.dependencies.join(', ')}</p>
+                                        </>
+                                      )}
+                                      {item.successSignals.length > 0 && (
+                                        <>
+                                          <span className="summary-label">Success Signals</span>
+                                          <div className="tag-list">
+                                            {item.successSignals.map((s, i) => (
+                                              <span className="tag" key={i}>
+                                                {s}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </>
+                                      )}
+                                      {item.reasons.length > 0 && (
+                                        <>
+                                          <span className="summary-label">Reasons</span>
+                                          <ul className="bullet-list">
+                                            {item.reasons.map((r, i) => (
+                                              <li key={i}>{r}</li>
+                                            ))}
+                                          </ul>
+                                        </>
+                                      )}
+                                      {item.warnings.length > 0 && <div className="content-warning" style={{ marginTop: 8 }}>{item.warnings.join(' ')}</div>}
+                                    </div>
+                                  </details>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="section">
+          <h3 className="section-title">Video Calendar</h3>
+
+          <ErrorMessage message={videoCalendarError} />
+
+          {!videoCalendar && !videoCalendarBusy && <p className="muted">No video calendar has been built yet.</p>}
+
+          <button className="btn btn-primary" onClick={handleBuildVideoCalendar} disabled={videoCalendarBusy}>
+            {videoCalendarBusy ? 'Building video calendar...' : videoCalendar ? 'Rebuild Video Calendar' : 'Build Video Calendar'}
+          </button>
+
+          {videoCalendar && (
+            <div style={{ marginTop: 16 }}>
+              <div className="summary-grid" style={{ marginBottom: 16 }}>
+                <div>
+                  <span className="summary-label">Total Items</span>
+                  <p>{videoCalendar.items.length}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Overall Confidence</span>
+                  <p>{videoCalendar.confidenceScore}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Top Priority Items</span>
+                  <p>{videoCalendar.topPriorityItemIds.length}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Weeks Represented</span>
+                  <p>{videoCalendar.weeks.map((w) => `Week ${w.week}`).join(', ') || '-'}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Format Directions Represented</span>
+                  <p>{videoFormats.length ? videoFormats.map((f) => labelize(f)).join(', ') : '-'}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Funnel Stages Represented</span>
+                  <p>{videoFunnelStages.length ? videoFunnelStages.map((s) => labelize(s)).join(', ') : '-'}</p>
+                </div>
+              </div>
+
+              {(videoCalendarMissingEvidence.length > 0 || videoCalendarWarnings.length > 0) && (
+                <div className="content-warning" style={{ marginBottom: 16 }}>
+                  {[...videoCalendarMissingEvidence, ...videoCalendarWarnings].join(' ')}
+                </div>
+              )}
+
+              {videoCalendar.items.length === 0 ? (
+                <p className="muted">No reliable video calendar was detected from the current campaign channels, formats, and content evidence.</p>
+              ) : (
+                <>
+                  <div className="form-inline">
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <select value={videoTypeFilter} onChange={(e) => setVideoTypeFilter(e.target.value)}>
+                        <option value="">All content types</option>
+                        {videoTypes.map((t) => (
+                          <option key={t} value={t}>
+                            {labelize(t)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <select value={videoFormatFilter} onChange={(e) => setVideoFormatFilter(e.target.value)}>
+                        <option value="">All formats</option>
+                        {videoFormats.map((f) => (
+                          <option key={f} value={f}>
+                            {labelize(f)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <select value={videoFunnelStageFilter} onChange={(e) => setVideoFunnelStageFilter(e.target.value)}>
+                        <option value="">All funnel stages</option>
+                        {videoFunnelStages.map((s) => (
+                          <option key={s} value={s}>
+                            {labelize(s)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {filteredVideoWeeks.map((week) => {
+                    const weekItems = week.itemIds.map((id) => videoCalendar.items.find((i) => i.id === id)).filter((i): i is NonNullable<typeof i> => !!i);
+                    return (
+                      <div className="calendar-week" key={week.week}>
+                        <div className="calendar-week-header">
+                          <div>
+                            <strong>
+                              Week {week.week} &mdash; {week.theme}
+                            </strong>
+                          </div>
+                          <div className="entity-card-meta">
+                            {weekItems.length} item{weekItems.length === 1 ? '' : 's'} &middot; Confidence {week.confidenceScore}
+                          </div>
+                        </div>
+                        <div className="calendar-days">
+                          {weekItems.map((item) => {
+                            const actualDate = actualDateForDay(campaign.startDate, item.day);
+                            return (
+                              <div className="calendar-day" key={item.id}>
+                                <div className="calendar-day-number">
+                                  Day {item.day}
+                                  {actualDate ? ` · ${actualDate}` : ''}
+                                </div>
+                                <div className="activity-card">
+                                  <div className="activity-card-title">{item.title}</div>
+                                  <div className="tag-list">
+                                    <span className="tag">{labelize(item.type)}</span>
+                                    <span className="tag">{labelize(item.formatDirection)}</span>
+                                    <span className={`quality-badge ${qualityBadgeClass(scoreQuality(item.priorityScore))}`}>Priority {item.priorityScore}</span>
+                                  </div>
+                                  <div className="entity-card-meta">Pillar: {pillarTitleById.get(item.pillarId) ?? item.pillarId}</div>
+                                  {item.topicId && <div className="entity-card-meta">Topic: {topicTitleById.get(item.topicId) ?? item.topicId}</div>}
+                                  {item.sourceBlogItemId && (
+                                    <div className="entity-card-meta">Repurposed from Blog: {blogTitleById.get(item.sourceBlogItemId) ?? item.sourceBlogItemId}</div>
+                                  )}
+                                  {item.sourceSocialItemId && (
+                                    <div className="entity-card-meta">Repurposed from Social: {socialTitleById.get(item.sourceSocialItemId) ?? item.sourceSocialItemId}</div>
                                   )}
                                   {item.audienceSegmentIds.length > 0 && (
                                     <div className="entity-card-meta">Audience: {item.audienceSegmentIds.map((id) => audienceLabel(mapping, id)).join(', ')}</div>

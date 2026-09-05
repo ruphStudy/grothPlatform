@@ -5,6 +5,7 @@ import { ContentIdeaService } from './content-idea.service';
 import { ContentPillarPlanService } from './content-pillar-plan.service';
 import { SocialCalendarService } from './social-calendar.service';
 import { TopicPrioritizationService } from './topic-prioritization.service';
+import { VideoCalendarService } from './video-calendar.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('organizations/:organizationId/products/:productId/campaigns/:campaignId/content-planning')
@@ -15,6 +16,7 @@ export class ContentPlanningController {
     private readonly contentPillarPlanService: ContentPillarPlanService,
     private readonly blogCalendarService: BlogCalendarService,
     private readonly socialCalendarService: SocialCalendarService,
+    private readonly videoCalendarService: VideoCalendarService,
   ) {}
 
   @Post('ideas-preview')
@@ -65,5 +67,15 @@ export class ContentPlanningController {
     @Param('campaignId') campaignId: string,
   ) {
     return this.socialCalendarService.buildSocialCalendarForCampaign(organizationId, productId, campaignId, req.user.userId);
+  }
+
+  @Post('video-calendar-preview')
+  buildVideoCalendar(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+  ) {
+    return this.videoCalendarService.buildVideoCalendarForCampaign(organizationId, productId, campaignId, req.user.userId);
   }
 }
