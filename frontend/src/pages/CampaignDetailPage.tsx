@@ -16,6 +16,7 @@ import type {
   CampaignStatus,
   CampaignType,
   ContentIdeaResult,
+  BlogCalendarResult,
   CampaignContentPillarTier,
   ContentPillarPlanResult,
   ContentTopicTier,
@@ -274,6 +275,10 @@ export default function CampaignDetailPage() {
   const [pillarPlan, setPillarPlan] = useState<ContentPillarPlanResult | null>(null);
   const [pillarPlanBusy, setPillarPlanBusy] = useState(false);
   const [pillarPlanError, setPillarPlanError] = useState<string | null>(null);
+
+  const [blogCalendar, setBlogCalendar] = useState<BlogCalendarResult | null>(null);
+  const [blogCalendarBusy, setBlogCalendarBusy] = useState(false);
+  const [blogCalendarError, setBlogCalendarError] = useState<string | null>(null);
 
   const basePath = `/organizations/${organizationId}/products/${productId}/campaigns/${campaignId}`;
 
@@ -551,6 +556,19 @@ export default function CampaignDetailPage() {
     }
   }
 
+  async function handleBuildBlogCalendar() {
+    setBlogCalendarBusy(true);
+    setBlogCalendarError(null);
+    try {
+      const result = await apiRequest<BlogCalendarResult>(`${basePath}/content-planning/blog-calendar-preview`, { method: 'POST', body: {} });
+      setBlogCalendar(result);
+    } catch (err) {
+      setBlogCalendarError(err instanceof ApiError ? err.message : 'Failed to build blog calendar');
+    } finally {
+      setBlogCalendarBusy(false);
+    }
+  }
+
   if (loading) {
     return (
       <AppLayout>
@@ -623,6 +641,11 @@ export default function CampaignDetailPage() {
   const PILLAR_TIER_ORDER: CampaignContentPillarTier[] = ['primary', 'supporting', 'experimental'];
   const pillarMissingEvidence = pillarPlan ? dedupe(pillarPlan.missingEvidence) : [];
   const pillarWarnings = pillarPlan ? dedupe(pillarPlan.warnings) : [];
+
+  const pillarTitleById = new Map((pillarPlan?.pillars ?? []).map((p) => [p.id, p.title]));
+  const blogCalendarMissingEvidence = blogCalendar ? dedupe(blogCalendar.missingEvidence) : [];
+  const blogCalendarWarnings = blogCalendar ? dedupe(blogCalendar.warnings) : [];
+  const blogFunnelStages = blogCalendar ? dedupe(blogCalendar.items.map((i) => i.funnelStage)) : [];
 
   return (
     <AppLayout>
@@ -1671,6 +1694,173 @@ export default function CampaignDetailPage() {
                             </details>
                           </Card>
                         ))}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="section">
+          <h3 className="section-title">Blog Calendar</h3>
+
+          <ErrorMessage message={blogCalendarError} />
+
+          {!blogCalendar && !blogCalendarBusy && <p className="muted">No blog calendar has been built yet.</p>}
+
+          <button className="btn btn-primary" onClick={handleBuildBlogCalendar} disabled={blogCalendarBusy}>
+            {blogCalendarBusy ? 'Building blog calendar...' : blogCalendar ? 'Rebuild Blog Calendar' : 'Build Blog Calendar'}
+          </button>
+
+          {blogCalendar && (
+            <div style={{ marginTop: 16 }}>
+              <div className="summary-grid" style={{ marginBottom: 16 }}>
+                <div>
+                  <span className="summary-label">Total Blog Items</span>
+                  <p>{blogCalendar.items.length}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Overall Confidence</span>
+                  <p>{blogCalendar.confidenceScore}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Top Priority Items</span>
+                  <p>{blogCalendar.topPriorityItemIds.length}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Weeks Represented</span>
+                  <p>{blogCalendar.weeks.map((w) => `Week ${w.week}`).join(', ') || '-'}</p>
+                </div>
+                <div>
+                  <span className="summary-label">Funnel Stages Represented</span>
+                  <p>{blogFunnelStages.length ? blogFunnelStages.map((s) => labelize(s)).join(', ') : '-'}</p>
+                </div>
+              </div>
+
+              {(blogCalendarMissingEvidence.length > 0 || blogCalendarWarnings.length > 0) && (
+                <div className="content-warning" style={{ marginBottom: 16 }}>
+                  {[...blogCalendarMissingEvidence, ...blogCalendarWarnings].join(' ')}
+                </div>
+              )}
+
+              {blogCalendar.items.length === 0 ? (
+                <p className="muted">No reliable blog calendar was detected for the current campaign channels and content strategy.</p>
+              ) : (
+                blogCalendar.weeks.map((week) => {
+                  const weekItems = week.itemIds.map((id) => blogCalendar.items.find((i) => i.id === id)).filter((i): i is NonNullable<typeof i> => !!i);
+                  return (
+                    <div className="calendar-week" key={week.week}>
+                      <div className="calendar-week-header">
+                        <div>
+                          <strong>
+                            Week {week.week} &mdash; {week.theme}
+                          </strong>
+                        </div>
+                        <div className="entity-card-meta">
+                          {weekItems.length} item{weekItems.length === 1 ? '' : 's'} &middot; Confidence {week.confidenceScore}
+                        </div>
+                      </div>
+                      <div className="calendar-days">
+                        {weekItems.map((item) => {
+                          const actualDate = actualDateForDay(campaign.startDate, item.day);
+                          const dependencyTitles = item.dependencies.map((depId) => blogCalendar.items.find((i) => i.id === depId)?.title ?? depId);
+                          return (
+                            <div className="calendar-day" key={item.id}>
+                              <div className="calendar-day-number">
+                                Day {item.day}
+                                {actualDate ? ` · ${actualDate}` : ''}
+                              </div>
+                              <div className="activity-card">
+                                <div className="activity-card-title">{item.title}</div>
+                                <div className="tag-list">
+                                  <span className="tag">{labelize(item.type)}</span>
+                                  <span className="tag">{labelize(item.funnelStage)}</span>
+                                  <span className={`quality-badge ${qualityBadgeClass(scoreQuality(item.priorityScore))}`}>Priority {item.priorityScore}</span>
+                                </div>
+                                <div className="entity-card-meta">Pillar: {pillarTitleById.get(item.pillarId) ?? item.pillarId}</div>
+                                {item.audienceSegmentIds.length > 0 && (
+                                  <div className="entity-card-meta">Audience: {item.audienceSegmentIds.map((id) => audienceLabel(mapping, id)).join(', ')}</div>
+                                )}
+                                {item.primaryKeyword && <div className="entity-card-meta">Primary keyword: {item.primaryKeyword}</div>}
+                                {item.suggestedCTA && <div className="entity-card-meta">CTA: {item.suggestedCTA}</div>}
+                                <details style={{ marginTop: 6 }}>
+                                  <summary className="summary-label" style={{ cursor: 'pointer' }}>
+                                    Details
+                                  </summary>
+                                  <div style={{ marginTop: 8 }}>
+                                    <span className="summary-label">Angle</span>
+                                    <p>{item.angle}</p>
+                                    {item.supportingKeywords.length > 0 && (
+                                      <>
+                                        <span className="summary-label">Supporting Keywords</span>
+                                        <div className="tag-list">
+                                          {item.supportingKeywords.map((k, i) => (
+                                            <span className="tag" key={i}>
+                                              {k}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </>
+                                    )}
+                                    {item.intentTypes.length > 0 && (
+                                      <>
+                                        <span className="summary-label">Intent Types</span>
+                                        <div className="tag-list">
+                                          {item.intentTypes.map((t, i) => (
+                                            <span className="tag" key={i}>
+                                              {labelize(t)}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </>
+                                    )}
+                                    {dependencyTitles.length > 0 && (
+                                      <>
+                                        <span className="summary-label">Depends On</span>
+                                        <ul className="bullet-list">
+                                          {dependencyTitles.map((t, i) => (
+                                            <li key={i}>{t}</li>
+                                          ))}
+                                        </ul>
+                                      </>
+                                    )}
+                                    {item.relatedCampaignActivityIds.length > 0 && (
+                                      <>
+                                        <span className="summary-label">Related Campaign Activities</span>
+                                        <p className="entity-card-meta">{item.relatedCampaignActivityIds.join(', ')}</p>
+                                      </>
+                                    )}
+                                    {item.successSignals.length > 0 && (
+                                      <>
+                                        <span className="summary-label">Success Signals</span>
+                                        <div className="tag-list">
+                                          {item.successSignals.map((s, i) => (
+                                            <span className="tag" key={i}>
+                                              {s}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </>
+                                    )}
+                                    {item.reasons.length > 0 && (
+                                      <>
+                                        <span className="summary-label">Reasons</span>
+                                        <ul className="bullet-list">
+                                          {item.reasons.map((r, i) => (
+                                            <li key={i}>{r}</li>
+                                          ))}
+                                        </ul>
+                                      </>
+                                    )}
+                                    {item.warnings.length > 0 && <div className="content-warning" style={{ marginTop: 8 }}>{item.warnings.join(' ')}</div>}
+                                  </div>
+                                </details>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );
