@@ -61,6 +61,8 @@ import type {
   ContentHumanReviewSummary,
   ContentVersionDetail,
   ContentVersionSummary,
+  SocialImageAsset,
+  SocialImageGenerationOptions,
 } from '../types';
 
 const CAMPAIGN_STATUSES: CampaignStatus[] = ['draft', 'planned', 'approved', 'active', 'paused', 'completed', 'archived'];
@@ -1628,6 +1630,128 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion: latestVers
               )}
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 17C — social image generation. Applied to LinkedIn/X/Facebook/Instagram
+// generated-content panels only (non-social kinds are rejected server-side
+// anyway). The full image prompt is always built server-side (17B) from
+// the persisted ContentVersion — this panel only ever sends safe options
+// (aspect ratio, style direction, overlay toggle/text). Generating again
+// never overwrites a prior image; it creates a new one, so the list below
+// simply accumulates newest-first.
+function SocialImageGenerationPanel({ basePath, artifactId, version }: { basePath: string; artifactId: string | undefined; version: number | undefined }) {
+  const [images, setImages] = useState<SocialImageAsset[] | null>(null);
+  const [listBusy, setListBusy] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [aspectRatio, setAspectRatio] = useState<'' | '1:1' | '4:5' | '16:9'>('');
+  const [styleDirection, setStyleDirection] = useState('');
+  const [includeTextOverlay, setIncludeTextOverlay] = useState(false);
+  const [overlayText, setOverlayText] = useState('');
+
+  useEffect(() => {
+    if (!artifactId || version === undefined) return;
+    (async () => {
+      setListBusy(true);
+      try {
+        const result = await apiRequest<SocialImageAsset[]>(`${basePath}/creative/social-image/${artifactId}/versions/${version}`);
+        setImages(result);
+      } catch {
+        // Best-effort convenience listing — a failure here must never
+        // block the rest of the panel.
+      } finally {
+        setListBusy(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [artifactId, version]);
+
+  async function handleGenerate() {
+    if (!artifactId || version === undefined) return;
+    const confirmed = window.confirm('Image generation may incur provider usage cost. Continue?');
+    if (!confirmed) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const options: SocialImageGenerationOptions = {
+        aspectRatio: aspectRatio || undefined,
+        styleDirection: styleDirection.trim() || undefined,
+        includeTextOverlay,
+        overlayText: includeTextOverlay ? overlayText.trim() || undefined : undefined,
+      };
+      const result = await apiRequest<SocialImageAsset>(`${basePath}/creative/social-image/${artifactId}/versions/${version}`, { method: 'POST', body: options });
+      setImages((prev) => [result, ...(prev ?? [])]);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to generate image');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!artifactId || version === undefined) return null;
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      <span className="summary-label" style={{ display: 'block', marginTop: 8 }}>
+        Social Image
+      </span>
+      <ErrorMessage message={error} />
+      <div className="form-inline">
+        <div className="field" style={{ marginBottom: 0 }}>
+          <select value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value as '' | '1:1' | '4:5' | '16:9')}>
+            <option value="">Platform default ratio</option>
+            <option value="1:1">1:1</option>
+            <option value="4:5">4:5</option>
+            <option value="16:9">16:9</option>
+          </select>
+        </div>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <input type="text" placeholder="Style direction (optional)" value={styleDirection} onChange={(e) => setStyleDirection(e.target.value)} />
+        </div>
+        <label className="entity-card-meta" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <input type="checkbox" checked={includeTextOverlay} onChange={(e) => setIncludeTextOverlay(e.target.checked)} />
+          Include text overlay
+        </label>
+        {includeTextOverlay && (
+          <div className="field" style={{ marginBottom: 0 }}>
+            <input type="text" placeholder="Overlay text (short)" maxLength={80} value={overlayText} onChange={(e) => setOverlayText(e.target.value)} />
+          </div>
+        )}
+      </div>
+      <button className="btn btn-secondary" onClick={handleGenerate} disabled={busy}>
+        {busy ? 'Generating...' : 'Generate Image'}
+      </button>
+
+      {listBusy && <Loading />}
+      {images && images.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          {images.map((img) => (
+            <div key={img.id} style={{ marginTop: 8, padding: 8, border: '1px solid var(--border-color, #ddd)', borderRadius: 6 }}>
+              {img.asset.url && <img src={img.asset.url} alt="Generated social creative" style={{ maxWidth: '100%', borderRadius: 4 }} />}
+              <div className="tag-list" style={{ marginTop: 6 }}>
+                <span className="tag">
+                  {img.provider}
+                  {img.model ? ` / ${img.model}` : ''}
+                </span>
+                {img.promptSnapshot.aspectRatio && <span className="tag">{img.promptSnapshot.aspectRatio}</span>}
+                {img.asset.width && img.asset.height && (
+                  <span className="tag">
+                    {img.asset.width}x{img.asset.height}
+                  </span>
+                )}
+                {img.cost && (
+                  <span className="tag">
+                    ${img.cost.estimated.toFixed(4)} {img.cost.currency}
+                  </span>
+                )}
+              </div>
+              <div className="entity-card-meta">Generated {new Date(img.createdAt).toLocaleString()}</div>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -4436,6 +4560,7 @@ export default function CampaignDetailPage() {
                                               Copy Post
                                             </button>
                                             <ContentVersionHistory basePath={basePath} artifactId={draft.artifactId} latestVersion={draft.version} />
+                                            <SocialImageGenerationPanel basePath={basePath} artifactId={draft.artifactId} version={draft.version} />
                                           </div>
                                         )}
                                       </div>
@@ -4567,6 +4692,7 @@ export default function CampaignDetailPage() {
                                               </>
                                             )}
                                             <ContentVersionHistory basePath={basePath} artifactId={draft.artifactId} latestVersion={draft.version} />
+                                            <SocialImageGenerationPanel basePath={basePath} artifactId={draft.artifactId} version={draft.version} />
                                           </div>
                                         )}
                                       </div>
@@ -4660,6 +4786,7 @@ export default function CampaignDetailPage() {
                                               Copy Post
                                             </button>
                                             <ContentVersionHistory basePath={basePath} artifactId={draft.artifactId} latestVersion={draft.version} />
+                                            <SocialImageGenerationPanel basePath={basePath} artifactId={draft.artifactId} version={draft.version} />
                                           </div>
                                         )}
                                       </div>
@@ -4772,6 +4899,7 @@ export default function CampaignDetailPage() {
                                               Copy Caption
                                             </button>
                                             <ContentVersionHistory basePath={basePath} artifactId={draft.artifactId} latestVersion={draft.version} />
+                                            <SocialImageGenerationPanel basePath={basePath} artifactId={draft.artifactId} version={draft.version} />
                                           </div>
                                         )}
                                       </div>

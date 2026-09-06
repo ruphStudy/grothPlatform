@@ -2936,3 +2936,59 @@ export interface ArtifactWithLatestVersion {
   artifact: ContentArtifact;
   latestVersion?: ContentVersionDetail;
 }
+
+// Sprint 17C — social image creative generated from a persisted social
+// ContentVersion (LinkedIn/X/Facebook/Instagram only).
+export interface SocialImageAssetSource {
+  contentArtifactId: string;
+  contentVersionId: string;
+  contentVersion: number;
+  contentKind: string;
+  platform: string;
+}
+
+export interface SocialImageAssetFile {
+  type: 'image';
+  url?: string;
+  storageKey?: string;
+  mimeType?: string;
+  width?: number;
+  height?: number;
+}
+
+export interface SocialImageAssetPromptSnapshot {
+  promptVersion: string;
+  aspectRatio?: string;
+  styleDirection?: string;
+  textOverlayEnabled: boolean;
+}
+
+export interface SocialImageAssetUsage {
+  imageCount?: number;
+}
+
+export interface SocialImageAssetCost {
+  currency: 'USD';
+  estimated: number;
+}
+
+export interface SocialImageAsset {
+  id: string;
+  kind: 'social_image';
+  source: SocialImageAssetSource;
+  provider: string;
+  model?: string;
+  asset: SocialImageAssetFile;
+  promptSnapshot: SocialImageAssetPromptSnapshot;
+  usage?: SocialImageAssetUsage;
+  cost?: SocialImageAssetCost;
+  status: 'generated' | 'failed';
+  createdAt: string;
+}
+
+export interface SocialImageGenerationOptions {
+  aspectRatio?: '1:1' | '4:5' | '16:9';
+  styleDirection?: string;
+  includeTextOverlay?: boolean;
+  overlayText?: string;
+}

@@ -1,4 +1,4 @@
-import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, InternalServerErrorException, ServiceUnavailableException } from '@nestjs/common';
 
 export type CreativeErrorCode =
   | 'creative_validation_failed'
@@ -7,7 +7,8 @@ export type CreativeErrorCode =
   | 'creative_provider_rate_limited'
   | 'creative_provider_timeout'
   | 'creative_provider_request_failed'
-  | 'creative_invalid_asset';
+  | 'creative_invalid_asset'
+  | 'creative_asset_persistence_failed';
 
 // Extending the existing Nest HTTP exceptions means a future controller that
 // lets these bubble up gets the right status code for free.
@@ -37,6 +38,16 @@ export class CreativeProviderError extends ServiceUnavailableException {
 
 export class CreativeInvalidAssetError extends ServiceUnavailableException {
   readonly code: CreativeErrorCode = 'creative_invalid_asset';
+  constructor(message: string) {
+    super(message);
+  }
+}
+
+// Generation itself succeeded, but persisting the CreativeAsset record
+// failed — callers must not report success, and must not call the
+// (paid) provider again to "retry" it.
+export class CreativeAssetPersistenceError extends InternalServerErrorException {
+  readonly code: CreativeErrorCode = 'creative_asset_persistence_failed';
   constructor(message: string) {
     super(message);
   }
