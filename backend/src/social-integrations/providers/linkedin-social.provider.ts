@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { SocialProviderError } from '../errors/social.errors';
+import { SocialCapabilityUnsupportedError, SocialProviderError } from '../errors/social.errors';
 import type {
   BuildAuthorizationUrlInput,
   BuildAuthorizationUrlResult,
@@ -10,16 +10,19 @@ import type {
   SocialPlatform,
   SocialProfile,
   SocialProviderCapabilities,
+  SocialPublishRequest,
+  SocialPublishResult,
 } from '../types/social.types';
-import { getJson, postForm } from './social-oauth-http.util';
+import { getJson, postForm, postJson } from './social-oauth-http.util';
 import type { SocialProvider } from './social-provider.interface';
 
 const AUTHORIZATION_URL = 'https://www.linkedin.com/oauth/v2/authorization';
 const TOKEN_URL = 'https://www.linkedin.com/oauth/v2/accessToken';
 const USERINFO_URL = 'https://api.linkedin.com/v2/userinfo';
-// Identity-only (least privilege) — 18C is connection-only; a write scope
-// like w_member_social is not requested until publishing actually exists.
-const DEFAULT_SCOPES = ['openid', 'profile'];
+const UGC_POSTS_URL = 'https://api.linkedin.com/v2/ugcPosts';
+// 19B adds w_member_social — the minimum scope text post publishing
+// actually requires; still no video/ads scopes (least privilege).
+const DEFAULT_SCOPES = ['openid', 'profile', 'w_member_social'];
 
 interface LinkedInTokenResponse {
   access_token?: string;
@@ -31,6 +34,10 @@ interface LinkedInUserInfoResponse {
   sub?: string;
   name?: string;
   picture?: string;
+}
+
+interface LinkedInUgcPostResponse {
+  id?: string;
 }
 
 @Injectable()
@@ -47,8 +54,9 @@ export class LinkedInSocialProvider implements SocialProvider {
   getCapabilities(): SocialProviderCapabilities {
     // refreshToken stays false: standard LinkedIn OIDC sign-in does not
     // return a refresh token, so this must not claim a capability that
-    // isn't actually implemented (item 9/10/26/X).
-    return { connectAccount: true, refreshToken: false, publishText: false, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: false, accountDiscovery: false };
+    // isn't actually implemented (item 9/10/26/X). 19B implements text-only
+    // UGC post publishing; image/video publishing is not implemented.
+    return { connectAccount: true, refreshToken: false, publishText: true, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: false, accountDiscovery: false };
   }
 
   buildAuthorizationUrl(input: BuildAuthorizationUrlInput): BuildAuthorizationUrlResult {
@@ -102,6 +110,38 @@ export class LinkedInSocialProvider implements SocialProvider {
       accountName: typeof data.name === 'string' ? data.name : undefined,
       avatarUrl: typeof data.picture === 'string' ? data.picture : undefined,
     };
+  }
+
+  // 19B: text-only UGC post. `input.externalAccountId` is the LinkedIn
+  // member's stable `sub` — used to build the required author URN.
+  // LinkedIn's UGC Post API returns the created post id in the
+  // `x-restli-id` response header rather than the JSON body; fall back to
+  // a body `id` field defensively in case that ever changes.
+  async publish(input: SocialPublishRequest): Promise<SocialPublishResult> {
+    if (input.media) {
+      throw new SocialCapabilityUnsupportedError('LinkedIn image/video publishing is not supported yet — text only.');
+    }
+    const response = await postJson(
+      UGC_POSTS_URL,
+      {
+        author: `urn:li:person:${input.externalAccountId}`,
+        lifecycleState: 'PUBLISHED',
+        specificContent: {
+          'com.linkedin.ugc.ShareContent': {
+            shareCommentary: { text: input.text },
+            shareMediaCategory: 'NONE',
+          },
+        },
+        visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' },
+      },
+      { Authorization: `Bearer ${input.accessToken}`, 'X-Restli-Protocol-Version': '2.0.0' },
+    );
+    const body = response.body as LinkedInUgcPostResponse;
+    const postId = response.header('x-restli-id') ?? body.id;
+    if (typeof postId !== 'string' || postId.length === 0) {
+      throw new SocialProviderError('social_provider_request_failed', 'LinkedIn did not return a post id.');
+    }
+    return { providerPostId: postId, publishedAt: new Date() };
   }
 
   private getConfiguredScopes(): string[] {

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { SocialProviderError } from '../errors/social.errors';
+import { SocialCapabilityUnsupportedError, SocialProviderError } from '../errors/social.errors';
 import type {
   BuildAuthorizationUrlInput,
   BuildAuthorizationUrlResult,
@@ -12,14 +12,17 @@ import type {
   SocialPlatform,
   SocialProfile,
   SocialProviderCapabilities,
+  SocialPublishRequest,
+  SocialPublishResult,
 } from '../types/social.types';
-import { buildMetaAuthorizationUrl, exchangeMetaAuthorizationCode, fetchMetaListBounded, metaGraphGet } from './meta-graph-client.util';
+import { buildMetaAuthorizationUrl, exchangeMetaAuthorizationCode, fetchMetaListBounded, metaGraphGet, metaGraphPost } from './meta-graph-client.util';
 import type { SocialProvider } from './social-provider.interface';
 
-// instagram_basic is required to read the linked professional account's
-// profile fields; Page scopes are needed because IG professional accounts
-// are only discoverable through their linked Facebook Page (item 16/18).
-const DEFAULT_SCOPES = ['public_profile', 'pages_show_list', 'pages_read_engagement', 'instagram_basic'];
+// instagram_basic reads the linked professional account's profile fields;
+// instagram_content_publish (19B) is required for the container/publish
+// flow; Page scopes are needed because IG professional accounts are only
+// discoverable through their linked Facebook Page (item 16/18).
+const DEFAULT_SCOPES = ['public_profile', 'pages_show_list', 'pages_read_engagement', 'instagram_basic', 'instagram_content_publish'];
 
 interface FacebookPageRecord {
   id?: string;
@@ -35,6 +38,10 @@ interface InstagramAccountResponse {
   username?: string;
   name?: string;
   profile_picture_url?: string;
+}
+
+interface InstagramMediaContainerResponse {
+  id?: string;
 }
 
 /**
@@ -58,7 +65,10 @@ export class InstagramSocialProvider implements SocialProvider {
   }
 
   getCapabilities(): SocialProviderCapabilities {
-    return { connectAccount: true, refreshToken: false, publishText: false, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: false, accountDiscovery: true };
+    // 19B: Instagram professional publishing genuinely requires media —
+    // text-only publishing is never advertised/implemented for this
+    // platform (item 24/26).
+    return { connectAccount: true, refreshToken: false, publishText: false, publishImage: true, publishVideo: false, fetchProfile: true, fetchPostStatus: false, accountDiscovery: true };
   }
 
   buildAuthorizationUrl(input: BuildAuthorizationUrlInput): BuildAuthorizationUrlResult {
@@ -120,6 +130,30 @@ export class InstagramSocialProvider implements SocialProvider {
       });
     }
     return candidates;
+  }
+
+  // 19B item 24: one logical publishing action implemented as Meta's
+  // required two-call container/publish protocol — create the media
+  // container, then publish it. No auto-retry between the two calls; a
+  // failure at either step surfaces as a single normalized failure.
+  async publish(input: SocialPublishRequest): Promise<SocialPublishResult> {
+    if (!input.media?.url) {
+      throw new SocialCapabilityUnsupportedError('Instagram publishing requires an image with a usable URL.');
+    }
+    const container = (await metaGraphPost(this.configService, `/${input.externalAccountId}/media`, input.accessToken, {
+      image_url: input.media.url,
+      caption: input.text,
+    })) as InstagramMediaContainerResponse;
+    if (typeof container.id !== 'string' || container.id.length === 0) {
+      throw new SocialProviderError('social_provider_request_failed', 'Instagram did not return a media container id.');
+    }
+    const published = (await metaGraphPost(this.configService, `/${input.externalAccountId}/media_publish`, input.accessToken, {
+      creation_id: container.id,
+    })) as InstagramMediaContainerResponse;
+    if (typeof published.id !== 'string' || published.id.length === 0) {
+      throw new SocialProviderError('social_provider_request_failed', 'Instagram did not return a published post id.');
+    }
+    return { providerPostId: published.id, publishedAt: new Date() };
   }
 
   private getConfiguredScopes(): string[] {

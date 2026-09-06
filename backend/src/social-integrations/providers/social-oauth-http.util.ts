@@ -45,6 +45,48 @@ export async function getJson(url: string, accessToken?: string): Promise<Record
   return parseJsonResponse(response, 'social_provider_request_failed');
 }
 
+// 19B: a JSON POST with a Bearer token — used by LinkedIn's UGC Post API
+// and X's tweet-creation API, both of which take a JSON body rather than
+// form-encoded fields. Some publish endpoints return the created id only
+// in a response header (e.g. LinkedIn's `x-restli-id`), so the header
+// reader is exposed alongside the parsed body rather than discarded.
+export interface JsonPostResponse {
+  status: number;
+  body: Record<string, unknown>;
+  header(name: string): string | null;
+}
+
+export async function postJson(url: string, payload: unknown, headers: Record<string, string>): Promise<JsonPostResponse> {
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(getTimeoutMs()),
+    });
+  } catch {
+    throw new SocialProviderError('social_timeout', 'The social provider request timed out.');
+  }
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new SocialProviderError('social_permission_denied', 'The social provider rejected the request credentials.');
+    }
+    if (response.status === 429) {
+      throw new SocialProviderError('social_rate_limited', 'The social provider is rate-limiting requests.');
+    }
+    throw new SocialProviderError('social_provider_request_failed', 'The social provider request failed.');
+  }
+  let body: Record<string, unknown> = {};
+  try {
+    const text = await response.text();
+    body = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+  } catch {
+    throw new SocialProviderError('social_provider_request_failed', 'The social provider returned an unreadable response.');
+  }
+  return { status: response.status, body, header: (name: string) => response.headers.get(name) };
+}
+
 async function parseJsonResponse(response: Response, fallbackFailureCode: 'social_token_exchange_failed' | 'social_provider_request_failed'): Promise<Record<string, unknown>> {
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) {

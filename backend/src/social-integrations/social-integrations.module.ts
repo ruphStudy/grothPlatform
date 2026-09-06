@@ -57,6 +57,6 @@ import type { SocialPlatform } from './types/social.types';
     SocialConnectionsService,
     MetaAccountSelectionService,
   ],
-  exports: [SocialEngineService],
+  exports: [SocialEngineService, SocialConnectionsService],
 })
 export class SocialIntegrationsModule {}

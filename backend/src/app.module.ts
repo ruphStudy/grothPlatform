@@ -17,6 +17,7 @@ import { KeywordIntelligenceModule } from './keyword-intelligence/keyword-intell
 import { ProductsModule } from './products/products.module';
 import { ResearchModule } from './research/research.module';
 import { SocialIntegrationsModule } from './social-integrations/social-integrations.module';
+import { SocialPublishingModule } from './social-publishing/social-publishing.module';
 import { UsersModule } from './users/users.module';
 import { WebsiteIntelligenceModule } from './website-intelligence/website-intelligence.module';
 
@@ -46,6 +47,7 @@ import { WebsiteIntelligenceModule } from './website-intelligence/website-intell
     ContentGenerationModule,
     CreativeModule,
     SocialIntegrationsModule,
+    SocialPublishingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

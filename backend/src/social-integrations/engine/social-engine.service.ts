@@ -14,6 +14,8 @@ import type {
   SocialPlatform,
   SocialProfile,
   SocialProviderCapabilities,
+  SocialPublishRequest,
+  SocialPublishResult,
 } from '../types/social.types';
 
 /**
@@ -80,6 +82,19 @@ export class SocialEngineService {
       throw new SocialCapabilityUnsupportedError(`The ${platform} provider does not support account discovery.`);
     }
     return this.callOnce(platform, () => provider.discoverAccountCandidates!(input), 'social_provider_request_failed');
+  }
+
+  // 19A/19B: no single capability key gates this generically — a caller
+  // needs `publishText` for LinkedIn/X/Facebook but `publishImage` for
+  // Instagram, and only the publishing orchestration (which knows which
+  // platform/content it's dealing with) can pick the right one. It must
+  // assert that capability itself before calling this method.
+  async publish(platform: SocialPlatform, input: SocialPublishRequest): Promise<SocialPublishResult> {
+    const provider = this.resolveProvider(platform);
+    if (!provider.publish) {
+      throw new SocialCapabilityUnsupportedError(`The ${platform} provider does not support publishing.`);
+    }
+    return this.callOnce(platform, () => provider.publish!(input), 'social_provider_request_failed');
   }
 
   private assertCapability(provider: SocialProvider, capability: keyof SocialProviderCapabilities): void {

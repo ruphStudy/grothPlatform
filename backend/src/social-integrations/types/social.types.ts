@@ -108,18 +108,37 @@ export interface SocialProfile {
   profileUrl?: string;
 }
 
-// Minimal provider-neutral publish shapes — kept ready for a later Sprint
-// 18 item. No endpoint exposes these yet (18A/18B item 7/37).
+// 19A/19B: provider-neutral publish shapes. `accessToken` is resolved
+// server-side by the publishing orchestration (never accepted from the
+// frontend) and passed in alongside the already-validated content.
+export interface SocialPublishMedia {
+  type: 'image';
+  url?: string;
+  storageKey?: string;
+  mimeType?: string;
+}
+
 export interface SocialPublishRequest {
   accessToken: string;
-  text?: string;
-  imageUrl?: string;
+  externalAccountId: string;
+
+  text: string;
+
+  media?: SocialPublishMedia;
+
+  // X thread support only: the previous post's providerPostId, so the
+  // orchestration can post a thread as a sequence of individually-replied
+  // publish() calls without the adapter needing any thread concept itself.
+  inReplyToId?: string;
+
+  metadata?: Record<string, string | number | boolean>;
 }
 
 export interface SocialPublishResult {
-  externalPostId: string;
-  url?: string;
-  publishedAt: Date;
+  providerPostId: string;
+  providerPostUrl?: string;
+  publishedAt?: Date;
+  metadata?: Record<string, string | number | boolean>;
 }
 
 export interface SocialPostStatusResult {

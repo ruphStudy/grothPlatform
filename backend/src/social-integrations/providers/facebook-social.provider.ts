@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { SocialProviderError } from '../errors/social.errors';
+import { SocialCapabilityUnsupportedError, SocialProviderError } from '../errors/social.errors';
 import type {
   BuildAuthorizationUrlInput,
   BuildAuthorizationUrlResult,
@@ -12,13 +12,19 @@ import type {
   SocialPlatform,
   SocialProfile,
   SocialProviderCapabilities,
+  SocialPublishRequest,
+  SocialPublishResult,
 } from '../types/social.types';
-import { buildMetaAuthorizationUrl, exchangeMetaAuthorizationCode, fetchMetaListBounded, metaGraphGet } from './meta-graph-client.util';
+import { buildMetaAuthorizationUrl, exchangeMetaAuthorizationCode, fetchMetaListBounded, metaGraphGet, metaGraphPost } from './meta-graph-client.util';
 import type { SocialProvider } from './social-provider.interface';
 
-// Identity + Page discovery only — no pages_manage_posts/publish scope
-// until publishing actually exists (item 4, least privilege).
-const DEFAULT_SCOPES = ['public_profile', 'pages_show_list', 'pages_read_engagement'];
+// 19B adds pages_manage_posts — the minimum scope Page text publishing
+// actually requires; still no video/ads/insights scopes (least privilege).
+const DEFAULT_SCOPES = ['public_profile', 'pages_show_list', 'pages_read_engagement', 'pages_manage_posts'];
+
+interface FacebookFeedPostResponse {
+  id?: string;
+}
 
 interface FacebookMeResponse {
   id?: string;
@@ -52,7 +58,10 @@ export class FacebookSocialProvider implements SocialProvider {
   }
 
   getCapabilities(): SocialProviderCapabilities {
-    return { connectAccount: true, refreshToken: false, publishText: false, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: false, accountDiscovery: true };
+    // 19B: text-only Page publishing is implemented; image/video publishing
+    // is not (item 23/26) — never advertise a capability this adapter
+    // doesn't actually implement.
+    return { connectAccount: true, refreshToken: false, publishText: true, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: false, accountDiscovery: true };
   }
 
   buildAuthorizationUrl(input: BuildAuthorizationUrlInput): BuildAuthorizationUrlResult {
@@ -106,6 +115,21 @@ export class FacebookSocialProvider implements SocialProvider {
       });
     }
     return candidates;
+  }
+
+  // 19B: text-only Page post. `input.externalAccountId` is the Page id
+  // and `input.accessToken` is that Page's own access token (never the
+  // personal user token) — both resolved server-side by the publishing
+  // orchestration, never accepted from the frontend.
+  async publish(input: SocialPublishRequest): Promise<SocialPublishResult> {
+    if (input.media) {
+      throw new SocialCapabilityUnsupportedError('Facebook image/video publishing is not supported yet — text only.');
+    }
+    const data = (await metaGraphPost(this.configService, `/${input.externalAccountId}/feed`, input.accessToken, { message: input.text })) as FacebookFeedPostResponse;
+    if (typeof data.id !== 'string' || data.id.length === 0) {
+      throw new SocialProviderError('social_provider_request_failed', 'Facebook did not return a post id.');
+    }
+    return { providerPostId: data.id, providerPostUrl: `https://facebook.com/${data.id}`, publishedAt: new Date() };
   }
 
   private getConfiguredScopes(): string[] {

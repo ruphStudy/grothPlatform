@@ -3107,3 +3107,29 @@ export interface PendingSelectionSummary {
   candidates: SocialAccountCandidateSummary[];
   expiresAt: string;
 }
+
+// Sprint 19A/19B — immediate social publishing. Never carries a token or
+// raw provider payload — the backend never returns one.
+export type PublicationStatus = 'pending' | 'publishing' | 'published' | 'failed';
+
+export interface SocialPublicationSummary {
+  id: string;
+  platform: SocialConnectionPlatform;
+  connectionId: string;
+  contentArtifactId: string;
+  contentVersionId: string;
+  contentVersion: number;
+  creativeAssetId?: string;
+  status: PublicationStatus;
+  providerName?: string;
+  providerPostId?: string;
+  providerPostUrl?: string;
+  providerPostIds?: string[];
+  contentSnapshot: { kind: string; text: string; mediaType?: 'image' };
+  publishedAt?: string;
+  attemptCount: number;
+  lastAttemptAt?: string;
+  errorCode?: string;
+  createdAt: string;
+  updatedAt: string;
+}

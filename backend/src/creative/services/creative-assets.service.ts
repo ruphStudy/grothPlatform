@@ -108,6 +108,26 @@ export class CreativeAssetsService {
     return this.toResponse(doc);
   }
 
+  // 19B: tenant-safe single lookup constrained to organization+product+
+  // campaign — used by social publishing to validate a caller-supplied
+  // creativeAssetId actually belongs to this campaign before it can ever
+  // be used in a publish request.
+  async getOwnedForCampaign(organizationId: string, productId: string, campaignId: string, creativeAssetId: string): Promise<CreativeAssetResponse> {
+    let doc: CreativeAssetDocument | null;
+    try {
+      doc = await this.assetModel.findOne({
+        _id: new Types.ObjectId(creativeAssetId),
+        organizationId: new Types.ObjectId(organizationId),
+        productId: new Types.ObjectId(productId),
+        campaignId: new Types.ObjectId(campaignId),
+      });
+    } catch {
+      throw new NotFoundException('Creative asset not found.');
+    }
+    if (!doc) throw new NotFoundException('Creative asset not found.');
+    return this.toResponse(doc);
+  }
+
   // 17G: creative *selection* only (unreviewed/preferred/rejected) —
   // deliberately distinct from Sprint 16 Human Review and Sprint 28
   // approval. Never deletes, never touches the source ContentVersion.

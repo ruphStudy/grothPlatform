@@ -63,6 +63,8 @@ import type {
   ContentVersionSummary,
   SocialImageAsset,
   SocialImageGenerationOptions,
+  SocialConnectionSummary,
+  SocialPublicationSummary,
 } from '../types';
 
 const CAMPAIGN_STATUSES: CampaignStatus[] = ['draft', 'planned', 'approved', 'active', 'paused', 'completed', 'archived'];
@@ -1780,6 +1782,182 @@ function CreativeImagePanel({
   );
 }
 
+// 19A/19B — immediate social publishing. Applied to LinkedIn/X/Facebook/
+// Instagram panels only. The server always resolves the actual post text
+// from the persisted ContentVersion — this panel only ever sends a
+// connectionId, an optional creativeAssetId (Instagram only), and a
+// client-generated idempotency key, never post text/tokens/platform
+// overrides. Each explicit "Publish Now" click uses a fresh key; a network
+// retry of the *same* click must reuse the key it already generated.
+function SocialPublishPanel({
+  basePath,
+  productBasePath,
+  artifactId,
+  version,
+  platform,
+}: {
+  basePath: string;
+  productBasePath: string;
+  artifactId: string | undefined;
+  version: number | undefined;
+  platform: 'linkedin' | 'x' | 'facebook' | 'instagram';
+}) {
+  const [connections, setConnections] = useState<SocialConnectionSummary[] | null>(null);
+  const [selectedConnectionId, setSelectedConnectionId] = useState('');
+  const [humanReviewDecision, setHumanReviewDecision] = useState<string | null>(null);
+  const [images, setImages] = useState<SocialImageAsset[] | null>(null);
+  const [selectedImageId, setSelectedImageId] = useState('');
+  const [publications, setPublications] = useState<SocialPublicationSummary[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const idempotencyKeyRef = useState<{ current: string | null }>(() => ({ current: null }))[0];
+
+  useEffect(() => {
+    if (!artifactId || version === undefined) return;
+    (async () => {
+      try {
+        const conns = await apiRequest<SocialConnectionSummary[]>(`${productBasePath}/social-connections`);
+        setConnections(conns.filter((c) => c.platform === platform && c.status === 'active'));
+      } catch {
+        // Best-effort — an empty/failed connection list just disables Publish.
+      }
+      try {
+        const detail = await apiRequest<ContentVersionDetail>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}`);
+        setHumanReviewDecision(detail.humanReview?.decision ?? null);
+      } catch {
+        // Best-effort — missing review surfaces as a server-side block on publish.
+      }
+      if (platform === 'instagram') {
+        try {
+          const imgs = await apiRequest<SocialImageAsset[]>(`${basePath}/creative/social-image/${artifactId}/versions/${version}`);
+          setImages(imgs);
+        } catch {
+          // Best-effort.
+        }
+      }
+      try {
+        // contentArtifactId narrows to this artifact; contentVersion (the
+        // human-facing version number) then narrows to exactly this
+        // version — the frontend never needs the Mongo contentVersionId.
+        const pubs = await apiRequest<SocialPublicationSummary[]>(`${basePath}/social-publications?contentArtifactId=${artifactId}`);
+        setPublications(pubs.filter((p) => p.contentVersion === version));
+      } catch {
+        // Best-effort.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [artifactId, version, platform]);
+
+  async function handlePublish() {
+    if (!artifactId || version === undefined || !selectedConnectionId) return;
+    if (platform === 'instagram' && !selectedImageId) return;
+    const confirmMessage =
+      humanReviewDecision === 'review_recommended'
+        ? 'Human review is recommended for this content. Publish anyway?'
+        : 'Image generation may incur provider usage cost.\n\nPublish this content now?';
+    if (!window.confirm(confirmMessage)) return;
+
+    if (!idempotencyKeyRef.current) idempotencyKeyRef.current = crypto.randomUUID();
+    const idempotencyKey = idempotencyKeyRef.current;
+
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await apiRequest<SocialPublicationSummary>(`${basePath}/social-publications/${artifactId}/versions/${version}/publish`, {
+        method: 'POST',
+        body: { connectionId: selectedConnectionId, creativeAssetId: platform === 'instagram' ? selectedImageId : undefined, idempotencyKey },
+      });
+      setPublications((prev) => [result, ...(prev ?? [])]);
+      idempotencyKeyRef.current = null; // a genuinely new explicit click gets a fresh key next time
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to publish');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!artifactId || version === undefined) return null;
+
+  const reviewRequired = humanReviewDecision === 'review_required';
+  const needsImage = platform === 'instagram';
+  const canPublish = !busy && !reviewRequired && !!selectedConnectionId && (!needsImage || !!selectedImageId);
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      <span className="summary-label" style={{ display: 'block', marginTop: 8 }}>
+        Publish
+      </span>
+      <ErrorMessage message={error} />
+      {connections === null && <Loading />}
+      {connections !== null && connections.length === 0 && (
+        <p className="entity-card-meta">No active {labelize(platform)} connection. Connect one from the product&apos;s Social Connections page.</p>
+      )}
+      {connections !== null && connections.length > 0 && (
+        <div className="form-inline">
+          <div className="field" style={{ marginBottom: 0 }}>
+            <select value={selectedConnectionId} onChange={(e) => setSelectedConnectionId(e.target.value)}>
+              <option value="">Select account</option>
+              {connections.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.accountName ?? c.username ?? c.id}
+                </option>
+              ))}
+            </select>
+          </div>
+          {needsImage && (
+            <div className="field" style={{ marginBottom: 0 }}>
+              <select value={selectedImageId} onChange={(e) => setSelectedImageId(e.target.value)}>
+                <option value="">Select image</option>
+                {(images ?? []).map((img) => (
+                  <option key={img.id} value={img.id}>
+                    Image {img.id.slice(-6)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      )}
+      {needsImage && images !== null && images.length === 0 && (
+        <p className="entity-card-meta">Instagram publishing requires an eligible image creative. Generate one above first.</p>
+      )}
+      {reviewRequired && <div className="content-warning">Human review is required before publishing.</div>}
+      {!reviewRequired && humanReviewDecision === 'review_recommended' && <p className="entity-card-meta">Human review is recommended for this content.</p>}
+      <button className="btn btn-primary" style={{ marginTop: 6 }} onClick={handlePublish} disabled={!canPublish}>
+        {busy ? 'Publishing...' : 'Publish Now'}
+      </button>
+
+      {publications && publications.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <span className="summary-label">Publishing History</span>
+          {publications.map((p) => (
+            <div key={p.id} style={{ marginTop: 6, padding: 8, border: '1px solid var(--border-color, #ddd)', borderRadius: 6 }}>
+              <div className="tag-list">
+                <span className="tag">{labelize(p.status)}</span>
+                {p.publishedAt && <span className="entity-card-meta">{new Date(p.publishedAt).toLocaleString()}</span>}
+              </div>
+              {p.status === 'published' && p.providerPostUrl && (
+                <a href={p.providerPostUrl} target="_blank" rel="noreferrer">
+                  View Post
+                </a>
+              )}
+              {p.status === 'failed' && (
+                <div className="content-warning" style={{ marginTop: 4 }}>
+                  {p.providerPostIds && p.providerPostIds.length > 0
+                    ? `Publishing stopped after part of the thread was published (${p.providerPostIds.length} post${p.providerPostIds.length === 1 ? '' : 's'}).`
+                    : p.errorCode
+                      ? `Publishing failed: ${labelize(p.errorCode)}`
+                      : 'Publishing failed.'}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Shared by every newsletter source location (Blog Calendar, Content
 // Pillar) — state stays lifted to the parent, keyed by `${sourceType}:${sourceId}`,
 // so newsletter drafts never collide with each other or with any other
@@ -2208,6 +2386,7 @@ export default function CampaignDetailPage() {
   const [repurposingView, setRepurposingView] = useState<'chains' | 'items'>('chains');
 
   const basePath = `/organizations/${organizationId}/products/${productId}/campaigns/${campaignId}`;
+  const productBasePath = `/organizations/${organizationId}/products/${productId}`;
 
   async function loadData() {
     if (!organizationId || !productId || !campaignId) return;
@@ -4622,6 +4801,7 @@ export default function CampaignDetailPage() {
                                               defaultRatioLabel="Platform default ratio"
                                               overlayMaxChars={80}
                                             />
+                                            <SocialPublishPanel basePath={basePath} productBasePath={productBasePath} artifactId={draft.artifactId} version={draft.version} platform="linkedin" />
                                           </div>
                                         )}
                                       </div>
@@ -4764,6 +4944,7 @@ export default function CampaignDetailPage() {
                                               defaultRatioLabel="Platform default ratio"
                                               overlayMaxChars={80}
                                             />
+                                            <SocialPublishPanel basePath={basePath} productBasePath={productBasePath} artifactId={draft.artifactId} version={draft.version} platform="x" />
                                           </div>
                                         )}
                                       </div>
@@ -4868,6 +5049,7 @@ export default function CampaignDetailPage() {
                                               defaultRatioLabel="Platform default ratio"
                                               overlayMaxChars={80}
                                             />
+                                            <SocialPublishPanel basePath={basePath} productBasePath={productBasePath} artifactId={draft.artifactId} version={draft.version} platform="facebook" />
                                           </div>
                                         )}
                                       </div>
@@ -4991,6 +5173,7 @@ export default function CampaignDetailPage() {
                                               defaultRatioLabel="Platform default ratio"
                                               overlayMaxChars={80}
                                             />
+                                            <SocialPublishPanel basePath={basePath} productBasePath={productBasePath} artifactId={draft.artifactId} version={draft.version} platform="instagram" />
                                           </div>
                                         )}
                                       </div>

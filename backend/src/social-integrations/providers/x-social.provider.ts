@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes } from 'crypto';
-import { SocialProviderError } from '../errors/social.errors';
+import { SocialCapabilityUnsupportedError, SocialProviderError } from '../errors/social.errors';
 import type {
   BuildAuthorizationUrlInput,
   BuildAuthorizationUrlResult,
@@ -12,17 +12,19 @@ import type {
   SocialPlatform,
   SocialProfile,
   SocialProviderCapabilities,
+  SocialPublishRequest,
+  SocialPublishResult,
 } from '../types/social.types';
-import { getJson, postForm } from './social-oauth-http.util';
+import { getJson, postForm, postJson } from './social-oauth-http.util';
 import type { SocialProvider } from './social-provider.interface';
 
 const AUTHORIZATION_URL = 'https://twitter.com/i/oauth2/authorize';
 const TOKEN_URL = 'https://api.twitter.com/2/oauth2/token';
 const USERS_ME_URL = 'https://api.twitter.com/2/users/me?user.fields=profile_image_url,username';
-// Least privilege for connection-only 18D: identity + refresh, no
-// tweet.read/tweet.write (those are publishing scopes, not requested
-// until publishing exists — item 21).
-const DEFAULT_SCOPES = ['users.read', 'offline.access'];
+const TWEETS_URL = 'https://api.twitter.com/2/tweets';
+// 19B adds tweet.write — the minimum scope posting/thread publishing
+// actually requires; still no media-upload scope (least privilege).
+const DEFAULT_SCOPES = ['users.read', 'tweet.write', 'offline.access'];
 const CODE_VERIFIER_BYTES = 32;
 
 interface XTokenResponse {
@@ -39,6 +41,10 @@ interface XUsersMeResponse {
     username?: string;
     profile_image_url?: string;
   };
+}
+
+interface XTweetResponse {
+  data?: { id?: string };
 }
 
 // X's OAuth 2.0 authorization-code flow requires PKCE (S256). The
@@ -58,7 +64,10 @@ export class XSocialProvider implements SocialProvider {
   }
 
   getCapabilities(): SocialProviderCapabilities {
-    return { connectAccount: true, refreshToken: true, publishText: false, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: false, accountDiscovery: false };
+    // 19B implements text-only single/thread posting; image/video
+    // publishing (which needs a separate media-upload endpoint) is not
+    // implemented and must not be advertised.
+    return { connectAccount: true, refreshToken: true, publishText: true, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: false, accountDiscovery: false };
   }
 
   buildAuthorizationUrl(input: BuildAuthorizationUrlInput): BuildAuthorizationUrlResult {
@@ -139,6 +148,27 @@ export class XSocialProvider implements SocialProvider {
       scopes: typeof data.scope === 'string' ? data.scope.split(' ') : undefined,
       profileUrl: profile.profileUrl,
     };
+  }
+
+  // 19B: publishes exactly one tweet per call. Thread sequencing (posting
+  // several tweets, each replying to the previous) is orchestrated by the
+  // caller via `input.inReplyToId` — this adapter has no thread concept of
+  // its own, matching item 19's "orchestration makes multiple provider
+  // calls, not the adapter."
+  async publish(input: SocialPublishRequest): Promise<SocialPublishResult> {
+    if (input.media) {
+      throw new SocialCapabilityUnsupportedError('X image/video publishing is not supported yet — text only.');
+    }
+    const response = await postJson(
+      TWEETS_URL,
+      { text: input.text, ...(input.inReplyToId ? { reply: { in_reply_to_tweet_id: input.inReplyToId } } : {}) },
+      { Authorization: `Bearer ${input.accessToken}` },
+    );
+    const postId = (response.body as XTweetResponse).data?.id;
+    if (typeof postId !== 'string' || postId.length === 0) {
+      throw new SocialProviderError('social_provider_request_failed', 'X did not return a post id.');
+    }
+    return { providerPostId: postId, publishedAt: new Date() };
   }
 
   private getConfiguredScopes(): string[] {

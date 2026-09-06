@@ -1,7 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { SocialProviderError } from '../errors/social.errors';
 import type { BuildAuthorizationUrlInput, BuildAuthorizationUrlResult, ExchangeAuthorizationCodeInput } from '../types/social.types';
-import { getJson } from './social-oauth-http.util';
+import { getJson, postForm } from './social-oauth-http.util';
 
 const DEFAULT_GRAPH_API_VERSION = 'v18.0';
 const DEFAULT_MAX_DISCOVERY_PAGES = 3;
@@ -65,6 +65,13 @@ export async function metaGraphGet(configService: ConfigService, path: string, a
   const version = getMetaGraphApiVersion(configService);
   const params = new URLSearchParams({ access_token: accessToken, ...extraParams });
   return getJson(`https://graph.facebook.com/${version}${path}?${params.toString()}`);
+}
+
+// 19B: a single typed Graph POST (Page posts, IG media container/publish
+// calls) — same untrusted-response treatment as metaGraphGet.
+export async function metaGraphPost(configService: ConfigService, path: string, accessToken: string, params: Record<string, string>): Promise<Record<string, unknown>> {
+  const version = getMetaGraphApiVersion(configService);
+  return postForm(`https://graph.facebook.com/${version}${path}`, { access_token: accessToken, ...params });
 }
 
 interface MetaListResponse {

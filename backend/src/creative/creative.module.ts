@@ -52,6 +52,6 @@ import { CreativeGenerationService } from './services/creative-generation.servic
     BrandAssetsService,
     BrandVisualProfileService,
   ],
-  exports: [CreativeEngineService, ImagePromptBuilderService],
+  exports: [CreativeEngineService, ImagePromptBuilderService, CreativeAssetsService],
 })
 export class CreativeModule {}
