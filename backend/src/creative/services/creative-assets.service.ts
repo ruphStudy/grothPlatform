@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { CreativeAssetPersistenceError } from '../errors/creative.errors';
 import { CreativeAsset, CreativeAssetDocument } from '../schemas/creative-asset.schema';
+import type { CreativeKind } from '../types/creative.types';
 import type { CreateCreativeAssetInput, CreativeAssetResponse } from '../types/creative-asset.types';
 
 /**
@@ -50,12 +51,16 @@ export class CreativeAssetsService {
     return this.toResponse(doc);
   }
 
-  async listForSourceVersion(organizationId: string, productId: string, campaignId: string, contentArtifactId: string, contentVersionId: string): Promise<CreativeAssetResponse[]> {
+  // `kind` is required — a single ContentVersion (e.g. a blog) can have
+  // both `blog_hero` and `thumbnail` assets, and each feature's GET route
+  // must only ever return its own kind.
+  async listForSourceVersion(organizationId: string, productId: string, campaignId: string, kind: CreativeKind, contentArtifactId: string, contentVersionId: string): Promise<CreativeAssetResponse[]> {
     const docs = await this.assetModel
       .find({
         organizationId: new Types.ObjectId(organizationId),
         productId: new Types.ObjectId(productId),
         campaignId: new Types.ObjectId(campaignId),
+        kind,
         'source.contentArtifactId': new Types.ObjectId(contentArtifactId),
         'source.contentVersionId': new Types.ObjectId(contentVersionId),
       })

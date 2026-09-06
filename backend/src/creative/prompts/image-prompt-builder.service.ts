@@ -28,7 +28,7 @@ export class ImagePromptBuilderService {
 
   buildImagePrompt(input: BuildImagePromptInput): CreativeImagePrompt {
     const overlayEnabled = !!input.textOverlay?.enabled && !!input.textOverlay?.text;
-    const overlayText = overlayEnabled ? truncateOverlayText(input.textOverlay!.text!, this.getTextOverlayMaxChars()) : undefined;
+    const overlayText = overlayEnabled ? truncateOverlayText(input.textOverlay!.text!, input.textOverlay?.maxChars ?? this.getTextOverlayMaxChars()) : undefined;
     const finalOverlayEnabled = overlayEnabled && !!overlayText;
 
     const required = [this.buildCreativeTask(input), this.buildTextOverlaySection(finalOverlayEnabled, overlayText), this.buildSafetySection(), this.buildOutputRequirement(input)];
@@ -96,6 +96,8 @@ export class ImagePromptBuilderService {
     if (title) lines.push(`Content topic: "${title}"`);
     const topic = capField(content?.topic);
     if (topic && topic !== title) lines.push(`Related topic: "${topic}"`);
+    const hook = capField(content?.hook);
+    if (hook) lines.push(`Opening hook (concept only, never a specific speaker/presenter identity): "${hook}"`);
     const platform = capField(content?.platform);
     if (platform) lines.push(`Target platform: ${platform}`);
     const objective = capField(campaign?.objective);

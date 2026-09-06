@@ -25,6 +25,9 @@ export interface ImagePromptContentContext {
   title?: string;
   topic?: string;
   platform?: string;
+  // 17E: a video script's hook line — never a fabricated speaker/presenter
+  // identity, just the opening concept the thumbnail should evoke.
+  hook?: string;
 }
 
 // Only ever populated from genuinely configured/persisted brand data
@@ -38,6 +41,10 @@ export interface ImagePromptBrandDirection {
 export interface ImagePromptTextOverlayInput {
   enabled?: boolean;
   text?: string;
+  // 17E: some features (e.g. thumbnails) need a stricter cap than the
+  // configured global default (e.g. blog hero/social 80 chars). Falls back
+  // to CREATIVE_TEXT_OVERLAY_MAX_CHARS when omitted.
+  maxChars?: number;
 }
 
 export interface ImagePromptSourceContext {

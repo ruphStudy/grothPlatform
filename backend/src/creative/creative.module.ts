@@ -11,14 +11,14 @@ import { CREATIVE_PROVIDER_TOKEN } from './providers/creative-provider.interface
 import { FakeCreativeProvider } from './providers/fake-creative-provider.service';
 import { CreativeAsset, CreativeAssetSchema } from './schemas/creative-asset.schema';
 import { CreativeAssetsService } from './services/creative-assets.service';
-import { SocialImageService } from './services/social-image.service';
+import { CreativeGenerationService } from './services/creative-generation.service';
 
 // 17A: DI infrastructure only (engine + provider token). 17B adds the
-// deterministic ImagePromptBuilderService (no DB, no provider call). 17C
-// adds the first real, persisted creative workflow (social images) —
-// SocialImageService reuses the same paid-generation approval gates as
-// 15C-15I/16H, and CreativeAssetsService is the only place that writes a
-// CreativeAsset document.
+// deterministic ImagePromptBuilderService (no DB, no provider call). 17C-
+// 17E share ONE persisted creative workflow — CreativeGenerationService —
+// covering social images, blog heroes, and thumbnails; it reuses the same
+// paid-generation approval gates as 15C-15I/16H, and CreativeAssetsService
+// is the only place that writes a CreativeAsset document.
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: CreativeAsset.name, schema: CreativeAssetSchema }]),
@@ -34,7 +34,7 @@ import { SocialImageService } from './services/social-image.service';
     CreativeEngineService,
     ImagePromptBuilderService,
     CreativeAssetsService,
-    SocialImageService,
+    CreativeGenerationService,
   ],
   exports: [CreativeEngineService, ImagePromptBuilderService],
 })

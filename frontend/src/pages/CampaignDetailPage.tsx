@@ -1636,19 +1636,39 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion: latestVers
   );
 }
 
-// 17C — social image generation. Applied to LinkedIn/X/Facebook/Instagram
-// generated-content panels only (non-social kinds are rejected server-side
-// anyway). The full image prompt is always built server-side (17B) from
-// the persisted ContentVersion — this panel only ever sends safe options
-// (aspect ratio, style direction, overlay toggle/text). Generating again
-// never overwrites a prior image; it creates a new one, so the list below
-// simply accumulates newest-first.
-function SocialImageGenerationPanel({ basePath, artifactId, version }: { basePath: string; artifactId: string | undefined; version: number | undefined }) {
+// 17C/17D/17E — shared creative-image generation panel. `apiSegment`
+// selects which server route/feature this instance talks to
+// (social-image | blog-hero | thumbnail); the full image prompt is always
+// built server-side (17B) from the persisted ContentVersion — this panel
+// only ever sends safe options (aspect ratio, style direction, overlay
+// toggle/text). Generating again never overwrites a prior image; it
+// creates a new one, so the list below simply accumulates newest-first.
+function CreativeImagePanel({
+  basePath,
+  artifactId,
+  version,
+  apiSegment,
+  label,
+  buttonLabel,
+  allowedRatios,
+  defaultRatioLabel,
+  overlayMaxChars,
+}: {
+  basePath: string;
+  artifactId: string | undefined;
+  version: number | undefined;
+  apiSegment: 'social-image' | 'blog-hero' | 'thumbnail';
+  label: string;
+  buttonLabel: string;
+  allowedRatios: string[];
+  defaultRatioLabel: string;
+  overlayMaxChars: number;
+}) {
   const [images, setImages] = useState<SocialImageAsset[] | null>(null);
   const [listBusy, setListBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [aspectRatio, setAspectRatio] = useState<'' | '1:1' | '4:5' | '16:9'>('');
+  const [aspectRatio, setAspectRatio] = useState('');
   const [styleDirection, setStyleDirection] = useState('');
   const [includeTextOverlay, setIncludeTextOverlay] = useState(false);
   const [overlayText, setOverlayText] = useState('');
@@ -1658,7 +1678,7 @@ function SocialImageGenerationPanel({ basePath, artifactId, version }: { basePat
     (async () => {
       setListBusy(true);
       try {
-        const result = await apiRequest<SocialImageAsset[]>(`${basePath}/creative/social-image/${artifactId}/versions/${version}`);
+        const result = await apiRequest<SocialImageAsset[]>(`${basePath}/creative/${apiSegment}/${artifactId}/versions/${version}`);
         setImages(result);
       } catch {
         // Best-effort convenience listing — a failure here must never
@@ -1668,7 +1688,7 @@ function SocialImageGenerationPanel({ basePath, artifactId, version }: { basePat
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [artifactId, version]);
+  }, [artifactId, version, apiSegment]);
 
   async function handleGenerate() {
     if (!artifactId || version === undefined) return;
@@ -1678,12 +1698,12 @@ function SocialImageGenerationPanel({ basePath, artifactId, version }: { basePat
     setError(null);
     try {
       const options: SocialImageGenerationOptions = {
-        aspectRatio: aspectRatio || undefined,
+        aspectRatio: (aspectRatio || undefined) as SocialImageGenerationOptions['aspectRatio'],
         styleDirection: styleDirection.trim() || undefined,
         includeTextOverlay,
         overlayText: includeTextOverlay ? overlayText.trim() || undefined : undefined,
       };
-      const result = await apiRequest<SocialImageAsset>(`${basePath}/creative/social-image/${artifactId}/versions/${version}`, { method: 'POST', body: options });
+      const result = await apiRequest<SocialImageAsset>(`${basePath}/creative/${apiSegment}/${artifactId}/versions/${version}`, { method: 'POST', body: options });
       setImages((prev) => [result, ...(prev ?? [])]);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to generate image');
@@ -1697,16 +1717,18 @@ function SocialImageGenerationPanel({ basePath, artifactId, version }: { basePat
   return (
     <div style={{ marginTop: 10 }}>
       <span className="summary-label" style={{ display: 'block', marginTop: 8 }}>
-        Social Image
+        {label}
       </span>
       <ErrorMessage message={error} />
       <div className="form-inline">
         <div className="field" style={{ marginBottom: 0 }}>
-          <select value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value as '' | '1:1' | '4:5' | '16:9')}>
-            <option value="">Platform default ratio</option>
-            <option value="1:1">1:1</option>
-            <option value="4:5">4:5</option>
-            <option value="16:9">16:9</option>
+          <select value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)}>
+            <option value="">{defaultRatioLabel}</option>
+            {allowedRatios.map((ratio) => (
+              <option key={ratio} value={ratio}>
+                {ratio}
+              </option>
+            ))}
           </select>
         </div>
         <div className="field" style={{ marginBottom: 0 }}>
@@ -1718,12 +1740,12 @@ function SocialImageGenerationPanel({ basePath, artifactId, version }: { basePat
         </label>
         {includeTextOverlay && (
           <div className="field" style={{ marginBottom: 0 }}>
-            <input type="text" placeholder="Overlay text (short)" maxLength={80} value={overlayText} onChange={(e) => setOverlayText(e.target.value)} />
+            <input type="text" placeholder="Overlay text (short)" maxLength={overlayMaxChars} value={overlayText} onChange={(e) => setOverlayText(e.target.value)} />
           </div>
         )}
       </div>
       <button className="btn btn-secondary" onClick={handleGenerate} disabled={busy}>
-        {busy ? 'Generating...' : 'Generate Image'}
+        {busy ? 'Generating...' : buttonLabel}
       </button>
 
       {listBusy && <Loading />}
@@ -1731,7 +1753,7 @@ function SocialImageGenerationPanel({ basePath, artifactId, version }: { basePat
         <div style={{ marginTop: 8 }}>
           {images.map((img) => (
             <div key={img.id} style={{ marginTop: 8, padding: 8, border: '1px solid var(--border-color, #ddd)', borderRadius: 6 }}>
-              {img.asset.url && <img src={img.asset.url} alt="Generated social creative" style={{ maxWidth: '100%', borderRadius: 4 }} />}
+              {img.asset.url && <img src={img.asset.url} alt={`Generated ${label.toLowerCase()}`} style={{ maxWidth: '100%', borderRadius: 4 }} />}
               <div className="tag-list" style={{ marginTop: 6 }}>
                 <span className="tag">
                   {img.provider}
@@ -4262,6 +4284,28 @@ export default function CampaignDetailPage() {
                                         Copy Draft
                                       </button>
                                       <ContentVersionHistory basePath={basePath} artifactId={blogDrafts[item.id].artifactId} latestVersion={blogDrafts[item.id].version} />
+                                      <CreativeImagePanel
+                                        basePath={basePath}
+                                        artifactId={blogDrafts[item.id].artifactId}
+                                        version={blogDrafts[item.id].version}
+                                        apiSegment="blog-hero"
+                                        label="Hero Image"
+                                        buttonLabel="Generate Hero Image"
+                                        allowedRatios={['16:9', '3:2', '1:1']}
+                                        defaultRatioLabel="Default ratio (16:9)"
+                                        overlayMaxChars={80}
+                                      />
+                                      <CreativeImagePanel
+                                        basePath={basePath}
+                                        artifactId={blogDrafts[item.id].artifactId}
+                                        version={blogDrafts[item.id].version}
+                                        apiSegment="thumbnail"
+                                        label="Thumbnail"
+                                        buttonLabel="Generate Thumbnail"
+                                        allowedRatios={['16:9', '1:1']}
+                                        defaultRatioLabel="Default ratio (16:9)"
+                                        overlayMaxChars={50}
+                                      />
                                     </div>
                                   )}
                                 </div>
@@ -4560,7 +4604,17 @@ export default function CampaignDetailPage() {
                                               Copy Post
                                             </button>
                                             <ContentVersionHistory basePath={basePath} artifactId={draft.artifactId} latestVersion={draft.version} />
-                                            <SocialImageGenerationPanel basePath={basePath} artifactId={draft.artifactId} version={draft.version} />
+                                            <CreativeImagePanel
+                                              basePath={basePath}
+                                              artifactId={draft.artifactId}
+                                              version={draft.version}
+                                              apiSegment="social-image"
+                                              label="Social Image"
+                                              buttonLabel="Generate Image"
+                                              allowedRatios={['1:1', '4:5', '16:9']}
+                                              defaultRatioLabel="Platform default ratio"
+                                              overlayMaxChars={80}
+                                            />
                                           </div>
                                         )}
                                       </div>
@@ -4692,7 +4746,17 @@ export default function CampaignDetailPage() {
                                               </>
                                             )}
                                             <ContentVersionHistory basePath={basePath} artifactId={draft.artifactId} latestVersion={draft.version} />
-                                            <SocialImageGenerationPanel basePath={basePath} artifactId={draft.artifactId} version={draft.version} />
+                                            <CreativeImagePanel
+                                              basePath={basePath}
+                                              artifactId={draft.artifactId}
+                                              version={draft.version}
+                                              apiSegment="social-image"
+                                              label="Social Image"
+                                              buttonLabel="Generate Image"
+                                              allowedRatios={['1:1', '4:5', '16:9']}
+                                              defaultRatioLabel="Platform default ratio"
+                                              overlayMaxChars={80}
+                                            />
                                           </div>
                                         )}
                                       </div>
@@ -4786,7 +4850,17 @@ export default function CampaignDetailPage() {
                                               Copy Post
                                             </button>
                                             <ContentVersionHistory basePath={basePath} artifactId={draft.artifactId} latestVersion={draft.version} />
-                                            <SocialImageGenerationPanel basePath={basePath} artifactId={draft.artifactId} version={draft.version} />
+                                            <CreativeImagePanel
+                                              basePath={basePath}
+                                              artifactId={draft.artifactId}
+                                              version={draft.version}
+                                              apiSegment="social-image"
+                                              label="Social Image"
+                                              buttonLabel="Generate Image"
+                                              allowedRatios={['1:1', '4:5', '16:9']}
+                                              defaultRatioLabel="Platform default ratio"
+                                              overlayMaxChars={80}
+                                            />
                                           </div>
                                         )}
                                       </div>
@@ -4899,7 +4973,17 @@ export default function CampaignDetailPage() {
                                               Copy Caption
                                             </button>
                                             <ContentVersionHistory basePath={basePath} artifactId={draft.artifactId} latestVersion={draft.version} />
-                                            <SocialImageGenerationPanel basePath={basePath} artifactId={draft.artifactId} version={draft.version} />
+                                            <CreativeImagePanel
+                                              basePath={basePath}
+                                              artifactId={draft.artifactId}
+                                              version={draft.version}
+                                              apiSegment="social-image"
+                                              label="Social Image"
+                                              buttonLabel="Generate Image"
+                                              allowedRatios={['1:1', '4:5', '16:9']}
+                                              defaultRatioLabel="Platform default ratio"
+                                              overlayMaxChars={80}
+                                            />
                                           </div>
                                         )}
                                       </div>
@@ -5222,6 +5306,17 @@ export default function CampaignDetailPage() {
                                               </button>
                                             </div>
                                             <ContentVersionHistory basePath={basePath} artifactId={draft.artifactId} latestVersion={draft.version} />
+                                            <CreativeImagePanel
+                                              basePath={basePath}
+                                              artifactId={draft.artifactId}
+                                              version={draft.version}
+                                              apiSegment="thumbnail"
+                                              label="Thumbnail"
+                                              buttonLabel="Generate Thumbnail"
+                                              allowedRatios={['16:9', '1:1']}
+                                              defaultRatioLabel="Default ratio (16:9)"
+                                              overlayMaxChars={50}
+                                            />
                                           </div>
                                         )}
                                       </div>
