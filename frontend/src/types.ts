@@ -3133,3 +3133,28 @@ export interface SocialPublicationSummary {
   createdAt: string;
   updatedAt: string;
 }
+
+// Sprint 19C/19D — scheduled social publishing. Stores scheduling intent
+// only; execution always goes through the same publishing pipeline as
+// SocialPublicationSummary above, which is what `publicationId` points to
+// once a schedule reaches status `published`.
+export type SocialScheduleStatus = 'scheduled' | 'processing' | 'published' | 'failed' | 'cancelled';
+
+export interface SocialScheduleSummary {
+  id: string;
+  platform: SocialConnectionPlatform;
+  connectionId: string;
+  contentArtifactId: string;
+  contentVersionId: string;
+  contentVersion: number;
+  creativeAssetId?: string;
+  scheduledAt: string;
+  timezone: string;
+  status: SocialScheduleStatus;
+  publicationId?: string;
+  attemptCount: number;
+  lastAttemptAt?: string;
+  errorCode?: string;
+  createdAt: string;
+  updatedAt: string;
+}

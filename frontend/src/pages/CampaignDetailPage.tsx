@@ -65,6 +65,7 @@ import type {
   SocialImageGenerationOptions,
   SocialConnectionSummary,
   SocialPublicationSummary,
+  SocialScheduleSummary,
 } from '../types';
 
 const CAMPAIGN_STATUSES: CampaignStatus[] = ['draft', 'planned', 'approved', 'active', 'paused', 'completed', 'archived'];
@@ -1948,6 +1949,285 @@ function SocialPublishPanel({
                     : p.errorCode
                       ? `Publishing failed: ${labelize(p.errorCode)}`
                       : 'Publishing failed.'}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Converts a wall-clock "YYYY-MM-DDTHH:mm" value picked in `timeZone` to a
+// UTC ISO instant, without a timezone-conversion library: treat the naive
+// value as if it were UTC, then shift by that same instant's real offset
+// in `timeZone` (found via a round-trip through Intl). scheduledAt is
+// always stored/compared server-side in UTC — `timezone` is UI/audit
+// metadata only (19C/19D item).
+function zonedTimeToUtcIso(localDateTime: string, timeZone: string): string | null {
+  if (!localDateTime) return null;
+  const naiveUtc = new Date(`${localDateTime}:00Z`);
+  if (Number.isNaN(naiveUtc.getTime())) return null;
+  try {
+    const zonedMillis = new Date(naiveUtc.toLocaleString('en-US', { timeZone })).getTime();
+    const utcMillis = new Date(naiveUtc.toLocaleString('en-US', { timeZone: 'UTC' })).getTime();
+    return new Date(naiveUtc.getTime() - (zonedMillis - utcMillis)).toISOString();
+  } catch {
+    return naiveUtc.toISOString();
+  }
+}
+
+function formatScheduledMoment(scheduledAtIso: string, timeZone: string): string {
+  try {
+    return `${new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone }).format(new Date(scheduledAtIso))} ${timeZone}`;
+  } catch {
+    return new Date(scheduledAtIso).toLocaleString();
+  }
+}
+
+// 19C/19D — schedule an existing publishable ContentVersion for a future
+// time. Mirrors SocialPublishPanel's gates/patterns exactly (same
+// connection/creative selection, same review_recommended/review_required
+// handling) but never sends post text/tokens either — only a connection,
+// an optional creativeAssetId, the chosen instant + timezone, and a
+// client-generated idempotency key. Execution and provider publishing
+// happen later, server-side, via the 19D scheduler worker.
+function SocialSchedulePanel({
+  basePath,
+  productBasePath,
+  artifactId,
+  version,
+  platform,
+}: {
+  basePath: string;
+  productBasePath: string;
+  artifactId: string | undefined;
+  version: number | undefined;
+  platform: 'linkedin' | 'x' | 'facebook' | 'instagram';
+}) {
+  const browserTimeZone = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone)[0];
+  const [connections, setConnections] = useState<SocialConnectionSummary[] | null>(null);
+  const [humanReviewDecision, setHumanReviewDecision] = useState<string | null>(null);
+  const [images, setImages] = useState<SocialImageAsset[] | null>(null);
+  const [schedules, setSchedules] = useState<SocialScheduleSummary[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<string | null>(null);
+  const idempotencyKeyRef = useState<{ current: string | null }>(() => ({ current: null }))[0];
+
+  const [selectedConnectionId, setSelectedConnectionId] = useState('');
+  const [selectedImageId, setSelectedImageId] = useState('');
+  const [localDateTime, setLocalDateTime] = useState('');
+  const [timezone, setTimezone] = useState(browserTimeZone);
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editLocalDateTime, setEditLocalDateTime] = useState('');
+  const [editTimezone, setEditTimezone] = useState(browserTimeZone);
+
+  useEffect(() => {
+    if (!artifactId || version === undefined) return;
+    (async () => {
+      try {
+        const conns = await apiRequest<SocialConnectionSummary[]>(`${productBasePath}/social-connections`);
+        setConnections(conns.filter((c) => c.platform === platform && c.status === 'active'));
+      } catch {
+        // Best-effort — an empty/failed connection list just disables Schedule.
+      }
+      try {
+        const detail = await apiRequest<ContentVersionDetail>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}`);
+        setHumanReviewDecision(detail.humanReview?.decision ?? null);
+      } catch {
+        // Best-effort — missing review surfaces as a server-side block on schedule.
+      }
+      if (platform === 'instagram') {
+        try {
+          const imgs = await apiRequest<SocialImageAsset[]>(`${basePath}/creative/social-image/${artifactId}/versions/${version}`);
+          setImages(imgs);
+        } catch {
+          // Best-effort.
+        }
+      }
+      try {
+        const items = await apiRequest<SocialScheduleSummary[]>(`${basePath}/social-schedules?contentArtifactId=${artifactId}`);
+        setSchedules(items.filter((s) => s.contentVersion === version));
+      } catch {
+        // Best-effort.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [artifactId, version, platform]);
+
+  if (!artifactId || version === undefined) return null;
+
+  const reviewRequired = humanReviewDecision === 'review_required';
+  const needsImage = platform === 'instagram';
+  const scheduledAtIso = zonedTimeToUtcIso(localDateTime, timezone);
+  const canSchedule = !busy && !reviewRequired && !!selectedConnectionId && (!needsImage || !!selectedImageId) && !!scheduledAtIso && new Date(scheduledAtIso).getTime() > Date.now() + 60_000;
+
+  async function handleSchedule() {
+    if (!artifactId || version === undefined || !scheduledAtIso) return;
+    const confirmMessage = humanReviewDecision === 'review_recommended' ? 'Human review is recommended for this content. Schedule anyway?' : 'Schedule this content for the selected time?';
+    if (!window.confirm(confirmMessage)) return;
+
+    if (!idempotencyKeyRef.current) idempotencyKeyRef.current = crypto.randomUUID();
+    const idempotencyKey = idempotencyKeyRef.current;
+
+    setBusy(true);
+    setError(null);
+    setConfirmation(null);
+    try {
+      const result = await apiRequest<SocialScheduleSummary>(`${basePath}/social-schedules/${artifactId}/versions/${version}`, {
+        method: 'POST',
+        body: { connectionId: selectedConnectionId, creativeAssetId: needsImage ? selectedImageId : undefined, scheduledAt: scheduledAtIso, timezone, idempotencyKey },
+      });
+      setSchedules((prev) => [result, ...(prev ?? [])]);
+      setConfirmation(formatScheduledMoment(result.scheduledAt, result.timezone));
+      idempotencyKeyRef.current = null;
+      setLocalDateTime('');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to schedule');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function startEdit(schedule: SocialScheduleSummary) {
+    setEditingId(schedule.id);
+    setEditTimezone(schedule.timezone);
+    // scheduledAt is UTC; show it back in its own saved timezone as an
+    // editable "YYYY-MM-DDTHH:mm" local value.
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: schedule.timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).formatToParts(new Date(schedule.scheduledAt));
+    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '00';
+    setEditLocalDateTime(`${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`);
+  }
+
+  async function handleSaveEdit(scheduleId: string) {
+    const newIso = zonedTimeToUtcIso(editLocalDateTime, editTimezone);
+    if (!newIso) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await apiRequest<SocialScheduleSummary>(`${basePath}/social-schedules/${scheduleId}`, {
+        method: 'PATCH',
+        body: { scheduledAt: newIso, timezone: editTimezone },
+      });
+      setSchedules((prev) => (prev ?? []).map((s) => (s.id === result.id ? result : s)));
+      setEditingId(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to update schedule');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleCancelSchedule(scheduleId: string) {
+    if (!window.confirm('Cancel this scheduled post?')) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await apiRequest<SocialScheduleSummary>(`${basePath}/social-schedules/${scheduleId}/cancel`, { method: 'POST' });
+      setSchedules((prev) => (prev ?? []).map((s) => (s.id === result.id ? result : s)));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to cancel schedule');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      <span className="summary-label" style={{ display: 'block', marginTop: 8 }}>
+        Schedule
+      </span>
+      <ErrorMessage message={error} />
+      {confirmation && <p className="entity-card-meta">{confirmation}</p>}
+      {connections !== null && connections.length === 0 && (
+        <p className="entity-card-meta">No active {labelize(platform)} connection. Connect one from the product&apos;s Social Connections page.</p>
+      )}
+      {connections !== null && connections.length > 0 && (
+        <div className="form-inline">
+          <div className="field" style={{ marginBottom: 0 }}>
+            <select value={selectedConnectionId} onChange={(e) => setSelectedConnectionId(e.target.value)}>
+              <option value="">Select account</option>
+              {connections.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.accountName ?? c.username ?? c.id}
+                </option>
+              ))}
+            </select>
+          </div>
+          {needsImage && (
+            <div className="field" style={{ marginBottom: 0 }}>
+              <select value={selectedImageId} onChange={(e) => setSelectedImageId(e.target.value)}>
+                <option value="">Select image</option>
+                {(images ?? []).map((img) => (
+                  <option key={img.id} value={img.id}>
+                    Image {img.id.slice(-6)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className="field" style={{ marginBottom: 0 }}>
+            <input type="datetime-local" value={localDateTime} onChange={(e) => setLocalDateTime(e.target.value)} />
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <input type="text" value={timezone} onChange={(e) => setTimezone(e.target.value)} style={{ width: 160 }} title="IANA timezone" />
+          </div>
+        </div>
+      )}
+      {needsImage && images !== null && images.length === 0 && (
+        <p className="entity-card-meta">Instagram publishing requires an eligible image creative. Generate one above first.</p>
+      )}
+      {reviewRequired && <div className="content-warning">Human review is required before this content can be scheduled.</div>}
+      {!reviewRequired && humanReviewDecision === 'review_recommended' && <p className="entity-card-meta">Human review is recommended for this content.</p>}
+      <button className="btn btn-secondary" style={{ marginTop: 6 }} onClick={handleSchedule} disabled={!canSchedule}>
+        {busy ? 'Scheduling...' : 'Schedule'}
+      </button>
+
+      {schedules && schedules.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <span className="summary-label">Scheduled Posts</span>
+          {schedules.map((s) => (
+            <div key={s.id} style={{ marginTop: 6, padding: 8, border: '1px solid var(--border-color, #ddd)', borderRadius: 6 }}>
+              <div className="tag-list">
+                <span className="tag">{labelize(s.status)}</span>
+                <span className="entity-card-meta">{formatScheduledMoment(s.scheduledAt, s.timezone)}</span>
+              </div>
+              {s.status === 'failed' && <div className="content-warning" style={{ marginTop: 4 }}>{s.errorCode ? `Scheduled publish failed: ${labelize(s.errorCode)}` : 'Scheduled publish failed.'}</div>}
+              {s.status === 'scheduled' && editingId !== s.id && (
+                <div className="tag-list" style={{ marginTop: 4 }}>
+                  <button className="btn btn-link" onClick={() => startEdit(s)} disabled={busy}>
+                    Edit
+                  </button>
+                  <button className="btn btn-link" onClick={() => handleCancelSchedule(s.id)} disabled={busy}>
+                    Cancel
+                  </button>
+                </div>
+              )}
+              {s.status === 'scheduled' && editingId === s.id && (
+                <div className="form-inline" style={{ marginTop: 4 }}>
+                  <div className="field" style={{ marginBottom: 0 }}>
+                    <input type="datetime-local" value={editLocalDateTime} onChange={(e) => setEditLocalDateTime(e.target.value)} />
+                  </div>
+                  <div className="field" style={{ marginBottom: 0 }}>
+                    <input type="text" value={editTimezone} onChange={(e) => setEditTimezone(e.target.value)} style={{ width: 160 }} title="IANA timezone" />
+                  </div>
+                  <button className="btn btn-primary" onClick={() => handleSaveEdit(s.id)} disabled={busy}>
+                    Save
+                  </button>
+                  <button className="btn btn-link" onClick={() => setEditingId(null)} disabled={busy}>
+                    Cancel Edit
+                  </button>
                 </div>
               )}
             </div>
@@ -4802,6 +5082,7 @@ export default function CampaignDetailPage() {
                                               overlayMaxChars={80}
                                             />
                                             <SocialPublishPanel basePath={basePath} productBasePath={productBasePath} artifactId={draft.artifactId} version={draft.version} platform="linkedin" />
+                                            <SocialSchedulePanel basePath={basePath} productBasePath={productBasePath} artifactId={draft.artifactId} version={draft.version} platform="linkedin" />
                                           </div>
                                         )}
                                       </div>
@@ -4945,6 +5226,7 @@ export default function CampaignDetailPage() {
                                               overlayMaxChars={80}
                                             />
                                             <SocialPublishPanel basePath={basePath} productBasePath={productBasePath} artifactId={draft.artifactId} version={draft.version} platform="x" />
+                                            <SocialSchedulePanel basePath={basePath} productBasePath={productBasePath} artifactId={draft.artifactId} version={draft.version} platform="x" />
                                           </div>
                                         )}
                                       </div>
@@ -5050,6 +5332,7 @@ export default function CampaignDetailPage() {
                                               overlayMaxChars={80}
                                             />
                                             <SocialPublishPanel basePath={basePath} productBasePath={productBasePath} artifactId={draft.artifactId} version={draft.version} platform="facebook" />
+                                            <SocialSchedulePanel basePath={basePath} productBasePath={productBasePath} artifactId={draft.artifactId} version={draft.version} platform="facebook" />
                                           </div>
                                         )}
                                       </div>
@@ -5174,6 +5457,7 @@ export default function CampaignDetailPage() {
                                               overlayMaxChars={80}
                                             />
                                             <SocialPublishPanel basePath={basePath} productBasePath={productBasePath} artifactId={draft.artifactId} version={draft.version} platform="instagram" />
+                                            <SocialSchedulePanel basePath={basePath} productBasePath={productBasePath} artifactId={draft.artifactId} version={draft.version} platform="instagram" />
                                           </div>
                                         )}
                                       </div>

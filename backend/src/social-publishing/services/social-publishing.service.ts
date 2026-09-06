@@ -14,7 +14,7 @@ import { SocialEngineService } from '../../social-integrations/engine/social-eng
 import { SocialConnectionsService } from '../../social-integrations/connections/services/social-connections.service';
 import { SocialConnectionDocument } from '../../social-integrations/connections/schemas/social-connection.schema';
 import type { SocialPlatform, SocialPublishRequest } from '../../social-integrations/types/social.types';
-import { PublicationReviewStatusUnavailableError } from '../errors/social-publishing.errors';
+import { HumanReviewRequiredError, PublicationReviewStatusUnavailableError } from '../errors/social-publishing.errors';
 import { SocialPublication, SocialPublicationDocument } from '../schemas/social-publication.schema';
 import type { PublishSocialContentInput, SocialPublicationListFilter, SocialPublicationResponse } from '../types/social-publishing.types';
 
@@ -56,40 +56,39 @@ export class SocialPublishingService {
     private readonly socialConnectionsService: SocialConnectionsService,
   ) {}
 
-  async publish(input: PublishSocialContentInput): Promise<SocialPublicationResponse> {
-    // Tenant-safe load first — throws NotFoundException on any org/product/
-    // campaign/artifact/version mismatch, before any other work.
-    const sourceVersion = await this.versioningService.getVersion(input.organizationId, input.productId, input.campaignId, input.artifactId, input.version);
-
+  // Tenant-safe load + platform derivation only — no gates, no provider
+  // call. Public so 19C scheduling can resolve the same source/platform
+  // pair without duplicating this lookup.
+  async resolveSourceAndPlatform(organizationId: string, productId: string, campaignId: string, artifactId: string, version: number): Promise<{ sourceVersion: ContentVersionDetail; platform: SocialPlatform }> {
+    const sourceVersion = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
     const platform = CONTENT_KIND_TO_PLATFORM[sourceVersion.kind];
     if (!platform) {
       throw new BadRequestException('Social publishing is only supported for LinkedIn, X, Facebook, or Instagram content.');
     }
+    return { sourceVersion, platform };
+  }
 
-    // Fast path (item 12/D): an already-completed or in-flight request for
-    // the same idempotency key returns the existing record — no provider
-    // call, no duplicate post.
-    const existing = await this.publicationModel.findOne({
-      organizationId: new Types.ObjectId(input.organizationId),
-      productId: new Types.ObjectId(input.productId),
-      platform,
-      idempotencyKey: input.idempotencyKey,
-    });
-    if (existing) {
-      this.assertSameRequest(existing, sourceVersion, input); // item 13/E
-      return this.toResponse(existing);
-    }
-
-    // Same paid/external-action gates as 15C-15I/16H/17C-17E.
+  // Every deterministic, no-provider-call gate immediate publishing and
+  // 19C scheduling share: campaign approval, Human Review, connection
+  // platform/active status, and CreativeAsset validity. Public so
+  // SocialSchedulingService can run the exact same checks at both
+  // schedule-creation time (item 7) and — indirectly, by calling
+  // publish() itself, which calls this again — at execution time (item
+  // 25), without duplicating a single gate.
+  async validatePublishEligibility(
+    input: { organizationId: string; productId: string; campaignId: string; connectionId: string; creativeAssetId?: string; userId: string },
+    sourceVersion: ContentVersionDetail,
+    platform: SocialPlatform,
+  ): Promise<{ connectionDoc: SocialConnectionDocument; plan: PublishPlan }> {
     await this.assertExternalActionApproved(input);
 
-    // Human Review gate (item 28/29) — never publish with no review result,
-    // never publish when review_required.
+    // Human Review gate (item 28/29) — never publish with no review
+    // result, never publish when review_required.
     if (!sourceVersion.humanReview) {
       throw new PublicationReviewStatusUnavailableError('Human Review has not been evaluated for this content yet; publishing is blocked until it has.');
     }
     if (sourceVersion.humanReview.decision === 'review_required') {
-      throw new ConflictException('Human review is required before this content can be published.');
+      throw new HumanReviewRequiredError('Human review is required before this content can be published.');
     }
     // review_recommended / auto_clear both proceed — auto_clear only means
     // the mandatory-review threshold wasn't triggered, never that a human
@@ -106,22 +105,43 @@ export class SocialPublishingService {
 
     // Creative resolution (item 27) — tenant/campaign/source-linked, and
     // never a rejected asset (item 31/T).
-    let creativeAssetId: string | undefined;
     let creativeImageUrl: string | undefined;
     if (input.creativeAssetId) {
       const creative = await this.creativeAssetsService.getOwnedForCampaign(input.organizationId, input.productId, input.campaignId, input.creativeAssetId);
-      if (creative.source.contentArtifactId !== input.artifactId || creative.source.contentVersionId !== sourceVersion.id) {
+      if (creative.source.contentArtifactId !== sourceVersion.artifactId || creative.source.contentVersionId !== sourceVersion.id) {
         throw new BadRequestException('The selected creative asset does not belong to this content version.');
       }
       if (creative.reviewStatus === 'rejected') {
         throw new ConflictException('This creative asset has been marked rejected and cannot be published.');
       }
-      creativeAssetId = creative.id;
       creativeImageUrl = creative.asset.url;
     }
 
     const plan = this.buildPublishPlan(platform, sourceVersion, creativeImageUrl, input.creativeAssetId);
     this.assertCapabilityForPlan(platform, plan);
+    return { connectionDoc, plan };
+  }
+
+  async publish(input: PublishSocialContentInput): Promise<SocialPublicationResponse> {
+    // Tenant-safe load first — throws NotFoundException on any org/product/
+    // campaign/artifact/version mismatch, before any other work.
+    const { sourceVersion, platform } = await this.resolveSourceAndPlatform(input.organizationId, input.productId, input.campaignId, input.artifactId, input.version);
+
+    // Fast path (item 12/D): an already-completed or in-flight request for
+    // the same idempotency key returns the existing record — no provider
+    // call, no duplicate post.
+    const existing = await this.publicationModel.findOne({
+      organizationId: new Types.ObjectId(input.organizationId),
+      productId: new Types.ObjectId(input.productId),
+      platform,
+      idempotencyKey: input.idempotencyKey,
+    });
+    if (existing) {
+      this.assertSameRequest(existing, sourceVersion, input); // item 13/E
+      return this.toResponse(existing);
+    }
+
+    const { connectionDoc, plan } = await this.validatePublishEligibility(input, sourceVersion, platform);
 
     // Claim the idempotency key atomically via the unique index — under a
     // genuine race, only one request wins create(); the loser returns the
@@ -252,7 +272,7 @@ export class SocialPublishingService {
   // ---------------------------------------------------------------------
 
   // Same paid/external-action gates as 15C-15I / 16H / 17C-17E.
-  private async assertExternalActionApproved(input: PublishSocialContentInput): Promise<void> {
+  private async assertExternalActionApproved(input: { organizationId: string; productId: string; campaignId: string; userId: string }): Promise<void> {
     const campaignApproval = await this.campaignReviewService.isCampaignApprovedForCurrentVersion(input.organizationId, input.productId, input.campaignId, input.userId);
     if (!campaignApproval.approved) {
       throw new ConflictException(campaignApproval.reason ?? 'Approve this campaign before publishing.');
