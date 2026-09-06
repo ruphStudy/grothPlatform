@@ -3060,3 +3060,32 @@ export interface BrandVisualProfile {
   logoUsage?: { enabled: boolean; preferredAssetId?: string };
   updatedAt: string;
 }
+
+// Sprint 18B — social account connections (product-scoped, no campaign
+// dimension). Never carries a token field — the backend never returns one.
+// Named distinctly from the existing 14E `SocialPlatform` (content-planning
+// platform, which also allows 'generic_social') since only these four are
+// actually connectable accounts.
+export type SocialConnectionPlatform = 'linkedin' | 'x' | 'facebook' | 'instagram';
+export type SocialConnectionStatus = 'active' | 'expired' | 'revoked' | 'error';
+
+export interface SocialConnectionSummary {
+  id: string;
+  platform: SocialConnectionPlatform;
+  accountName?: string;
+  username?: string;
+  avatarUrl?: string;
+  profileUrl?: string;
+  status: SocialConnectionStatus;
+  scopes?: string[];
+  tokenExpiresAt?: string;
+  lastValidatedAt?: string;
+  lastErrorCode?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SocialAuthorizeResponse {
+  authorizationUrl: string;
+  state: string;
+}

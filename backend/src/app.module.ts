@@ -16,6 +16,7 @@ import { ProductIntelligenceModule } from './product-intelligence/product-intell
 import { KeywordIntelligenceModule } from './keyword-intelligence/keyword-intelligence.module';
 import { ProductsModule } from './products/products.module';
 import { ResearchModule } from './research/research.module';
+import { SocialIntegrationsModule } from './social-integrations/social-integrations.module';
 import { UsersModule } from './users/users.module';
 import { WebsiteIntelligenceModule } from './website-intelligence/website-intelligence.module';
 
@@ -44,6 +45,7 @@ import { WebsiteIntelligenceModule } from './website-intelligence/website-intell
     ContentPlanningModule,
     ContentGenerationModule,
     CreativeModule,
+    SocialIntegrationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

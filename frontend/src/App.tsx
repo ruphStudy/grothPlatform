@@ -9,6 +9,8 @@ import LoginPage from './pages/LoginPage';
 import OrganizationPage from './pages/OrganizationPage';
 import ProductPage from './pages/ProductPage';
 import RegisterPage from './pages/RegisterPage';
+import SocialConnectionsCallbackPage from './pages/SocialConnectionsCallbackPage';
+import SocialConnectionsPage from './pages/SocialConnectionsPage';
 
 function App() {
   return (
@@ -48,6 +50,15 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/organizations/:organizationId/products/:productId/social-connections"
+          element={
+            <ProtectedRoute>
+              <SocialConnectionsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/social-connections/callback" element={<SocialConnectionsCallbackPage />} />
         <Route
           path="/organizations/:organizationId/products/:productId/campaigns/:campaignId"
           element={

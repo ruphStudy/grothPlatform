@@ -400,7 +400,14 @@ export default function ProductPage() {
       <PageHeader
         backTo={{ to: `/organizations/${organizationId}`, label: 'Organization' }}
         title={product?.name}
-        actions={product && <Badge status={product.status} />}
+        actions={
+          <>
+            <Link to={`/organizations/${organizationId}/products/${productId}/social-connections`} className="btn btn-secondary">
+              Social Connections
+            </Link>
+            {product && <Badge status={product.status} />}
+          </>
+        }
       />
 
       <Card className="summary-card">
