@@ -1,5 +1,6 @@
 import type {
   BuildAuthorizationUrlInput,
+  BuildAuthorizationUrlResult,
   ExchangeAuthorizationCodeInput,
   GetPostStatusInput,
   GetProfileInput,
@@ -28,7 +29,7 @@ export interface SocialProvider {
 
   getCapabilities(): SocialProviderCapabilities;
 
-  buildAuthorizationUrl?(input: BuildAuthorizationUrlInput): string;
+  buildAuthorizationUrl?(input: BuildAuthorizationUrlInput): BuildAuthorizationUrlResult;
 
   exchangeAuthorizationCode?(input: ExchangeAuthorizationCodeInput): Promise<SocialAuthResult>;
 

@@ -20,9 +20,19 @@ export interface BuildAuthorizationUrlInput {
   scopes?: string[];
 }
 
+// PKCE-capable providers (18D: X) return a server-generated code_verifier
+// alongside the URL — the caller persists it in the OAuth state record
+// (never in the browser-visible state/query) and replays it at exchange
+// time. Providers that don't need PKCE simply omit codeVerifier.
+export interface BuildAuthorizationUrlResult {
+  url: string;
+  codeVerifier?: string;
+}
+
 export interface ExchangeAuthorizationCodeInput {
   code: string;
   redirectUri: string;
+  codeVerifier?: string;
 }
 
 export interface RefreshAccessTokenInput {

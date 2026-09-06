@@ -21,6 +21,7 @@ export interface ConsumedOAuthState {
   organizationId: string;
   productId: string;
   userId: string;
+  codeVerifier?: string;
 }
 
 /**
@@ -49,6 +50,14 @@ export class OAuthStateService {
     return token;
   }
 
+  // 18D: attaches a PKCE code_verifier to an already-created state record
+  // — called only after buildAuthorizationUrl() generates one, since the
+  // state token itself must exist first to build the authorization URL.
+  // Server-side only; never returned to the browser.
+  async attachCodeVerifier(token: string, codeVerifier: string): Promise<void> {
+    await this.stateModel.updateOne({ token }, { $set: { codeVerifier } });
+  }
+
   // One-time use: consuming a valid state immediately marks it consumed,
   // so a replayed callback with the same token is rejected (item 22/G/H).
   async consume(token: string, platform: SocialPlatform): Promise<ConsumedOAuthState> {
@@ -67,7 +76,7 @@ export class OAuthStateService {
     }
     doc.consumedAt = new Date();
     await doc.save();
-    return { organizationId: doc.organizationId.toString(), productId: doc.productId.toString(), userId: doc.userId.toString() };
+    return { organizationId: doc.organizationId.toString(), productId: doc.productId.toString(), userId: doc.userId.toString(), codeVerifier: doc.codeVerifier };
   }
 
   private getTtlSeconds(): number {

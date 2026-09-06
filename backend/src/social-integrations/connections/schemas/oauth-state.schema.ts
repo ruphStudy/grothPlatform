@@ -33,6 +33,11 @@ export class OAuthState {
   @Prop()
   consumedAt?: Date;
 
+  // 18D (X): PKCE code_verifier, generated server-side and stored here
+  // only — never placed in the browser-visible state/query payload.
+  @Prop()
+  codeVerifier?: string;
+
   createdAt?: Date;
 }
 export const OAuthStateSchema = SchemaFactory.createForClass(OAuthState);

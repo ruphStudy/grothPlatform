@@ -34,8 +34,13 @@ export class SocialConnectionsController {
 
     const state = await this.oauthStateService.create({ organizationId, productId, platform, userId: req.user.userId });
     const redirectUri = buildCallbackUrl(this.configService, platform);
-    const authorizationUrl = this.socialEngine.buildAuthorizationUrl(platform, { redirectUri, state });
-    return { authorizationUrl, state };
+    const { url, codeVerifier } = this.socialEngine.buildAuthorizationUrl(platform, { redirectUri, state });
+    // PKCE providers (18D: X) hand back a code_verifier here — persisted
+    // server-side against the just-created state, never in the response.
+    if (codeVerifier) {
+      await this.oauthStateService.attachCodeVerifier(state, codeVerifier);
+    }
+    return { authorizationUrl: url, state };
   }
 
   @Get()

@@ -4,6 +4,7 @@ import { SOCIAL_PROVIDER_REGISTRY_TOKEN } from '../providers/social-provider.tok
 import type { SocialProvider } from '../providers/social-provider.interface';
 import type {
   BuildAuthorizationUrlInput,
+  BuildAuthorizationUrlResult,
   ExchangeAuthorizationCodeInput,
   GetProfileInput,
   RefreshAccessTokenInput,
@@ -34,7 +35,7 @@ export class SocialEngineService {
     return provider;
   }
 
-  buildAuthorizationUrl(platform: SocialPlatform, input: BuildAuthorizationUrlInput): string {
+  buildAuthorizationUrl(platform: SocialPlatform, input: BuildAuthorizationUrlInput): BuildAuthorizationUrlResult {
     const provider = this.resolveProvider(platform);
     this.assertCapability(provider, 'connectAccount');
     if (!provider.buildAuthorizationUrl) {

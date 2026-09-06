@@ -56,7 +56,7 @@ export class SocialOAuthCallbackController {
 
     try {
       const redirectUri = buildCallbackUrl(this.configService, platform);
-      const authResult = await this.socialEngine.exchangeAuthorizationCode(platform, { code, redirectUri });
+      const authResult = await this.socialEngine.exchangeAuthorizationCode(platform, { code, redirectUri, codeVerifier: bound.codeVerifier });
       await this.socialConnectionsService.upsertFromAuthResult(bound.organizationId, bound.productId, authResult, authResult.platform, bound.userId);
       this.logger.log(`platform=${platform} org=${bound.organizationId} product=${bound.productId} outcome=connected`);
       return res.redirect(buildFrontendRedirectUrl(this.configService, platform, 'success'));

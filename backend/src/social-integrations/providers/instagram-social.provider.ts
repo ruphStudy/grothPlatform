@@ -1,7 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SocialProviderError } from '../errors/social.errors';
-import type { BuildAuthorizationUrlInput, ExchangeAuthorizationCodeInput, GetProfileInput, SocialAuthResult, SocialPlatform, SocialProfile, SocialProviderCapabilities } from '../types/social.types';
+import type {
+  BuildAuthorizationUrlInput,
+  BuildAuthorizationUrlResult,
+  ExchangeAuthorizationCodeInput,
+  GetProfileInput,
+  SocialAuthResult,
+  SocialPlatform,
+  SocialProfile,
+  SocialProviderCapabilities,
+} from '../types/social.types';
 import { getJson, postForm } from './social-oauth-http.util';
 import type { SocialProvider } from './social-provider.interface';
 
@@ -28,7 +37,7 @@ export class InstagramSocialProvider implements SocialProvider {
     return { connectAccount: true, refreshToken: false, publishText: false, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: false };
   }
 
-  buildAuthorizationUrl(input: BuildAuthorizationUrlInput): string {
+  buildAuthorizationUrl(input: BuildAuthorizationUrlInput): BuildAuthorizationUrlResult {
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: this.configService.get<string>('META_CLIENT_ID') ?? '',
@@ -36,7 +45,7 @@ export class InstagramSocialProvider implements SocialProvider {
       state: input.state,
       scope: (input.scopes ?? DEFAULT_SCOPES).join(' '),
     });
-    return `${AUTHORIZATION_URL}?${params.toString()}`;
+    return { url: `${AUTHORIZATION_URL}?${params.toString()}` };
   }
 
   async exchangeAuthorizationCode(input: ExchangeAuthorizationCodeInput): Promise<SocialAuthResult> {

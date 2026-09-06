@@ -1,5 +1,17 @@
 import { SocialProviderError } from '../errors/social.errors';
 
+const DEFAULT_TIMEOUT_MS = 10000;
+
+// Mirrors the WEBSITE_FETCH_TIMEOUT_MS convention used elsewhere in the
+// repo (website-intelligence) — a provider request must never hang
+// indefinitely (item 28). Read directly from process.env since these are
+// plain functions, not injected Nest providers.
+function getTimeoutMs(): number {
+  const raw = process.env.SOCIAL_HTTP_TIMEOUT_MS;
+  const parsed = raw ? Number(raw) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_TIMEOUT_MS;
+}
+
 // Thin, dependency-free HTTP helpers shared by every platform adapter —
 // deliberately not a platform SDK. Normalizes network/HTTP failures into a
 // SocialProviderError so the engine never has to guess what a bare fetch
@@ -12,6 +24,7 @@ export async function postForm(url: string, body: Record<string, string>): Promi
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams(body).toString(),
+      signal: AbortSignal.timeout(getTimeoutMs()),
     });
   } catch {
     throw new SocialProviderError('social_timeout', 'The social provider request timed out.');
@@ -24,6 +37,7 @@ export async function getJson(url: string, accessToken?: string): Promise<Record
   try {
     response = await fetch(url, {
       headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      signal: AbortSignal.timeout(getTimeoutMs()),
     });
   } catch {
     throw new SocialProviderError('social_timeout', 'The social provider request timed out.');
