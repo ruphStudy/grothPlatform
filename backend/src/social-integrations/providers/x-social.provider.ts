@@ -58,7 +58,7 @@ export class XSocialProvider implements SocialProvider {
   }
 
   getCapabilities(): SocialProviderCapabilities {
-    return { connectAccount: true, refreshToken: true, publishText: false, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: false };
+    return { connectAccount: true, refreshToken: true, publishText: false, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: false, accountDiscovery: false };
   }
 
   buildAuthorizationUrl(input: BuildAuthorizationUrlInput): BuildAuthorizationUrlResult {

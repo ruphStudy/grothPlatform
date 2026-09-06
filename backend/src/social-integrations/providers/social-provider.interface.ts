@@ -1,10 +1,12 @@
 import type {
   BuildAuthorizationUrlInput,
   BuildAuthorizationUrlResult,
+  DiscoverAccountCandidatesInput,
   ExchangeAuthorizationCodeInput,
   GetPostStatusInput,
   GetProfileInput,
   RefreshAccessTokenInput,
+  SocialAccountCandidate,
   SocialAuthResult,
   SocialPlatform,
   SocialPostStatusResult,
@@ -36,6 +38,10 @@ export interface SocialProvider {
   refreshAccessToken?(input: RefreshAccessTokenInput): Promise<SocialAuthResult>;
 
   getProfile?(input: GetProfileInput): Promise<SocialProfile>;
+
+  // 18E/18F only (Facebook Pages, linked Instagram professional accounts).
+  // Gated by capabilities().accountDiscovery — LinkedIn/X simply omit it.
+  discoverAccountCandidates?(input: DiscoverAccountCandidatesInput): Promise<SocialAccountCandidate[]>;
 
   publish?(input: SocialPublishRequest): Promise<SocialPublishResult>;
 

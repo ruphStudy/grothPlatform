@@ -2,7 +2,9 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ProductsModule } from '../products/products.module';
 import { OAuthState, OAuthStateSchema } from './connections/schemas/oauth-state.schema';
+import { PendingAccountSelection, PendingAccountSelectionSchema } from './connections/schemas/pending-account-selection.schema';
 import { SocialConnection, SocialConnectionSchema } from './connections/schemas/social-connection.schema';
+import { MetaAccountSelectionService } from './connections/services/meta-account-selection.service';
 import { OAuthStateService } from './connections/services/oauth-state.service';
 import { SocialConnectionsService } from './connections/services/social-connections.service';
 import { TokenEncryptionService } from './connections/services/token-encryption.service';
@@ -27,6 +29,7 @@ import type { SocialPlatform } from './types/social.types';
     MongooseModule.forFeature([
       { name: SocialConnection.name, schema: SocialConnectionSchema },
       { name: OAuthState.name, schema: OAuthStateSchema },
+      { name: PendingAccountSelection.name, schema: PendingAccountSelectionSchema },
     ]),
     ProductsModule,
   ],
@@ -52,6 +55,7 @@ import type { SocialPlatform } from './types/social.types';
     TokenEncryptionService,
     OAuthStateService,
     SocialConnectionsService,
+    MetaAccountSelectionService,
   ],
   exports: [SocialEngineService],
 })

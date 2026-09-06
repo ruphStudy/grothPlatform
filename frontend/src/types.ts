@@ -3089,3 +3089,21 @@ export interface SocialAuthorizeResponse {
   authorizationUrl: string;
   state: string;
 }
+
+// Sprint 18E/18F — Facebook/Instagram account-selection. No token field
+// exists here — the backend never returns one.
+export interface SocialAccountCandidateSummary {
+  externalAccountId: string;
+  accountName?: string;
+  username?: string;
+  avatarUrl?: string;
+  profileUrl?: string;
+  accountType?: string;
+}
+
+export interface PendingSelectionSummary {
+  selectionId: string;
+  platform: SocialConnectionPlatform;
+  candidates: SocialAccountCandidateSummary[];
+  expiresAt: string;
+}

@@ -48,7 +48,7 @@ export class LinkedInSocialProvider implements SocialProvider {
     // refreshToken stays false: standard LinkedIn OIDC sign-in does not
     // return a refresh token, so this must not claim a capability that
     // isn't actually implemented (item 9/10/26/X).
-    return { connectAccount: true, refreshToken: false, publishText: false, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: false };
+    return { connectAccount: true, refreshToken: false, publishText: false, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: false, accountDiscovery: false };
   }
 
   buildAuthorizationUrl(input: BuildAuthorizationUrlInput): BuildAuthorizationUrlResult {

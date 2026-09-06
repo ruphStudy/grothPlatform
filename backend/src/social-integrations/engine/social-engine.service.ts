@@ -5,9 +5,11 @@ import type { SocialProvider } from '../providers/social-provider.interface';
 import type {
   BuildAuthorizationUrlInput,
   BuildAuthorizationUrlResult,
+  DiscoverAccountCandidatesInput,
   ExchangeAuthorizationCodeInput,
   GetProfileInput,
   RefreshAccessTokenInput,
+  SocialAccountCandidate,
   SocialAuthResult,
   SocialPlatform,
   SocialProfile,
@@ -69,6 +71,15 @@ export class SocialEngineService {
       throw new SocialCapabilityUnsupportedError(`The ${platform} provider does not support profile fetch.`);
     }
     return this.callOnce(platform, () => provider.getProfile!(input), 'social_provider_request_failed');
+  }
+
+  async discoverAccountCandidates(platform: SocialPlatform, input: DiscoverAccountCandidatesInput): Promise<SocialAccountCandidate[]> {
+    const provider = this.resolveProvider(platform);
+    this.assertCapability(provider, 'accountDiscovery');
+    if (!provider.discoverAccountCandidates) {
+      throw new SocialCapabilityUnsupportedError(`The ${platform} provider does not support account discovery.`);
+    }
+    return this.callOnce(platform, () => provider.discoverAccountCandidates!(input), 'social_provider_request_failed');
   }
 
   private assertCapability(provider: SocialProvider, capability: keyof SocialProviderCapabilities): void {

@@ -1,9 +1,11 @@
-import { Controller, Delete, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { ProductsService } from '../../products/products.service';
 import { SocialEngineService } from '../engine/social-engine.service';
 import { parsePlatformParam } from './dto/validate-platform.util';
+import { SelectPendingAccountDto } from './dto/select-pending-account.dto';
+import { MetaAccountSelectionService } from './services/meta-account-selection.service';
 import { OAuthStateService } from './services/oauth-state.service';
 import { SocialConnectionsService } from './services/social-connections.service';
 import { buildCallbackUrl } from './social-oauth-callback.util';
@@ -20,6 +22,7 @@ export class SocialConnectionsController {
     private readonly socialEngine: SocialEngineService,
     private readonly oauthStateService: OAuthStateService,
     private readonly socialConnectionsService: SocialConnectionsService,
+    private readonly metaAccountSelectionService: MetaAccountSelectionService,
   ) {}
 
   @Post(':platform/authorize')
@@ -80,5 +83,35 @@ export class SocialConnectionsController {
   ) {
     await this.productsService.findOne(organizationId, productId, req.user.userId);
     return this.socialConnectionsService.validate(organizationId, productId, connectionId);
+  }
+
+  // 18E/18F: shown when the OAuth callback found multiple eligible
+  // accounts (Facebook Pages, linked Instagram professional accounts) and
+  // could not safely auto-complete the connection.
+  @Get(':platform/pending/:selectionId')
+  async getPendingSelection(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('platform') platformParam: string,
+    @Param('selectionId') selectionId: string,
+  ) {
+    await this.productsService.findOne(organizationId, productId, req.user.userId);
+    const platform = parsePlatformParam(platformParam);
+    return this.metaAccountSelectionService.getPending(organizationId, productId, platform, selectionId);
+  }
+
+  @Post(':platform/pending/:selectionId/select')
+  async selectPendingAccount(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('platform') platformParam: string,
+    @Param('selectionId') selectionId: string,
+    @Body() body: SelectPendingAccountDto,
+  ) {
+    await this.productsService.findOne(organizationId, productId, req.user.userId);
+    const platform = parsePlatformParam(platformParam);
+    return this.metaAccountSelectionService.selectCandidate(organizationId, productId, platform, selectionId, body.externalAccountId, req.user.userId);
   }
 }

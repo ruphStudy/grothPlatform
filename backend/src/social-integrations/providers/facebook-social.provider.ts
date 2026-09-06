@@ -4,21 +4,42 @@ import { SocialProviderError } from '../errors/social.errors';
 import type {
   BuildAuthorizationUrlInput,
   BuildAuthorizationUrlResult,
+  DiscoverAccountCandidatesInput,
   ExchangeAuthorizationCodeInput,
   GetProfileInput,
+  SocialAccountCandidate,
   SocialAuthResult,
   SocialPlatform,
   SocialProfile,
   SocialProviderCapabilities,
 } from '../types/social.types';
-import { getJson } from './social-oauth-http.util';
+import { buildMetaAuthorizationUrl, exchangeMetaAuthorizationCode, fetchMetaListBounded, metaGraphGet } from './meta-graph-client.util';
 import type { SocialProvider } from './social-provider.interface';
 
-const GRAPH_VERSION = 'v18.0';
-const AUTHORIZATION_URL = `https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth`;
-const TOKEN_URL = `https://graph.facebook.com/${GRAPH_VERSION}/oauth/access_token`;
-const DEFAULT_SCOPES = ['pages_show_list', 'pages_read_engagement'];
+// Identity + Page discovery only — no pages_manage_posts/publish scope
+// until publishing actually exists (item 4, least privilege).
+const DEFAULT_SCOPES = ['public_profile', 'pages_show_list', 'pages_read_engagement'];
 
+interface FacebookMeResponse {
+  id?: string;
+  name?: string;
+  picture?: { data?: { url?: string } };
+}
+
+interface FacebookPageRecord {
+  id?: string;
+  name?: string;
+  access_token?: string;
+}
+
+/**
+ * 18E: Facebook connection via the shared Meta Graph client. Publishing
+ * targets a Facebook Page, not the personal user identity, so
+ * exchangeAuthorizationCode only produces a transient user-level token —
+ * the actual persisted SocialConnection is always a discovered Page
+ * (see discoverAccountCandidates and MetaAccountSelectionService, which
+ * decides single-candidate auto-complete vs. a pending selection).
+ */
 @Injectable()
 export class FacebookSocialProvider implements SocialProvider {
   readonly platform: SocialPlatform = 'facebook';
@@ -31,53 +52,69 @@ export class FacebookSocialProvider implements SocialProvider {
   }
 
   getCapabilities(): SocialProviderCapabilities {
-    return { connectAccount: true, refreshToken: false, publishText: false, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: false };
+    return { connectAccount: true, refreshToken: false, publishText: false, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: false, accountDiscovery: true };
   }
 
   buildAuthorizationUrl(input: BuildAuthorizationUrlInput): BuildAuthorizationUrlResult {
-    const params = new URLSearchParams({
-      response_type: 'code',
-      client_id: this.configService.get<string>('META_CLIENT_ID') ?? '',
-      redirect_uri: input.redirectUri,
-      state: input.state,
-      scope: (input.scopes ?? DEFAULT_SCOPES).join(','),
-    });
-    return { url: `${AUTHORIZATION_URL}?${params.toString()}` };
+    return buildMetaAuthorizationUrl(this.configService, input, this.getConfiguredScopes());
   }
 
   async exchangeAuthorizationCode(input: ExchangeAuthorizationCodeInput): Promise<SocialAuthResult> {
-    const params = new URLSearchParams({
-      grant_type: 'authorization_code',
-      code: input.code,
-      redirect_uri: input.redirectUri,
-      client_id: this.configService.get<string>('META_CLIENT_ID') ?? '',
-      client_secret: this.configService.get<string>('META_CLIENT_SECRET') ?? '',
-    });
-    const data = await getJson(`${TOKEN_URL}?${params.toString()}`);
-    const accessToken = data.access_token as string | undefined;
-    if (!accessToken) {
-      throw new SocialProviderError('social_token_exchange_failed', 'Facebook did not return an access token.');
-    }
+    const { accessToken, expiresAt } = await exchangeMetaAuthorizationCode(this.configService, input);
+    // Profile failure aborts the whole exchange — never persist a
+    // connection with no genuine account identity (item 6/13).
     const profile = await this.getProfile({ accessToken });
-    const expiresIn = typeof data.expires_in === 'number' ? data.expires_in : undefined;
     return {
       platform: 'facebook',
       externalAccountId: profile.externalAccountId,
       accountName: profile.accountName,
       accessToken,
-      expiresAt: expiresIn ? new Date(Date.now() + expiresIn * 1000) : undefined,
+      expiresAt,
       profileUrl: profile.profileUrl,
     };
   }
 
   async getProfile(input: GetProfileInput): Promise<SocialProfile> {
-    const data = await getJson(`https://graph.facebook.com/${GRAPH_VERSION}/me?fields=id,name,picture&access_token=${encodeURIComponent(input.accessToken)}`);
-    const picture = data.picture as { data?: { url?: string } } | undefined;
+    // Calling /me with a Page access token returns that Page's own
+    // identity — this makes getProfile work unchanged whether the stored
+    // token is the personal user token (pre-selection) or a Page token
+    // (a persisted, selected connection's Validate action).
+    const data = (await metaGraphGet(this.configService, '/me', input.accessToken, { fields: 'id,name,picture' })) as FacebookMeResponse;
+    if (typeof data.id !== 'string' || data.id.length === 0) {
+      throw new SocialProviderError('social_auth_failed', 'Facebook did not return a stable account identity.');
+    }
     return {
-      externalAccountId: String(data.id ?? ''),
+      externalAccountId: data.id,
       accountName: typeof data.name === 'string' ? data.name : undefined,
-      avatarUrl: picture?.data?.url,
-      profileUrl: data.id ? `https://facebook.com/${String(data.id)}` : undefined,
+      avatarUrl: data.picture?.data?.url,
+      profileUrl: `https://facebook.com/${data.id}`,
     };
+  }
+
+  async discoverAccountCandidates(input: DiscoverAccountCandidatesInput): Promise<SocialAccountCandidate[]> {
+    const raw = await fetchMetaListBounded(this.configService, '/me/accounts', input.accessToken, { fields: 'id,name,access_token', limit: '25' });
+    const candidates: SocialAccountCandidate[] = [];
+    for (const item of raw) {
+      const page = item as FacebookPageRecord;
+      if (typeof page.id !== 'string' || page.id.length === 0 || typeof page.access_token !== 'string' || page.access_token.length === 0) continue;
+      candidates.push({
+        externalAccountId: page.id,
+        accountName: typeof page.name === 'string' ? page.name : undefined,
+        accountType: 'page',
+        profileUrl: `https://facebook.com/${page.id}`,
+        internalAccessToken: page.access_token,
+      });
+    }
+    return candidates;
+  }
+
+  private getConfiguredScopes(): string[] {
+    const configured = this.configService.get<string>('FACEBOOK_SCOPES');
+    if (!configured) return DEFAULT_SCOPES;
+    const scopes = configured
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return scopes.length > 0 ? scopes : DEFAULT_SCOPES;
   }
 }

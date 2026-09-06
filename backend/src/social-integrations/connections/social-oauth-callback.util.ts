@@ -13,9 +13,30 @@ export function buildCallbackUrl(configService: ConfigService, platform: SocialP
   return `${base.replace(/\/$/, '')}/social-connections/oauth/${platform}/callback`;
 }
 
-// Never includes a token/code/state — only a coarse status the frontend
-// uses to decide whether to show success or a generic failure message.
-export function buildFrontendRedirectUrl(configService: ConfigService, platform: SocialPlatform, status: 'success' | 'error'): string {
+// Never includes a token/code/state/raw provider error — only a coarse
+// status plus an already-normalized error code the frontend can use to
+// show a clean message (e.g. social_no_eligible_account).
+export function buildFrontendRedirectUrl(configService: ConfigService, platform: SocialPlatform, status: 'success' | 'error', errorCode?: string): string {
   const base = configService.get<string>('FRONTEND_BASE_URL') ?? DEFAULT_FRONTEND_BASE_URL;
-  return `${base.replace(/\/$/, '')}/social-connections/callback?status=${status}&platform=${platform}`;
+  const params = new URLSearchParams({ status, platform });
+  if (errorCode) params.set('error', errorCode);
+  return `${base.replace(/\/$/, '')}/social-connections/callback?${params.toString()}`;
+}
+
+// 18E/18F: Facebook/Instagram OAuth may require the user to pick among
+// several discovered Pages/accounts. organizationId/productId are
+// included so the frontend can deep-link to the tenant-scoped pending-
+// selection endpoint — they are ordinary, already-public-in-every-URL
+// identifiers, not secrets; the selectionId is a random, tenant-bound,
+// one-time token, and no token/code/secret is ever carried (item 36).
+export function buildFrontendSelectionRedirectUrl(
+  configService: ConfigService,
+  platform: SocialPlatform,
+  selectionId: string,
+  organizationId: string,
+  productId: string,
+): string {
+  const base = configService.get<string>('FRONTEND_BASE_URL') ?? DEFAULT_FRONTEND_BASE_URL;
+  const params = new URLSearchParams({ status: 'selection_required', platform, selectionId, organizationId, productId });
+  return `${base.replace(/\/$/, '')}/social-connections/callback?${params.toString()}`;
 }

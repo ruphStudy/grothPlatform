@@ -12,6 +12,10 @@ export interface SocialProviderCapabilities {
   publishVideo: boolean;
   fetchProfile: boolean;
   fetchPostStatus: boolean;
+  // 18E/18F: true only for providers whose OAuth flow yields multiple
+  // possible marketing accounts (Facebook Pages, linked Instagram
+  // professional accounts) that a user must discover/select among.
+  accountDiscovery: boolean;
 }
 
 export interface BuildAuthorizationUrlInput {
@@ -46,6 +50,32 @@ export interface GetProfileInput {
 export interface GetPostStatusInput {
   accessToken: string;
   externalPostId: string;
+}
+
+export interface DiscoverAccountCandidatesInput {
+  accessToken: string;
+}
+
+// A marketing-eligible account discovered under a user's OAuth grant
+// (a Facebook Page, or an Instagram professional account linked to one).
+// `internalAccessToken`/`internalRefreshToken` are deliberately prefixed
+// so it's obvious at every call site that they must never be serialized
+// into an HTTP response — only the safe display fields may reach the
+// frontend (see PendingSelectionCandidateResponse).
+export interface SocialAccountCandidate {
+  externalAccountId: string;
+  accountName?: string;
+  username?: string;
+  avatarUrl?: string;
+  profileUrl?: string;
+  accountType?: 'page' | 'professional' | 'business' | 'creator' | 'unknown';
+  // Present for an Instagram candidate discovered via a linked Facebook Page.
+  linkedFacebookPageId?: string;
+
+  internalAccessToken: string;
+  internalRefreshToken?: string;
+  internalExpiresAt?: Date;
+  internalScopes?: string[];
 }
 
 // Internal only — never returned to the frontend once persisted (see

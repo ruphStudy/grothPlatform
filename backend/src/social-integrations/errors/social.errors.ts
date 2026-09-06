@@ -12,7 +12,8 @@ export type SocialErrorCode =
   | 'social_provider_request_failed'
   | 'social_oauth_state_invalid'
   | 'social_oauth_state_expired'
-  | 'social_oauth_state_consumed';
+  | 'social_oauth_state_consumed'
+  | 'social_no_eligible_account';
 
 export class SocialConfigurationError extends ServiceUnavailableException {
   readonly code: SocialErrorCode = 'social_provider_not_configured';
@@ -43,5 +44,15 @@ export class SocialOAuthStateError extends BadRequestException {
   constructor(code: SocialErrorCode, message: string) {
     super(message);
     this.code = code;
+  }
+}
+
+// 18E/18F: OAuth succeeded, but no marketing-eligible account (Facebook
+// Page, or Instagram professional account linked to one) was found for
+// the connected user. Never persist a connection in this case.
+export class SocialNoEligibleAccountError extends BadRequestException {
+  readonly code: SocialErrorCode = 'social_no_eligible_account';
+  constructor(message: string) {
+    super(message);
   }
 }
