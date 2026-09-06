@@ -8,6 +8,7 @@ import { AudienceIntelligenceModule } from './audience-intelligence/audience-int
 import { CampaignsModule } from './campaigns/campaigns.module';
 import { ContentGenerationModule } from './content-generation/content-generation.module';
 import { ContentPlanningModule } from './content-planning/content-planning.module';
+import { CreativeModule } from './creative/creative.module';
 import { GrowthStrategyModule } from './growth-strategy/growth-strategy.module';
 import { MarketIntelligenceModule } from './market-intelligence/market-intelligence.module';
 import { OrganizationsModule } from './organizations/organizations.module';
@@ -42,6 +43,7 @@ import { WebsiteIntelligenceModule } from './website-intelligence/website-intell
     CampaignsModule,
     ContentPlanningModule,
     ContentGenerationModule,
+    CreativeModule,
   ],
   controllers: [AppController],
   providers: [AppService],
