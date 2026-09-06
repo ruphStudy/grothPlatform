@@ -57,6 +57,8 @@ import type {
   ContentQualitySummary,
   ContentImprovementFocus,
   ContentImprovementResult,
+  ContentHumanReviewResult,
+  ContentHumanReviewSummary,
   ContentVersionDetail,
   ContentVersionSummary,
 } from '../types';
@@ -436,6 +438,30 @@ function QualityScoreBadge({ quality }: { quality: ContentQualitySummary | undef
   );
 }
 
+// 16I answers only "does this need human review?" — it never approves or
+// publishes content (spec sections 1/28), so wording must never imply an
+// approval workflow exists yet.
+function humanReviewBadgeClass(decision: ContentHumanReviewSummary['decision']): string {
+  if (decision === 'auto_clear') return 'quality-good';
+  if (decision === 'review_recommended') return 'quality-limited';
+  return 'quality-empty';
+}
+
+function humanReviewDecisionLabel(decision: ContentHumanReviewSummary['decision']): string {
+  if (decision === 'auto_clear') return 'Clear';
+  if (decision === 'review_recommended') return 'Recommended';
+  return 'Required';
+}
+
+function HumanReviewBadge({ humanReview }: { humanReview: ContentHumanReviewSummary | undefined }) {
+  if (!humanReview) return null;
+  return (
+    <span className={`quality-badge ${humanReviewBadgeClass(humanReview.decision)}`} style={{ fontWeight: 600 }}>
+      Human Review: {humanReviewDecisionLabel(humanReview.decision)}
+    </span>
+  );
+}
+
 // Exact labels follow current generation semantics (spec section 31): v1
 // with no reason is "Generated", a later version with no reason is
 // "Regenerated", and an AI-improved version names its source version.
@@ -500,6 +526,11 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion: latestVers
   const [improveBusy, setImproveBusy] = useState(false);
   const [improveError, setImproveError] = useState<string | null>(null);
   const [improveComparison, setImproveComparison] = useState<{ fromVersion: number; fromScore?: number; toVersion: number; toScore?: number } | null>(null);
+  const [latestHumanReview, setLatestHumanReview] = useState<ContentHumanReviewSummary | undefined>(undefined);
+  const [humanReviewDetail, setHumanReviewDetail] = useState<ContentHumanReviewResult | null>(null);
+  const [humanReviewOpen, setHumanReviewOpen] = useState(false);
+  const [humanReviewBusy, setHumanReviewBusy] = useState(false);
+  const [humanReviewError, setHumanReviewError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!artifactId || !latestVersion) return;
@@ -524,6 +555,9 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion: latestVers
     apiRequest<ContentQualityResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${latestVersion}/quality`)
       .then((result) => setLatestQuality(result ?? undefined))
       .catch(() => setLatestQuality(undefined));
+    apiRequest<ContentHumanReviewResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${latestVersion}/human-review`)
+      .then((result) => setLatestHumanReview(result ?? undefined))
+      .catch(() => setLatestHumanReview(undefined));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [artifactId, latestVersion]);
 
@@ -834,10 +868,80 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion: latestVers
       if (version === latestVersion) {
         setLatestQuality(summary);
       }
+      // The backend keeps 16I synchronized whenever Quality is recalculated
+      // (spec section 22) — refresh the already-updated persisted decision
+      // rather than recomputing it a second time.
+      await refreshHumanReviewAfterSync(version);
     } catch (err) {
       setQualityError(err instanceof ApiError ? err.message : 'Failed to recalculate quality score');
     } finally {
       setQualityBusy(false);
+    }
+  }
+
+  async function refreshHumanReviewAfterSync(version: number) {
+    if (!artifactId) return;
+    try {
+      const result = await apiRequest<ContentHumanReviewResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}/human-review`);
+      if (!result) return;
+      const summary = { decision: result.decision, riskScore: result.riskScore, reasonCount: result.reasons.length };
+      if (selected && selected.version === version) {
+        setSelected((prev) => (prev ? { ...prev, humanReview: summary } : prev));
+      }
+      if (version === latestVersion) {
+        setLatestHumanReview(summary);
+      }
+      if (humanReviewOpen) {
+        setHumanReviewDetail(result);
+      }
+    } catch {
+      // Non-fatal — the persisted decision is still correct; the UI will
+      // pick it up next time the panel is opened.
+    }
+  }
+
+  async function loadHumanReview(version: number) {
+    if (!artifactId) return;
+    setHumanReviewBusy(true);
+    setHumanReviewError(null);
+    try {
+      const result = await apiRequest<ContentHumanReviewResult | null>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}/human-review`);
+      setHumanReviewDetail(result);
+    } catch (err) {
+      setHumanReviewError(err instanceof ApiError ? err.message : 'Failed to load review decision');
+    } finally {
+      setHumanReviewBusy(false);
+    }
+  }
+
+  async function toggleHumanReview(version: number) {
+    if (humanReviewOpen) {
+      setHumanReviewOpen(false);
+      return;
+    }
+    setHumanReviewOpen(true);
+    await loadHumanReview(version);
+  }
+
+  async function reevaluateHumanReview(version: number) {
+    if (!artifactId) return;
+    setHumanReviewBusy(true);
+    setHumanReviewError(null);
+    try {
+      const result = await apiRequest<ContentHumanReviewResult>(`${basePath}/content-generation/artifacts/${artifactId}/versions/${version}/human-review`, { method: 'POST' });
+      setHumanReviewDetail(result);
+      setHumanReviewOpen(true);
+      const summary = { decision: result.decision, riskScore: result.riskScore, reasonCount: result.reasons.length };
+      if (selected && selected.version === version) {
+        setSelected({ ...selected, humanReview: summary });
+      }
+      if (version === latestVersion) {
+        setLatestHumanReview(summary);
+      }
+    } catch (err) {
+      setHumanReviewError(err instanceof ApiError ? err.message : 'Failed to re-evaluate review need');
+    } finally {
+      setHumanReviewBusy(false);
     }
   }
 
@@ -865,6 +969,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion: latestVers
         setLatestBrandVoice(result.brandVoice);
         setLatestOriginality(result.originality);
         setLatestQuality(result.quality);
+        setLatestHumanReview(result.humanReview);
       }
       if (open) {
         try {
@@ -955,6 +1060,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion: latestVers
       <div className="tag-list">
         <span className="tag">v{latestVersion}</span>
         <QualityScoreBadge quality={latestQuality} />
+        <HumanReviewBadge humanReview={latestHumanReview} />
         <GroundingBadge grounding={latestGrounding} />
         <FactValidationBadge factValidation={latestFactValidation} />
         <SeoReviewBadge seoReview={latestSeoReview} />
@@ -975,6 +1081,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion: latestVers
                 <li key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
                   <span className="tag">v{v.version}</span>
                   <QualityScoreBadge quality={v.quality} />
+                  <HumanReviewBadge humanReview={v.humanReview} />
                   <GroundingBadge grounding={v.grounding} />
                   <FactValidationBadge factValidation={v.factValidation} />
                   <SeoReviewBadge seoReview={v.seoReview} />
@@ -990,6 +1097,9 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion: latestVers
                     onClick={() => {
                       setImproveComparison(null);
                       setImproveError(null);
+                      setHumanReviewOpen(false);
+                      setHumanReviewDetail(null);
+                      setHumanReviewError(null);
                       void viewVersion(v.version);
                     }}
                     disabled={selectedBusy}
@@ -1007,6 +1117,7 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion: latestVers
                 <span className="tag">Viewing v{selected.version}</span>
                 <span className="entity-card-meta">{generationReasonLabel(selected)}</span>
                 <QualityScoreBadge quality={selected.quality} />
+                <HumanReviewBadge humanReview={selected.humanReview} />
                 <GroundingBadge grounding={selected.grounding} />
                 <FactValidationBadge factValidation={selected.factValidation} />
                 <SeoReviewBadge seoReview={selected.seoReview} />
@@ -1018,6 +1129,12 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion: latestVers
                 </button>
                 <button className="btn btn-secondary" onClick={() => recalculateQuality(selected.version)} disabled={qualityBusy}>
                   {qualityBusy ? 'Recalculating...' : 'Recalculate Quality'}
+                </button>
+                <button className="btn btn-secondary" onClick={() => toggleHumanReview(selected.version)}>
+                  {humanReviewOpen ? 'Hide Review Decision' : 'View Review Decision'}
+                </button>
+                <button className="btn btn-secondary" onClick={() => reevaluateHumanReview(selected.version)} disabled={humanReviewBusy}>
+                  {humanReviewBusy ? 'Re-evaluating...' : 'Re-evaluate Review Need'}
                 </button>
                 <select
                   value={improveFocus}
@@ -1039,6 +1156,9 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion: latestVers
                   onClick={() => {
                     setImproveComparison(null);
                     setImproveError(null);
+                    setHumanReviewOpen(false);
+                    setHumanReviewDetail(null);
+                    setHumanReviewError(null);
                     setSelected(null);
                   }}
                 >
@@ -1151,6 +1271,51 @@ function ContentVersionHistory({ basePath, artifactId, latestVersion: latestVers
                       )}
                       {qualityDetail.warnings.length > 0 && (
                         <div className="content-warning" style={{ marginTop: 8 }}>{qualityDetail.warnings.join(' ')}</div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+              {humanReviewOpen && (
+                <div style={{ marginTop: 8, padding: 8, background: 'var(--surface-muted, #f5f5f5)', borderRadius: 6, border: '1px solid var(--border-color, #ddd)' }}>
+                  {humanReviewBusy && <Loading />}
+                  <ErrorMessage message={humanReviewError} />
+                  {!humanReviewBusy && !humanReviewDetail && !humanReviewError && <p className="entity-card-meta">No review decision yet.</p>}
+                  {humanReviewDetail && (
+                    <>
+                      <div className="tag-list">
+                        <span className="tag" style={{ fontWeight: 600 }}>
+                          {humanReviewDecisionLabel(humanReviewDetail.decision) === 'Clear' ? 'Auto-clear' : `Human review ${humanReviewDecisionLabel(humanReviewDetail.decision).toLowerCase()}`}
+                        </span>
+                        <span className="tag">Risk score {humanReviewDetail.riskScore}</span>
+                        {humanReviewDetail.evaluatedQualityScore !== undefined && <span className="tag">Quality {humanReviewDetail.evaluatedQualityScore}</span>}
+                      </div>
+                      {humanReviewDetail.triggeredRuleIds.length > 0 && (
+                        <p className="entity-card-meta" style={{ marginTop: 6 }}>Triggered rules: {humanReviewDetail.triggeredRuleIds.join(', ')}</p>
+                      )}
+                      {humanReviewDetail.reasons.length > 0 ? (
+                        <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0' }}>
+                          {[...humanReviewDetail.reasons]
+                            .sort((a, b) => {
+                              const order: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+                              return order[a.severity] - order[b.severity];
+                            })
+                            .map((r) => (
+                              <li
+                                key={r.id}
+                                style={{
+                                  padding: '6px 0',
+                                  borderTop: '1px solid var(--border-color, #ddd)',
+                                  color: r.severity === 'critical' || r.severity === 'high' ? 'var(--error, #b00020)' : undefined,
+                                }}
+                              >
+                                <div>{r.reason}</div>
+                                <span className="entity-card-meta">{labelize(r.category)} · {labelize(r.severity)}</span>
+                              </li>
+                            ))}
+                        </ul>
+                      ) : (
+                        <p className="entity-card-meta" style={{ marginTop: 6 }}>No review concerns were found.</p>
                       )}
                     </>
                   )}

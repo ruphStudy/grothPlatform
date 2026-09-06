@@ -2845,6 +2845,37 @@ export type ContentVersionGenerationReason = 'generated' | 'regenerated' | 'auto
 
 export type ContentImprovementFocus = 'all' | 'facts' | 'seo' | 'readability' | 'brand_voice' | 'originality';
 
+export type HumanReviewDecision = 'auto_clear' | 'review_recommended' | 'review_required';
+
+export type HumanReviewReasonCategory = 'grounding' | 'fact_validation' | 'seo' | 'readability' | 'brand_voice' | 'originality' | 'quality' | 'generation' | 'other';
+
+export type HumanReviewReasonSeverity = 'low' | 'medium' | 'high' | 'critical';
+
+export interface HumanReviewReason {
+  id: string;
+  category: HumanReviewReasonCategory;
+  severity: HumanReviewReasonSeverity;
+  reason: string;
+}
+
+export interface ContentHumanReviewSummary {
+  decision: HumanReviewDecision;
+  riskScore: number;
+  reasonCount: number;
+}
+
+export interface ContentHumanReviewResult extends ContentHumanReviewSummary {
+  contentVersionId: string;
+  artifactId: string;
+  organizationId: string;
+  productId: string;
+  campaignId: string;
+  reasons: HumanReviewReason[];
+  triggeredRuleIds: string[];
+  evaluatedQualityScore?: number;
+  evaluatedAt: string;
+}
+
 export interface ContentVersionSummary {
   id: string;
   version: number;
@@ -2865,6 +2896,7 @@ export interface ContentVersionSummary {
   quality?: ContentQualitySummary;
   generationReason?: ContentVersionGenerationReason;
   improvedFromVersion?: number;
+  humanReview?: ContentHumanReviewSummary;
 }
 
 export interface ContentVersionDetail extends ContentVersionSummary {
@@ -2897,6 +2929,7 @@ export interface ContentImprovementResult {
   brandVoice?: ContentBrandVoiceSummary;
   originality?: ContentOriginalitySummary;
   quality?: ContentQualitySummary;
+  humanReview?: ContentHumanReviewSummary;
 }
 
 export interface ArtifactWithLatestVersion {

@@ -20,6 +20,7 @@ import { ContentArtifact, ContentArtifactSchema } from './schemas/content-artifa
 import { ContentFactValidationResult, ContentFactValidationResultSchema } from './schemas/content-fact-validation-result.schema';
 import { ContentBrandVoiceResult, ContentBrandVoiceResultSchema } from './schemas/content-brand-voice-result.schema';
 import { ContentGroundingResult, ContentGroundingResultSchema } from './schemas/content-grounding-result.schema';
+import { ContentHumanReviewResult, ContentHumanReviewResultSchema } from './schemas/content-human-review-result.schema';
 import { ContentOriginalityResult, ContentOriginalityResultSchema } from './schemas/content-originality-result.schema';
 import { ContentQualityResult, ContentQualityResultSchema } from './schemas/content-quality-result.schema';
 import { ContentReadabilityResult, ContentReadabilityResultSchema } from './schemas/content-readability-result.schema';
@@ -28,6 +29,7 @@ import { ContentVersion, ContentVersionSchema } from './schemas/content-version.
 import { ContentBrandVoiceService } from './services/content-brand-voice.service';
 import { ContentFactValidationService } from './services/content-fact-validation.service';
 import { ContentGroundingService } from './services/content-grounding.service';
+import { ContentHumanReviewService } from './services/content-human-review.service';
 import { ContentImprovementService } from './services/content-improvement.service';
 import { ContentOriginalityService } from './services/content-originality.service';
 import { ContentQualityService } from './services/content-quality.service';
@@ -51,6 +53,7 @@ import { ContentVersioningService } from './services/content-versioning.service'
       { name: ContentBrandVoiceResult.name, schema: ContentBrandVoiceResultSchema },
       { name: ContentOriginalityResult.name, schema: ContentOriginalityResultSchema },
       { name: ContentQualityResult.name, schema: ContentQualityResultSchema },
+      { name: ContentHumanReviewResult.name, schema: ContentHumanReviewResultSchema },
     ]),
   ],
   controllers: [ContentGenerationController, ContentArtifactsController],
@@ -65,6 +68,7 @@ import { ContentVersioningService } from './services/content-versioning.service'
     ContentBrandVoiceService,
     ContentOriginalityService,
     ContentQualityService,
+    ContentHumanReviewService,
     ContentImprovementService,
     ContentVersioningService,
     BlogGenerationService,

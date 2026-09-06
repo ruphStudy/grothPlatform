@@ -213,6 +213,7 @@ export class ContentImprovementService {
       brandVoice: saved.brandVoice,
       originality: saved.originality,
       quality: saved.quality,
+      humanReview: saved.humanReview,
     };
   }
 

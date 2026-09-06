@@ -8,6 +8,7 @@ import { ContentVersion, ContentVersionDocument } from '../schemas/content-versi
 import { ContentBrandVoiceService } from './content-brand-voice.service';
 import { ContentFactValidationService } from './content-fact-validation.service';
 import { ContentGroundingService } from './content-grounding.service';
+import { ContentHumanReviewService } from './content-human-review.service';
 import { ContentOriginalityService } from './content-originality.service';
 import { ContentQualityService } from './content-quality.service';
 import { ContentReadabilityService } from './content-readability.service';
@@ -64,6 +65,7 @@ export class ContentVersioningService {
     private readonly brandVoiceService: ContentBrandVoiceService,
     private readonly originalityService: ContentOriginalityService,
     private readonly qualityService: ContentQualityService,
+    private readonly humanReviewService: ContentHumanReviewService,
   ) {}
 
   async saveGeneratedVersion(input: SaveGeneratedVersionInput): Promise<SavedVersionResult> {
@@ -241,7 +243,25 @@ export class ContentVersioningService {
       this.logger.warn(`contentVersionId=${versionDoc._id.toString()} kind=quality success=false reason=${(err as Error).message}. Content quality score could not be calculated.`);
     }
 
-    return { artifactId: artifact._id.toString(), versionId: versionDoc._id.toString(), version, grounding, factValidation, seoReview, readability, brandVoice, originality, quality };
+    // Human Review evaluation runs LAST, after Quality — it only reads the
+    // persisted results above (including Quality) and never reruns any
+    // underlying review. Same no-paid-API guarantee: a failure here must
+    // never discard the generated version.
+    let humanReview: SavedVersionResult['humanReview'];
+    try {
+      const result = await this.humanReviewService.evaluateForVersion({
+        contentVersionId: versionDoc._id.toString(),
+        artifactId: artifact._id.toString(),
+        organizationId: input.organizationId,
+        productId: input.productId,
+        campaignId: input.campaignId,
+      });
+      humanReview = { decision: result.decision, riskScore: result.riskScore, reasonCount: result.reasons.length };
+    } catch (err) {
+      this.logger.warn(`contentVersionId=${versionDoc._id.toString()} kind=human_review success=false reason=${(err as Error).message}. Human review decision could not be evaluated.`);
+    }
+
+    return { artifactId: artifact._id.toString(), versionId: versionDoc._id.toString(), version, grounding, factValidation, seoReview, readability, brandVoice, originality, quality, humanReview };
   }
 
   async listArtifacts(organizationId: string, productId: string, campaignId: string, filter?: ArtifactFilter): Promise<ContentArtifactResponse[]> {
@@ -290,15 +310,17 @@ export class ContentVersioningService {
     const versions = await this.versionModel.find(query).sort({ version: -1 }).limit(limit).exec();
     const summaries = versions.map((v) => this.toVersionSummary(v));
     const versionIds = summaries.map((s) => s.id);
-    const [groundingByVersionId, factValidationByVersionId, seoReviewByVersionId, readabilityByVersionId, brandVoiceByVersionId, originalityByVersionId, qualityByVersionId] = await Promise.all([
-      this.groundingService.getSummariesByVersionIds(versionIds),
-      this.factValidationService.getSummariesByVersionIds(versionIds),
-      this.seoReviewService.getSummariesByVersionIds(versionIds),
-      this.readabilityService.getSummariesByVersionIds(versionIds),
-      this.brandVoiceService.getSummariesByVersionIds(versionIds),
-      this.originalityService.getSummariesByVersionIds(versionIds),
-      this.qualityService.getSummariesByVersionIds(versionIds),
-    ]);
+    const [groundingByVersionId, factValidationByVersionId, seoReviewByVersionId, readabilityByVersionId, brandVoiceByVersionId, originalityByVersionId, qualityByVersionId, humanReviewByVersionId] =
+      await Promise.all([
+        this.groundingService.getSummariesByVersionIds(versionIds),
+        this.factValidationService.getSummariesByVersionIds(versionIds),
+        this.seoReviewService.getSummariesByVersionIds(versionIds),
+        this.readabilityService.getSummariesByVersionIds(versionIds),
+        this.brandVoiceService.getSummariesByVersionIds(versionIds),
+        this.originalityService.getSummariesByVersionIds(versionIds),
+        this.qualityService.getSummariesByVersionIds(versionIds),
+        this.humanReviewService.getSummariesByVersionIds(versionIds),
+      ]);
     return summaries.map((s) => ({
       ...s,
       grounding: groundingByVersionId.get(s.id),
@@ -308,6 +330,7 @@ export class ContentVersioningService {
       brandVoice: brandVoiceByVersionId.get(s.id),
       originality: originalityByVersionId.get(s.id),
       quality: qualityByVersionId.get(s.id),
+      humanReview: humanReviewByVersionId.get(s.id),
     }));
   }
 
@@ -316,7 +339,7 @@ export class ContentVersioningService {
     const versionDoc = await this.versionModel.findOne({ artifactId: artifact._id, version });
     if (!versionDoc) throw new NotFoundException('Content version not found.');
     const detail = this.toVersionDetail(versionDoc);
-    const [grounding, factValidation, seoReview, readability, brandVoice, originality, quality] = await Promise.all([
+    const [grounding, factValidation, seoReview, readability, brandVoice, originality, quality, humanReview] = await Promise.all([
       this.groundingService.getSummary(detail.id),
       this.factValidationService.getSummary(detail.id),
       this.seoReviewService.getSummary(detail.id),
@@ -324,8 +347,9 @@ export class ContentVersioningService {
       this.brandVoiceService.getSummary(detail.id),
       this.originalityService.getSummary(detail.id),
       this.qualityService.getSummary(detail.id),
+      this.humanReviewService.getSummary(detail.id),
     ]);
-    return { ...detail, grounding, factValidation, seoReview, readability, brandVoice, originality, quality };
+    return { ...detail, grounding, factValidation, seoReview, readability, brandVoice, originality, quality, humanReview };
   }
 
   async getLatestByCriteria(organizationId: string, productId: string, campaignId: string, kind: ContentGenerationKind, sourceType: string, sourceId: string): Promise<ArtifactWithLatestVersion | null> {
@@ -341,7 +365,7 @@ export class ContentVersioningService {
     const versionDoc = await this.versionModel.findById(artifact.latestVersionId);
     if (!versionDoc) return null;
     const detail = this.toVersionDetail(versionDoc);
-    const [grounding, factValidation, seoReview, readability, brandVoice, originality, quality] = await Promise.all([
+    const [grounding, factValidation, seoReview, readability, brandVoice, originality, quality, humanReview] = await Promise.all([
       this.groundingService.getSummary(detail.id),
       this.factValidationService.getSummary(detail.id),
       this.seoReviewService.getSummary(detail.id),
@@ -349,8 +373,9 @@ export class ContentVersioningService {
       this.brandVoiceService.getSummary(detail.id),
       this.originalityService.getSummary(detail.id),
       this.qualityService.getSummary(detail.id),
+      this.humanReviewService.getSummary(detail.id),
     ]);
-    return { artifact: this.toArtifactResponse(artifact), latestVersion: { ...detail, grounding, factValidation, seoReview, readability, brandVoice, originality, quality } };
+    return { artifact: this.toArtifactResponse(artifact), latestVersion: { ...detail, grounding, factValidation, seoReview, readability, brandVoice, originality, quality, humanReview } };
   }
 
   async listLatestForCampaign(organizationId: string, productId: string, campaignId: string, filter?: ArtifactFilter): Promise<ArtifactWithLatestVersion[]> {
@@ -359,15 +384,17 @@ export class ContentVersioningService {
     const versions = await this.versionModel.find({ _id: { $in: latestVersionIds } }).exec();
     const versionById = new Map(versions.map((v) => [v._id.toString(), v]));
     const versionIds = versions.map((v) => v._id.toString());
-    const [groundingByVersionId, factValidationByVersionId, seoReviewByVersionId, readabilityByVersionId, brandVoiceByVersionId, originalityByVersionId, qualityByVersionId] = await Promise.all([
-      this.groundingService.getSummariesByVersionIds(versionIds),
-      this.factValidationService.getSummariesByVersionIds(versionIds),
-      this.seoReviewService.getSummariesByVersionIds(versionIds),
-      this.readabilityService.getSummariesByVersionIds(versionIds),
-      this.brandVoiceService.getSummariesByVersionIds(versionIds),
-      this.originalityService.getSummariesByVersionIds(versionIds),
-      this.qualityService.getSummariesByVersionIds(versionIds),
-    ]);
+    const [groundingByVersionId, factValidationByVersionId, seoReviewByVersionId, readabilityByVersionId, brandVoiceByVersionId, originalityByVersionId, qualityByVersionId, humanReviewByVersionId] =
+      await Promise.all([
+        this.groundingService.getSummariesByVersionIds(versionIds),
+        this.factValidationService.getSummariesByVersionIds(versionIds),
+        this.seoReviewService.getSummariesByVersionIds(versionIds),
+        this.readabilityService.getSummariesByVersionIds(versionIds),
+        this.brandVoiceService.getSummariesByVersionIds(versionIds),
+        this.originalityService.getSummariesByVersionIds(versionIds),
+        this.qualityService.getSummariesByVersionIds(versionIds),
+        this.humanReviewService.getSummariesByVersionIds(versionIds),
+      ]);
 
     return artifacts.map((artifact) => {
       const versionDoc = artifact.latestVersionId ? versionById.get(artifact.latestVersionId.toString()) : undefined;
@@ -384,6 +411,7 @@ export class ContentVersioningService {
           brandVoice: brandVoiceByVersionId.get(detail.id),
           originality: originalityByVersionId.get(detail.id),
           quality: qualityByVersionId.get(detail.id),
+          humanReview: humanReviewByVersionId.get(detail.id),
         },
       };
     });

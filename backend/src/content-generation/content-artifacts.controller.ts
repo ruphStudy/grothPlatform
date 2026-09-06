@@ -5,6 +5,7 @@ import { ContentImprovementOptionsDto } from './dto/content-improvement-options.
 import { ContentBrandVoiceService } from './services/content-brand-voice.service';
 import { ContentFactValidationService } from './services/content-fact-validation.service';
 import { ContentGroundingService } from './services/content-grounding.service';
+import { ContentHumanReviewService } from './services/content-human-review.service';
 import { ContentImprovementService } from './services/content-improvement.service';
 import { ContentOriginalityService } from './services/content-originality.service';
 import { ContentQualityService } from './services/content-quality.service';
@@ -34,13 +35,14 @@ export class ContentArtifactsController {
     private readonly brandVoiceService: ContentBrandVoiceService,
     private readonly originalityService: ContentOriginalityService,
     private readonly qualityService: ContentQualityService,
+    private readonly humanReviewService: ContentHumanReviewService,
     private readonly improvementService: ContentImprovementService,
   ) {}
 
-  // Keeps Quality (16G) synchronized after any 16A-16F manual recheck (spec
-  // section 20), without ever rerunning the underlying reviews themselves.
-  // Best-effort: a quality recalculation failure must never fail the
-  // recheck response that triggered it.
+  // Keeps Quality (16G) and Human Review (16I) synchronized after any
+  // 16A-16F manual recheck (spec sections 20/22), without ever rerunning
+  // the underlying reviews themselves. Best-effort: a failure here must
+  // never fail the recheck response that triggered it.
   private async recalculateQualityQuietly(versionDetail: ContentVersionDetail, organizationId: string, productId: string, campaignId: string): Promise<void> {
     try {
       await this.qualityService.calculateForVersion({
@@ -52,6 +54,21 @@ export class ContentArtifactsController {
       });
     } catch (err) {
       this.logger.warn(`contentVersionId=${versionDetail.id} kind=quality success=false reason=${(err as Error).message}. Content quality score could not be calculated.`);
+    }
+    await this.reevaluateHumanReviewQuietly(versionDetail, organizationId, productId, campaignId);
+  }
+
+  private async reevaluateHumanReviewQuietly(versionDetail: ContentVersionDetail, organizationId: string, productId: string, campaignId: string): Promise<void> {
+    try {
+      await this.humanReviewService.evaluateForVersion({
+        contentVersionId: versionDetail.id,
+        artifactId: versionDetail.artifactId,
+        organizationId,
+        productId,
+        campaignId,
+      });
+    } catch (err) {
+      this.logger.warn(`contentVersionId=${versionDetail.id} kind=human_review success=false reason=${(err as Error).message}. Human review decision could not be evaluated.`);
     }
   }
 
@@ -428,7 +445,50 @@ export class ContentArtifactsController {
   ) {
     await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
     const versionDetail = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
-    return this.qualityService.calculateForVersion({
+    const result = await this.qualityService.calculateForVersion({
+      contentVersionId: versionDetail.id,
+      artifactId: versionDetail.artifactId,
+      organizationId,
+      productId,
+      campaignId,
+    });
+    await this.reevaluateHumanReviewQuietly(versionDetail, organizationId, productId, campaignId);
+    return result;
+  }
+
+  // Read-only: never rebuilds Growth Strategy. Returns null (not 404) when
+  // no human review decision exists yet for an otherwise-valid version.
+  @Get('artifacts/:artifactId/versions/:version/human-review')
+  async getHumanReview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+    @Param('artifactId') artifactId: string,
+    @Param('version', ParseIntPipe) version: number,
+  ) {
+    await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
+    const versionDetail = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
+    return this.humanReviewService.getResult(versionDetail.id);
+  }
+
+  // Manual re-evaluation: reads the latest persisted 16A-16G results for
+  // this version and re-derives the decision — never reruns any underlying
+  // review, never calls AI, never rebuilds Growth Strategy. No confirmation
+  // required. This is a review-need signal only — it never approves or
+  // publishes content (that remains Sprint 28).
+  @Post('artifacts/:artifactId/versions/:version/human-review')
+  async reevaluateHumanReview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+    @Param('artifactId') artifactId: string,
+    @Param('version', ParseIntPipe) version: number,
+  ) {
+    await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
+    const versionDetail = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
+    return this.humanReviewService.evaluateForVersion({
       contentVersionId: versionDetail.id,
       artifactId: versionDetail.artifactId,
       organizationId,

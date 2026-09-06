@@ -2,6 +2,7 @@ import type { ContentGenerationKind } from './content-generation.types';
 import type { ContentBrandVoiceSummary, ContentVersionBrandVoiceSnapshot } from './content-brand-voice.types';
 import type { ContentFactValidationSummary } from './content-fact-validation.types';
 import type { ContentGroundingSummary, ContentVersionGroundingEvidenceSnapshot } from './content-grounding.types';
+import type { ContentHumanReviewSummary } from './content-human-review.types';
 import type { ContentOriginalitySummary } from './content-originality.types';
 import type { ContentQualitySummary } from './content-quality.types';
 import type { ContentReadabilitySummary } from './content-readability.types';
@@ -122,6 +123,7 @@ export interface SavedVersionResult {
   brandVoice?: ContentBrandVoiceSummary;
   originality?: ContentOriginalitySummary;
   quality?: ContentQualitySummary;
+  humanReview?: ContentHumanReviewSummary;
 }
 
 export interface ContentArtifactResponse {
@@ -155,6 +157,7 @@ export interface ContentVersionSummary {
   quality?: ContentQualitySummary;
   generationReason?: ContentVersionGenerationReason;
   improvedFromVersion?: number;
+  humanReview?: ContentHumanReviewSummary;
 }
 
 export interface ContentVersionDetail extends ContentVersionSummary {
