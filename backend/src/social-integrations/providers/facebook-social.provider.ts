@@ -6,16 +6,18 @@ import type {
   BuildAuthorizationUrlResult,
   DiscoverAccountCandidatesInput,
   ExchangeAuthorizationCodeInput,
+  GetPostStatusInput,
   GetProfileInput,
   SocialAccountCandidate,
   SocialAuthResult,
   SocialPlatform,
+  SocialPostStatusResult,
   SocialProfile,
   SocialProviderCapabilities,
   SocialPublishRequest,
   SocialPublishResult,
 } from '../types/social.types';
-import { buildMetaAuthorizationUrl, exchangeMetaAuthorizationCode, fetchMetaListBounded, metaGraphGet, metaGraphPost } from './meta-graph-client.util';
+import { buildMetaAuthorizationUrl, exchangeMetaAuthorizationCode, fetchMetaListBounded, metaGraphCheckStatus, metaGraphGet, metaGraphPost } from './meta-graph-client.util';
 import type { SocialProvider } from './social-provider.interface';
 
 // 19B adds pages_manage_posts — the minimum scope Page text publishing
@@ -60,8 +62,9 @@ export class FacebookSocialProvider implements SocialProvider {
   getCapabilities(): SocialProviderCapabilities {
     // 19B: text-only Page publishing is implemented; image/video publishing
     // is not (item 23/26) — never advertise a capability this adapter
-    // doesn't actually implement.
-    return { connectAccount: true, refreshToken: false, publishText: true, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: false, accountDiscovery: true };
+    // doesn't actually implement. 19F: a Page-post status check via a
+    // single Graph GET is genuinely implemented below.
+    return { connectAccount: true, refreshToken: false, publishText: true, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: true, accountDiscovery: true };
   }
 
   buildAuthorizationUrl(input: BuildAuthorizationUrlInput): BuildAuthorizationUrlResult {
@@ -130,6 +133,20 @@ export class FacebookSocialProvider implements SocialProvider {
       throw new SocialProviderError('social_provider_request_failed', 'Facebook did not return a post id.');
     }
     return { providerPostId: data.id, providerPostUrl: `https://facebook.com/${data.id}`, publishedAt: new Date() };
+  }
+
+  // 19F: one Graph GET on the post id. Meta's Graph API does not reliably
+  // confirm deletion on this endpoint (item 29) — a 401/403 or other
+  // non-ok response is only ever reported as `unavailable`, never
+  // `deleted`.
+  async getPostStatus(input: GetPostStatusInput): Promise<SocialPostStatusResult> {
+    const checkedAt = new Date();
+    const check = await metaGraphCheckStatus(this.configService, input.externalPostId, input.accessToken, 'id,permalink_url');
+    if (check.ok) {
+      const url = typeof check.raw?.permalink_url === 'string' ? check.raw.permalink_url : `https://facebook.com/${input.externalPostId}`;
+      return { providerPostId: input.externalPostId, status: 'published', providerPostUrl: url, checkedAt };
+    }
+    return { providerPostId: input.externalPostId, status: 'unavailable', checkedAt };
   }
 
   private getConfiguredScopes(): string[] {

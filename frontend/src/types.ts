@@ -3130,9 +3130,17 @@ export interface SocialPublicationSummary {
   attemptCount: number;
   lastAttemptAt?: string;
   errorCode?: string;
+  // Sprint 19F — remote/provider-side status, distinct from `status`
+  // above (GIP's own execution state). Never conflate the two.
+  remoteStatus?: SocialRemotePostStatus;
+  remoteStatusCheckedAt?: string;
+  remoteStatusErrorCode?: string;
   createdAt: string;
   updatedAt: string;
 }
+
+// Sprint 19F — provider-neutral remote post status.
+export type SocialRemotePostStatus = 'published' | 'unavailable' | 'deleted' | 'failed' | 'unknown';
 
 // Sprint 19C/19D — scheduled social publishing. Stores scheduling intent
 // only; execution always goes through the same publishing pipeline as
@@ -3157,4 +3165,27 @@ export interface SocialScheduleSummary {
   errorCode?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// Sprint 19E — Publishing Calendar. A read-only management/view layer
+// combining SocialSchedule + SocialPublication; never a second scheduling
+// engine. A schedule that has already published carries both
+// `scheduleId` and `publicationId` on the SAME item.
+export type PublishingCalendarItemType = 'scheduled' | 'publication';
+export type PublishingCalendarStatus = 'scheduled' | 'processing' | 'published' | 'failed' | 'cancelled';
+
+export interface PublishingCalendarItem {
+  id: string;
+  type: PublishingCalendarItemType;
+  platform: SocialConnectionPlatform;
+  status: PublishingCalendarStatus;
+  scheduledAt?: string;
+  publishedAt?: string;
+  connection: { id: string; accountName?: string; username?: string };
+  source: { contentArtifactId: string; contentVersionId: string; contentVersion: number; contentKind: string };
+  creativeAssetId?: string;
+  publicationId?: string;
+  scheduleId?: string;
+  providerPostUrl?: string;
+  errorCode?: string;
 }

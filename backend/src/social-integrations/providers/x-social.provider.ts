@@ -6,16 +6,18 @@ import type {
   BuildAuthorizationUrlInput,
   BuildAuthorizationUrlResult,
   ExchangeAuthorizationCodeInput,
+  GetPostStatusInput,
   GetProfileInput,
   RefreshAccessTokenInput,
   SocialAuthResult,
   SocialPlatform,
+  SocialPostStatusResult,
   SocialProfile,
   SocialProviderCapabilities,
   SocialPublishRequest,
   SocialPublishResult,
 } from '../types/social.types';
-import { getJson, postForm, postJson } from './social-oauth-http.util';
+import { getJson, getJsonWithStatus, postForm, postJson } from './social-oauth-http.util';
 import type { SocialProvider } from './social-provider.interface';
 
 const AUTHORIZATION_URL = 'https://twitter.com/i/oauth2/authorize';
@@ -66,8 +68,9 @@ export class XSocialProvider implements SocialProvider {
   getCapabilities(): SocialProviderCapabilities {
     // 19B implements text-only single/thread posting; image/video
     // publishing (which needs a separate media-upload endpoint) is not
-    // implemented and must not be advertised.
-    return { connectAccount: true, refreshToken: true, publishText: true, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: false, accountDiscovery: false };
+    // implemented and must not be advertised. 19F: GET /2/tweets/:id is
+    // genuinely implemented below.
+    return { connectAccount: true, refreshToken: true, publishText: true, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: true, accountDiscovery: false };
   }
 
   buildAuthorizationUrl(input: BuildAuthorizationUrlInput): BuildAuthorizationUrlResult {
@@ -169,6 +172,25 @@ export class XSocialProvider implements SocialProvider {
       throw new SocialProviderError('social_provider_request_failed', 'X did not return a post id.');
     }
     return { providerPostId: postId, publishedAt: new Date() };
+  }
+
+  // 19F: X's tweet-lookup API is explicit about non-existence — a 404 on
+  // a previously-published tweet id is treated as a genuine confirmed
+  // `deleted` (unlike Meta's Graph API, which is ambiguous on this point
+  // and therefore never reports `deleted` from this codebase).
+  async getPostStatus(input: GetPostStatusInput): Promise<SocialPostStatusResult> {
+    const checkedAt = new Date();
+    const { status, body } = await getJsonWithStatus(`${TWEETS_URL}/${input.externalPostId}`, input.accessToken);
+    if (status === 200 && (body as XTweetResponse).data?.id) {
+      return { providerPostId: input.externalPostId, status: 'published', providerPostUrl: `https://x.com/i/web/status/${input.externalPostId}`, checkedAt };
+    }
+    if (status === 404) {
+      return { providerPostId: input.externalPostId, status: 'deleted', checkedAt };
+    }
+    if (status === 401 || status === 403) {
+      return { providerPostId: input.externalPostId, status: 'unavailable', checkedAt };
+    }
+    return { providerPostId: input.externalPostId, status: 'unknown', checkedAt };
   }
 
   private getConfiguredScopes(): string[] {

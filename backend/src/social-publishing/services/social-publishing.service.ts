@@ -181,8 +181,15 @@ export class SocialPublishingService {
     };
     if (filter?.platform) query.platform = filter.platform;
     if (filter?.status) query.status = filter.status;
+    if (filter?.remoteStatus) query.remoteStatus = filter.remoteStatus;
     if (filter?.connectionId) query.connectionId = new Types.ObjectId(filter.connectionId);
     if (filter?.contentArtifactId) query.contentArtifactId = new Types.ObjectId(filter.contentArtifactId);
+    if (filter?.from || filter?.to) {
+      const range: Record<string, Date> = {};
+      if (filter.from) range.$gte = new Date(filter.from);
+      if (filter.to) range.$lte = new Date(filter.to);
+      query.createdAt = range;
+    }
 
     let cursor = this.publicationModel.find(query).sort({ createdAt: -1 });
     if (filter?.limit) cursor = cursor.limit(filter.limit);
@@ -370,7 +377,10 @@ export class SocialPublishingService {
     }
   }
 
-  private async findOwned(organizationId: string, productId: string, campaignId: string, publicationId: string): Promise<SocialPublicationDocument> {
+  // Public so 19F's SocialPublicationStatusService can resolve/persist the
+  // same tenant-safe document and reuse the same response projection
+  // without duplicating either.
+  async findOwned(organizationId: string, productId: string, campaignId: string, publicationId: string): Promise<SocialPublicationDocument> {
     let doc: SocialPublicationDocument | null;
     try {
       doc = await this.publicationModel.findOne({
@@ -386,7 +396,7 @@ export class SocialPublishingService {
     return doc;
   }
 
-  private toResponse(doc: SocialPublicationDocument): SocialPublicationResponse {
+  toResponse(doc: SocialPublicationDocument): SocialPublicationResponse {
     return {
       id: doc._id.toString(),
       platform: doc.platform,
@@ -405,6 +415,9 @@ export class SocialPublishingService {
       attemptCount: doc.attemptCount,
       lastAttemptAt: doc.lastAttemptAt,
       errorCode: doc.errorCode,
+      remoteStatus: doc.remoteStatus,
+      remoteStatusCheckedAt: doc.remoteStatusCheckedAt,
+      remoteStatusErrorCode: doc.remoteStatusErrorCode,
       createdAt: doc.createdAt as Date,
       updatedAt: doc.updatedAt as Date,
     };

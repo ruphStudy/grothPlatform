@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { SocialCapabilityUnsupportedError, SocialConfigurationError, SocialProviderError } from '../errors/social.errors';
+import { SocialCapabilityUnsupportedError, SocialConfigurationError, SocialPostStatusUnsupportedError, SocialProviderError } from '../errors/social.errors';
 import { SOCIAL_PROVIDER_REGISTRY_TOKEN } from '../providers/social-provider.tokens';
 import type { SocialProvider } from '../providers/social-provider.interface';
 import type {
@@ -7,11 +7,13 @@ import type {
   BuildAuthorizationUrlResult,
   DiscoverAccountCandidatesInput,
   ExchangeAuthorizationCodeInput,
+  GetPostStatusInput,
   GetProfileInput,
   RefreshAccessTokenInput,
   SocialAccountCandidate,
   SocialAuthResult,
   SocialPlatform,
+  SocialPostStatusResult,
   SocialProfile,
   SocialProviderCapabilities,
   SocialPublishRequest,
@@ -95,6 +97,19 @@ export class SocialEngineService {
       throw new SocialCapabilityUnsupportedError(`The ${platform} provider does not support publishing.`);
     }
     return this.callOnce(platform, () => provider.publish!(input), 'social_provider_request_failed');
+  }
+
+  // 19F: a dedicated unsupported-capability error (rather than the
+  // generic SocialCapabilityUnsupportedError every other method throws)
+  // so callers can reliably surface the spec's normalized
+  // `social_post_status_unsupported` code — checked, and thrown, strictly
+  // before any provider call (item 18/23).
+  async getPostStatus(platform: SocialPlatform, input: GetPostStatusInput): Promise<SocialPostStatusResult> {
+    const provider = this.resolveProvider(platform);
+    if (!provider.getCapabilities().fetchPostStatus || !provider.getPostStatus) {
+      throw new SocialPostStatusUnsupportedError(`The ${platform} provider does not support remote status checks.`);
+    }
+    return this.callOnce(platform, () => provider.getPostStatus!(input), 'social_provider_request_failed');
   }
 
   private assertCapability(provider: SocialProvider, capability: keyof SocialProviderCapabilities): void {

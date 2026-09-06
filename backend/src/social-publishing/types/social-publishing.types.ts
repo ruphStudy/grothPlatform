@@ -1,4 +1,4 @@
-import type { SocialPlatform } from '../../social-integrations/types/social.types';
+import type { SocialPlatform, SocialRemotePostStatus } from '../../social-integrations/types/social.types';
 import type { PublicationStatus } from '../schemas/social-publication.schema';
 
 export interface PublishSocialContentInput {
@@ -16,8 +16,11 @@ export interface PublishSocialContentInput {
 export interface SocialPublicationListFilter {
   platform?: SocialPlatform;
   status?: PublicationStatus;
+  remoteStatus?: SocialRemotePostStatus;
   connectionId?: string;
   contentArtifactId?: string;
+  from?: string;
+  to?: string;
   limit?: number;
 }
 
@@ -51,6 +54,10 @@ export interface SocialPublicationResponse {
   attemptCount: number;
   lastAttemptAt?: Date;
   errorCode?: string;
+
+  remoteStatus?: SocialRemotePostStatus;
+  remoteStatusCheckedAt?: Date;
+  remoteStatusErrorCode?: string;
 
   createdAt: Date;
   updatedAt: Date;

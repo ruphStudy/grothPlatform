@@ -11,8 +11,11 @@ import { SocialSchedule, SocialScheduleSchema } from './schemas/social-schedule.
 import { SocialPublishingService } from './services/social-publishing.service';
 import { SocialSchedulingService } from './services/social-scheduling.service';
 import { SocialSchedulerService } from './services/social-scheduler.service';
+import { PublishingCalendarService } from './services/publishing-calendar.service';
+import { SocialPublicationStatusService } from './services/social-publication-status.service';
 import { SocialPublishingController } from './social-publishing.controller';
 import { SocialSchedulingController } from './social-scheduling.controller';
+import { PublishingCalendarController } from './publishing-calendar.controller';
 
 // 19A/19B: the only module that persists SocialPublication records and
 // orchestrates publishing. Reuses 15/16 content-version + human-review
@@ -37,7 +40,7 @@ import { SocialSchedulingController } from './social-scheduling.controller';
     CreativeModule,
     SocialIntegrationsModule,
   ],
-  controllers: [SocialPublishingController, SocialSchedulingController],
-  providers: [SocialPublishingService, SocialSchedulingService, SocialSchedulerService],
+  controllers: [SocialPublishingController, SocialSchedulingController, PublishingCalendarController],
+  providers: [SocialPublishingService, SocialSchedulingService, SocialSchedulerService, PublishingCalendarService, SocialPublicationStatusService],
 })
 export class SocialPublishingModule {}

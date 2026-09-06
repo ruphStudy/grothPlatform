@@ -3487,6 +3487,9 @@ export default function CampaignDetailPage() {
             <Link to={`${basePath}/creative`} className="btn btn-secondary">
               Creative
             </Link>
+            <Link to={`${basePath}/publishing`} className="btn btn-secondary">
+              Publishing
+            </Link>
             <span className={`quality-badge ${statusQualityClass(campaign.status)}`}>{labelize(campaign.status)}</span>
           </>
         }

@@ -1,7 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { SocialProviderError } from '../errors/social.errors';
 import type { BuildAuthorizationUrlInput, BuildAuthorizationUrlResult, ExchangeAuthorizationCodeInput } from '../types/social.types';
-import { getJson, postForm } from './social-oauth-http.util';
+import { getJson, getTimeoutMs, postForm } from './social-oauth-http.util';
 
 const DEFAULT_GRAPH_API_VERSION = 'v18.0';
 const DEFAULT_MAX_DISCOVERY_PAGES = 3;
@@ -72,6 +72,43 @@ export async function metaGraphGet(configService: ConfigService, path: string, a
 export async function metaGraphPost(configService: ConfigService, path: string, accessToken: string, params: Record<string, string>): Promise<Record<string, unknown>> {
   const version = getMetaGraphApiVersion(configService);
   return postForm(`https://graph.facebook.com/${version}${path}`, { access_token: accessToken, ...params });
+}
+
+// 19F: a status-check GET on a single Graph object (a Page post or IG
+// media id). Meta's Graph API does not reliably distinguish "deleted"
+// from "never existed" from other 400-class errors on this endpoint (a
+// well-known ambiguity), so this never claims `deleted` — only whether
+// the object is currently reachable (`ok`) or not, and whether that was a
+// permission-class response. The caller normalizes the rest.
+export interface MetaObjectStatusCheck {
+  ok: boolean;
+  permissionDenied: boolean;
+  raw?: Record<string, unknown>;
+}
+
+export async function metaGraphCheckStatus(configService: ConfigService, objectId: string, accessToken: string, fields: string): Promise<MetaObjectStatusCheck> {
+  const version = getMetaGraphApiVersion(configService);
+  const params = new URLSearchParams({ access_token: accessToken, fields });
+  let response: Response;
+  try {
+    response = await fetch(`https://graph.facebook.com/${version}/${objectId}?${params.toString()}`, { signal: AbortSignal.timeout(getTimeoutMs()) });
+  } catch {
+    throw new SocialProviderError('social_timeout', 'The social provider request timed out.');
+  }
+  if (response.status === 429) {
+    throw new SocialProviderError('social_rate_limited', 'The social provider is rate-limiting requests.');
+  }
+  let body: Record<string, unknown> = {};
+  try {
+    const text = await response.text();
+    body = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+  } catch {
+    throw new SocialProviderError('social_provider_request_failed', 'The social provider returned an unreadable response.');
+  }
+  if (response.status === 401 || response.status === 403) {
+    return { ok: false, permissionDenied: true, raw: body };
+  }
+  return { ok: response.ok, permissionDenied: false, raw: body };
 }
 
 interface MetaListResponse {

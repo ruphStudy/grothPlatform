@@ -6,16 +6,18 @@ import type {
   BuildAuthorizationUrlResult,
   DiscoverAccountCandidatesInput,
   ExchangeAuthorizationCodeInput,
+  GetPostStatusInput,
   GetProfileInput,
   SocialAccountCandidate,
   SocialAuthResult,
   SocialPlatform,
+  SocialPostStatusResult,
   SocialProfile,
   SocialProviderCapabilities,
   SocialPublishRequest,
   SocialPublishResult,
 } from '../types/social.types';
-import { buildMetaAuthorizationUrl, exchangeMetaAuthorizationCode, fetchMetaListBounded, metaGraphGet, metaGraphPost } from './meta-graph-client.util';
+import { buildMetaAuthorizationUrl, exchangeMetaAuthorizationCode, fetchMetaListBounded, metaGraphCheckStatus, metaGraphGet, metaGraphPost } from './meta-graph-client.util';
 import type { SocialProvider } from './social-provider.interface';
 
 // instagram_basic reads the linked professional account's profile fields;
@@ -67,8 +69,9 @@ export class InstagramSocialProvider implements SocialProvider {
   getCapabilities(): SocialProviderCapabilities {
     // 19B: Instagram professional publishing genuinely requires media —
     // text-only publishing is never advertised/implemented for this
-    // platform (item 24/26).
-    return { connectAccount: true, refreshToken: false, publishText: false, publishImage: true, publishVideo: false, fetchProfile: true, fetchPostStatus: false, accountDiscovery: true };
+    // platform (item 24/26). 19F: a media-object status check via a
+    // single Graph GET is genuinely implemented below.
+    return { connectAccount: true, refreshToken: false, publishText: false, publishImage: true, publishVideo: false, fetchProfile: true, fetchPostStatus: true, accountDiscovery: true };
   }
 
   buildAuthorizationUrl(input: BuildAuthorizationUrlInput): BuildAuthorizationUrlResult {
@@ -154,6 +157,20 @@ export class InstagramSocialProvider implements SocialProvider {
       throw new SocialProviderError('social_provider_request_failed', 'Instagram did not return a published post id.');
     }
     return { providerPostId: published.id, publishedAt: new Date() };
+  }
+
+  // 19F: one Graph GET on the IG media id, authenticated with the
+  // connection's linked-Page access token (the same one used to
+  // publish). Same ambiguity caveat as Facebook's status check — never
+  // reports `deleted`, only `published`/`unavailable`.
+  async getPostStatus(input: GetPostStatusInput): Promise<SocialPostStatusResult> {
+    const checkedAt = new Date();
+    const check = await metaGraphCheckStatus(this.configService, input.externalPostId, input.accessToken, 'id,permalink');
+    if (check.ok) {
+      const url = typeof check.raw?.permalink === 'string' ? check.raw.permalink : undefined;
+      return { providerPostId: input.externalPostId, status: 'published', providerPostUrl: url, checkedAt };
+    }
+    return { providerPostId: input.externalPostId, status: 'unavailable', checkedAt };
   }
 
   private getConfiguredScopes(): string[] {

@@ -13,7 +13,8 @@ export type SocialErrorCode =
   | 'social_oauth_state_invalid'
   | 'social_oauth_state_expired'
   | 'social_oauth_state_consumed'
-  | 'social_no_eligible_account';
+  | 'social_no_eligible_account'
+  | 'social_post_status_unsupported';
 
 export class SocialConfigurationError extends ServiceUnavailableException {
   readonly code: SocialErrorCode = 'social_provider_not_configured';
@@ -52,6 +53,16 @@ export class SocialOAuthStateError extends BadRequestException {
 // the connected user. Never persist a connection in this case.
 export class SocialNoEligibleAccountError extends BadRequestException {
   readonly code: SocialErrorCode = 'social_no_eligible_account';
+  constructor(message: string) {
+    super(message);
+  }
+}
+
+// 19F: the connected provider adapter does not implement (or does not
+// advertise) a remote post-status lookup. Thrown before any provider call
+// is ever attempted — never a fake/guessed success.
+export class SocialPostStatusUnsupportedError extends BadRequestException {
+  readonly code: SocialErrorCode = 'social_post_status_unsupported';
   constructor(message: string) {
     super(message);
   }

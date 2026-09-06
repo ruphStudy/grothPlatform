@@ -141,8 +141,18 @@ export interface SocialPublishResult {
   metadata?: Record<string, string | number | boolean>;
 }
 
+// 19F: provider-neutral remote post status. Distinct from GIP's own
+// SocialPublication.status (our execution state) — never conflated with
+// it. A provider must never claim `deleted` unless it explicitly confirms
+// non-existence; anything less certain (private, permission error,
+// ambiguous provider response) is `unavailable`.
+export type SocialRemotePostStatus = 'published' | 'unavailable' | 'deleted' | 'failed' | 'unknown';
+export const SOCIAL_REMOTE_POST_STATUSES: SocialRemotePostStatus[] = ['published', 'unavailable', 'deleted', 'failed', 'unknown'];
+
 export interface SocialPostStatusResult {
-  externalPostId: string;
-  status: string;
-  url?: string;
+  providerPostId: string;
+  status: SocialRemotePostStatus;
+  providerPostUrl?: string;
+  checkedAt: Date;
+  metadata?: Record<string, string | number | boolean>;
 }

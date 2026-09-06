@@ -8,6 +8,7 @@ import DashboardPage from './pages/DashboardPage';
 import LoginPage from './pages/LoginPage';
 import OrganizationPage from './pages/OrganizationPage';
 import ProductPage from './pages/ProductPage';
+import PublishingCalendarPage from './pages/PublishingCalendarPage';
 import RegisterPage from './pages/RegisterPage';
 import SocialConnectionsCallbackPage from './pages/SocialConnectionsCallbackPage';
 import SocialConnectionsPage from './pages/SocialConnectionsPage';
@@ -72,6 +73,14 @@ function App() {
           element={
             <ProtectedRoute>
               <CreativeReviewPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/organizations/:organizationId/products/:productId/campaigns/:campaignId/publishing"
+          element={
+            <ProtectedRoute>
+              <PublishingCalendarPage />
             </ProtectedRoute>
           }
         />

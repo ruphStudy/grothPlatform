@@ -56,6 +56,10 @@ export class LinkedInSocialProvider implements SocialProvider {
     // return a refresh token, so this must not claim a capability that
     // isn't actually implemented (item 9/10/26/X). 19B implements text-only
     // UGC post publishing; image/video publishing is not implemented.
+    // 19F: fetchPostStatus stays false too — reading back a UGC post
+    // reliably requires API access this app's current OIDC+w_member_social
+    // scope was never verified against; never claim a status-check
+    // capability that isn't genuinely implemented.
     return { connectAccount: true, refreshToken: false, publishText: true, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: false, accountDiscovery: false };
   }
 

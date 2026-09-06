@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
-import { SOCIAL_PLATFORMS } from '../../social-integrations/types/social.types';
-import type { SocialPlatform } from '../../social-integrations/types/social.types';
+import { SOCIAL_PLATFORMS, SOCIAL_REMOTE_POST_STATUSES } from '../../social-integrations/types/social.types';
+import type { SocialPlatform, SocialRemotePostStatus } from '../../social-integrations/types/social.types';
 
 export type PublicationStatus = 'pending' | 'publishing' | 'published' | 'failed';
 export const PUBLICATION_STATUSES: PublicationStatus[] = ['pending', 'publishing', 'published', 'failed'];
@@ -88,6 +88,18 @@ export class SocialPublication {
 
   @Prop()
   errorCode?: string;
+
+  // 19F: provider-side remote status, kept strictly separate from
+  // `status` above (our own execution state). A remote check can never
+  // overwrite `status=published` — only these three fields.
+  @Prop({ type: String, enum: SOCIAL_REMOTE_POST_STATUSES })
+  remoteStatus?: SocialRemotePostStatus;
+
+  @Prop()
+  remoteStatusCheckedAt?: Date;
+
+  @Prop()
+  remoteStatusErrorCode?: string;
 
   @Prop({ type: Object })
   providerMetadata?: Record<string, string | number | boolean>;
