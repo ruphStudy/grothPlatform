@@ -2992,3 +2992,71 @@ export interface SocialImageGenerationOptions {
   includeTextOverlay?: boolean;
   overlayText?: string;
 }
+
+// Sprint 17G — consolidated creative review. Same safe shape as
+// SocialImageAsset, generalized across every kind (social_image/blog_hero/
+// thumbnail) plus a creative-selection reviewStatus.
+export type CreativeAssetKind = 'social_image' | 'blog_hero' | 'thumbnail' | 'brand_asset' | 'generic';
+export type CreativeAssetReviewStatus = 'unreviewed' | 'preferred' | 'rejected';
+
+export interface CreativeAssetSummary {
+  id: string;
+  kind: CreativeAssetKind;
+  source: {
+    contentArtifactId: string;
+    contentVersionId: string;
+    contentVersion: number;
+    contentKind: string;
+    platform: string;
+  };
+  provider: string;
+  model?: string;
+  asset: {
+    type: 'image';
+    url?: string;
+    storageKey?: string;
+    mimeType?: string;
+    width?: number;
+    height?: number;
+  };
+  promptSnapshot: {
+    promptVersion: string;
+    aspectRatio?: string;
+    styleDirection?: string;
+    textOverlayEnabled: boolean;
+  };
+  usage?: { imageCount?: number };
+  cost?: { currency: 'USD'; estimated: number };
+  status: 'generated' | 'failed';
+  reviewStatus: CreativeAssetReviewStatus;
+  createdAt: string;
+}
+
+// Sprint 17F — brand assets (org/product scoped, no campaign dimension).
+export type BrandAssetType = 'logo' | 'logo_mark' | 'icon' | 'product_image' | 'screenshot' | 'background' | 'reference_image' | 'other';
+
+export interface BrandAssetSummary {
+  id: string;
+  organizationId: string;
+  productId: string;
+  type: BrandAssetType;
+  name: string;
+  description?: string;
+  asset: { url?: string; storageKey?: string; mimeType?: string; width?: number; height?: number };
+  usage?: { primary?: boolean; allowedCreativeKinds?: CreativeAssetKind[] };
+  metadata?: { source?: 'uploaded' | 'generated' | 'external'; altText?: string };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BrandVisualProfile {
+  organizationId: string;
+  productId: string;
+  colors?: { primary?: string; secondary?: string; accent?: string; background?: string };
+  visualStyle: string[];
+  avoidStyles: string[];
+  preferredSubjects: string[];
+  avoidSubjects: string[];
+  logoUsage?: { enabled: boolean; preferredAssetId?: string };
+  updatedAt: string;
+}

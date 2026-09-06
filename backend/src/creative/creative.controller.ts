@@ -1,10 +1,13 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CampaignsService } from '../campaigns/campaigns.service';
 import { BlogHeroGenerationOptionsDto } from './dto/blog-hero-generation-options.dto';
 import { SocialImageGenerationOptionsDto } from './dto/social-image-generation-options.dto';
 import { ThumbnailGenerationOptionsDto } from './dto/thumbnail-generation-options.dto';
+import { UpdateCreativeAssetReviewDto } from './dto/update-creative-asset-review.dto';
+import { CreativeAssetsService } from './services/creative-assets.service';
 import { CreativeGenerationService } from './services/creative-generation.service';
+import type { CreativeKind } from './types/creative.types';
 
 // Tenant safety for every GET route is the same cheap Campaign ownership
 // check used by 15J's read endpoints (content-artifacts.controller.ts) —
@@ -16,7 +19,48 @@ export class CreativeController {
   constructor(
     private readonly campaignsService: CampaignsService,
     private readonly creativeGenerationService: CreativeGenerationService,
+    private readonly creativeAssetsService: CreativeAssetsService,
   ) {}
+
+  // 17G: consolidated creative review list across every kind
+  // (social_image/blog_hero/thumbnail). Read-only, no provider call.
+  @Get('assets')
+  async listAssets(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+    @Query('kind') kind?: string,
+    @Query('contentArtifactId') contentArtifactId?: string,
+    @Query('contentVersionId') contentVersionId?: string,
+    @Query('platform') platform?: string,
+    @Query('limit') limit?: string,
+  ) {
+    await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
+    return this.creativeAssetsService.listForCampaign(organizationId, productId, campaignId, {
+      kind: kind as CreativeKind | undefined,
+      contentArtifactId,
+      contentVersionId,
+      platform,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
+  // 17G: creative *selection* only (unreviewed/preferred/rejected) — never
+  // deletes, never touches the source ContentVersion, independent of
+  // Sprint 16 Human Review and any future Sprint 28 approval workflow.
+  @Patch('assets/:assetId/review')
+  async updateAssetReview(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+    @Param('assetId') assetId: string,
+    @Body() body: UpdateCreativeAssetReviewDto,
+  ) {
+    await this.campaignsService.findOne(organizationId, productId, campaignId, req.user.userId);
+    return this.creativeAssetsService.updateReviewStatus(organizationId, productId, campaignId, assetId, body.status);
+  }
 
   @Post('social-image/:artifactId/versions/:version')
   generateSocialImage(

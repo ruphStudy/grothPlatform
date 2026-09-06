@@ -1,10 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { CreativeAssetPersistenceError } from '../errors/creative.errors';
-import { CreativeAsset, CreativeAssetDocument } from '../schemas/creative-asset.schema';
+import { CreativeAsset, CreativeAssetDocument, CreativeAssetReviewStatus } from '../schemas/creative-asset.schema';
 import type { CreativeKind } from '../types/creative.types';
-import type { CreateCreativeAssetInput, CreativeAssetResponse } from '../types/creative-asset.types';
+import type { CreateCreativeAssetInput, CreativeAssetListFilter, CreativeAssetResponse } from '../types/creative-asset.types';
 
 /**
  * Thin persistence layer for CreativeAsset (17C). Every explicit "Generate
@@ -69,6 +69,87 @@ export class CreativeAssetsService {
     return docs.map((d) => this.toResponse(d));
   }
 
+  // 17G: campaign-wide creative review list across every kind
+  // (social_image/blog_hero/thumbnail), newest first. Read-only, no
+  // provider call, no per-item enrichment lookups — everything returned
+  // already lives on the CreativeAsset document itself.
+  async listForCampaign(organizationId: string, productId: string, campaignId: string, filter?: CreativeAssetListFilter): Promise<CreativeAssetResponse[]> {
+    const query: Record<string, unknown> = {
+      organizationId: new Types.ObjectId(organizationId),
+      productId: new Types.ObjectId(productId),
+      campaignId: new Types.ObjectId(campaignId),
+    };
+    if (filter?.kind) query.kind = filter.kind;
+    if (filter?.contentArtifactId) query['source.contentArtifactId'] = new Types.ObjectId(filter.contentArtifactId);
+    if (filter?.contentVersionId) query['source.contentVersionId'] = new Types.ObjectId(filter.contentVersionId);
+    if (filter?.platform) query['source.platform'] = filter.platform;
+
+    let cursor = this.assetModel.find(query).sort({ createdAt: -1 });
+    if (filter?.limit) cursor = cursor.limit(filter.limit);
+    const docs = await cursor.exec();
+    return docs.map((d) => this.toResponse(d));
+  }
+
+  // Tenant-safe single lookup constrained to organization+product only (no
+  // campaign requirement) — used by 17F's promote-to-brand-asset flow,
+  // which addresses a creative asset directly by id.
+  async getOwned(organizationId: string, productId: string, creativeAssetId: string): Promise<CreativeAssetResponse> {
+    let doc: CreativeAssetDocument | null;
+    try {
+      doc = await this.assetModel.findOne({
+        _id: new Types.ObjectId(creativeAssetId),
+        organizationId: new Types.ObjectId(organizationId),
+        productId: new Types.ObjectId(productId),
+      });
+    } catch {
+      throw new NotFoundException('Creative asset not found.');
+    }
+    if (!doc) throw new NotFoundException('Creative asset not found.');
+    return this.toResponse(doc);
+  }
+
+  // 17G: creative *selection* only (unreviewed/preferred/rejected) —
+  // deliberately distinct from Sprint 16 Human Review and Sprint 28
+  // approval. Never deletes, never touches the source ContentVersion.
+  async updateReviewStatus(organizationId: string, productId: string, campaignId: string, assetId: string, status: CreativeAssetReviewStatus): Promise<CreativeAssetResponse> {
+    let doc: CreativeAssetDocument | null;
+    try {
+      doc = await this.assetModel.findOne({
+        _id: new Types.ObjectId(assetId),
+        organizationId: new Types.ObjectId(organizationId),
+        productId: new Types.ObjectId(productId),
+        campaignId: new Types.ObjectId(campaignId),
+      });
+    } catch {
+      throw new NotFoundException('Creative asset not found.');
+    }
+    if (!doc) throw new NotFoundException('Creative asset not found.');
+
+    // Optional rule (item 28): at most one `preferred` asset per source +
+    // kind — enforced only because it's simple and deterministic.
+    if (status === 'preferred') {
+      await this.assetModel
+        .updateMany(
+          {
+            organizationId: doc.organizationId,
+            productId: doc.productId,
+            campaignId: doc.campaignId,
+            kind: doc.kind,
+            'source.contentArtifactId': doc.source.contentArtifactId,
+            'source.contentVersionId': doc.source.contentVersionId,
+            _id: { $ne: doc._id },
+            reviewStatus: 'preferred',
+          },
+          { $set: { reviewStatus: 'unreviewed' } },
+        )
+        .exec();
+    }
+
+    doc.reviewStatus = status;
+    await doc.save();
+    return this.toResponse(doc);
+  }
+
   private toResponse(doc: CreativeAssetDocument): CreativeAssetResponse {
     return {
       id: doc._id.toString(),
@@ -99,6 +180,7 @@ export class CreativeAssetsService {
       usage: doc.usage ? { imageCount: doc.usage.imageCount } : undefined,
       cost: doc.cost ? { currency: doc.cost.currency, estimated: doc.cost.estimated } : undefined,
       status: doc.status,
+      reviewStatus: doc.reviewStatus ?? 'unreviewed',
       createdAt: doc.createdAt as Date,
     };
   }

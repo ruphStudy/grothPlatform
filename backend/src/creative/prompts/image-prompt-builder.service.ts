@@ -130,15 +130,37 @@ export class ImagePromptBuilderService {
   private buildBrandDirection(brand: BuildImagePromptInput['brand']): string | undefined {
     const tone = capField(brand?.tone, 200);
     const style = capField(brand?.style, 200);
-    const colors = brand?.colors && brand.colors.length > 0 ? brand.colors.slice(0, 6).map((c) => capField(c, 50)).filter(Boolean).join(', ') : undefined;
-    if (!tone && !style && !colors) {
+    const colors = this.joinCappedList(brand?.colors, 6, 50);
+    const avoidStyles = this.joinCappedList(brand?.avoidStyles, 10, 60);
+    const preferredSubjects = this.joinCappedList(brand?.preferredSubjects, 10, 60);
+    const avoidSubjects = this.joinCappedList(brand?.avoidSubjects, 10, 60);
+    const hasLogoReference = !!brand?.hasLogoReference;
+    if (!tone && !style && !colors && !avoidStyles && !preferredSubjects && !avoidSubjects && !hasLogoReference) {
       return undefined;
     }
     const lines: string[] = [];
     if (tone) lines.push(`Brand tone: ${tone}.`);
     if (style) lines.push(`Brand style: ${style}.`);
     if (colors) lines.push(`Brand colors: ${colors}.`);
+    if (preferredSubjects) lines.push(`Preferred subjects: ${preferredSubjects}.`);
+    if (avoidStyles) lines.push(`Avoid these styles: ${avoidStyles}.`);
+    if (avoidSubjects) lines.push(`Avoid these subjects: ${avoidSubjects}.`);
+    if (hasLogoReference) {
+      lines.push(
+        'A brand logo/reference image exists on file, but it cannot be supplied to you directly — do not attempt to invent, recreate, guess, or approximate any specific logo; use neutral, unbranded visual elements instead.',
+      );
+    }
     return `Brand Direction\n${lines.join('\n')}`;
+  }
+
+  private joinCappedList(values: string[] | undefined, maxItems: number, maxItemChars: number): string | undefined {
+    if (!values || values.length === 0) return undefined;
+    const joined = values
+      .slice(0, maxItems)
+      .map((v) => capField(v, maxItemChars))
+      .filter(Boolean)
+      .join(', ');
+    return joined.length > 0 ? joined : undefined;
   }
 
   private buildTextOverlaySection(enabled: boolean, text: string | undefined): string {

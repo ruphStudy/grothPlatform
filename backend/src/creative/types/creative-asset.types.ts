@@ -1,4 +1,13 @@
+import type { CreativeAssetReviewStatus } from '../schemas/creative-asset.schema';
 import type { CreativeCost, CreativeKind, CreativeUsage } from './creative.types';
+
+export interface CreativeAssetListFilter {
+  kind?: CreativeKind;
+  contentArtifactId?: string;
+  contentVersionId?: string;
+  platform?: string;
+  limit?: number;
+}
 
 export interface CreativeAssetFileInput {
   type: 'image';
@@ -66,6 +75,7 @@ export interface CreativeAssetResponse {
   cost?: CreativeCost;
 
   status: 'generated' | 'failed';
+  reviewStatus: CreativeAssetReviewStatus;
 
   createdAt: Date;
 }

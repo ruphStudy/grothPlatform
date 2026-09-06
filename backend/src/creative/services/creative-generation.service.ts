@@ -3,15 +3,18 @@ import { ConfigService } from '@nestjs/config';
 import { CampaignReviewService } from '../../campaigns/campaign-review.service';
 import { CampaignsService } from '../../campaigns/campaigns.service';
 import { ContentVersioningService } from '../../content-generation/services/content-versioning.service';
+import type { ContentVersionBrandVoiceSnapshot } from '../../content-generation/types/content-brand-voice.types';
 import type { ContentGenerationKind } from '../../content-generation/types/content-generation.types';
 import type { ContentVersionDetail } from '../../content-generation/types/content-versioning.types';
 import { GrowthStrategyReviewService } from '../../growth-strategy/growth-strategy-review.service';
 import { ProductsService } from '../../products/products.service';
 import { CreativeEngineService } from '../engine/creative-engine.service';
 import { ImagePromptBuilderService, IMAGE_PROMPT_VERSION } from '../prompts/image-prompt-builder.service';
-import type { BuildImagePromptInput, ImagePromptContentContext } from '../prompts/image-prompt.types';
+import type { BuildImagePromptInput, ImagePromptBrandDirection, ImagePromptContentContext } from '../prompts/image-prompt.types';
 import type { CreativeKind } from '../types/creative.types';
 import type { CreativeAssetResponse } from '../types/creative-asset.types';
+import { BrandAssetsService } from './brand-assets.service';
+import { BrandVisualProfileService } from './brand-visual-profile.service';
 import { CreativeAssetsService } from './creative-assets.service';
 
 const SOCIAL_CONTENT_KINDS: ContentGenerationKind[] = ['linkedin', 'x', 'facebook', 'instagram'];
@@ -128,6 +131,8 @@ export class CreativeGenerationService {
     private readonly imagePromptBuilder: ImagePromptBuilderService,
     private readonly creativeEngine: CreativeEngineService,
     private readonly creativeAssetsService: CreativeAssetsService,
+    private readonly brandVisualProfileService: BrandVisualProfileService,
+    private readonly brandAssetsService: BrandAssetsService,
   ) {}
 
   async generateSocialImage(input: GenerateCreativeImageInput): Promise<CreativeAssetResponse> {
@@ -185,7 +190,7 @@ export class CreativeGenerationService {
     const styleDirection = factualRisk ? [baseStyleDirection, CONCEPTUAL_STYLE_OVERRIDE].filter(Boolean).join('; ') : baseStyleDirection;
 
     const evidence = sourceVersion.groundingEvidenceSnapshot;
-    const brandSnapshot = sourceVersion.brandVoiceSnapshot;
+    const brand = await this.resolveBrandDirection(input.organizationId, input.productId, sourceVersion.brandVoiceSnapshot);
 
     const promptInput: BuildImagePromptInput = {
       kind: config.creativeKind,
@@ -205,10 +210,7 @@ export class CreativeGenerationService {
         ctaDirection: evidence?.suggestedCTA,
       },
       content: this.buildContentContext(config.creativeKind, sourceVersion, evidence?.topic),
-      brand:
-        (brandSnapshot?.tone && brandSnapshot.tone.length > 0) || (brandSnapshot?.style && brandSnapshot.style.length > 0)
-          ? { tone: brandSnapshot?.tone?.join(', '), style: brandSnapshot?.style?.join(', ') }
-          : undefined,
+      brand,
       textOverlay: { enabled: overlayEnabled, text: overlayEnabled ? requestedOverlayText : undefined, maxChars: config.overlayMaxChars },
       sourceContext: {
         organizationId: input.organizationId,
@@ -301,6 +303,52 @@ export class CreativeGenerationService {
     if (!strategyStillApproved) {
       throw new ConflictException(`The product has changed since the Growth Strategy was last approved. Review and approve it again before ${actionLabel}.`);
     }
+  }
+
+  // 17F: merges genuine 16E brandVoiceSnapshot data with a genuine,
+  // explicitly-configured 17F BrandVisualProfile. Cheap reads only (no
+  // provider call); if no profile exists at all, this degrades to exactly
+  // the pre-17F brandVoiceSnapshot-only behavior (item 12/E — no profile
+  // preserves current prompt behavior). The logo-asset check only runs
+  // when the profile explicitly enables logo usage, and it only ever
+  // records that a reference *exists* — it never asks the provider to
+  // recreate it (item 13, enforced in image-prompt-builder.service.ts).
+  private async resolveBrandDirection(
+    organizationId: string,
+    productId: string,
+    brandSnapshot: ContentVersionBrandVoiceSnapshot | undefined,
+  ): Promise<ImagePromptBrandDirection | undefined> {
+    const profile = await this.brandVisualProfileService.get(organizationId, productId);
+
+    let hasLogoReference = false;
+    if (profile?.logoUsage?.enabled) {
+      const logoAssets = await this.brandAssetsService.list(organizationId, productId, 'logo');
+      hasLogoReference = logoAssets.length > 0 || !!profile.logoUsage.preferredAssetId;
+    }
+
+    const tone = brandSnapshot?.tone && brandSnapshot.tone.length > 0 ? brandSnapshot.tone.join(', ') : undefined;
+    const styleParts = [
+      brandSnapshot?.style && brandSnapshot.style.length > 0 ? brandSnapshot.style.join(', ') : undefined,
+      profile?.visualStyle && profile.visualStyle.length > 0 ? profile.visualStyle.join(', ') : undefined,
+    ].filter((v): v is string => !!v);
+    const style = styleParts.length > 0 ? styleParts.join(', ') : undefined;
+    const colors = profile?.colors ? [profile.colors.primary, profile.colors.secondary, profile.colors.accent, profile.colors.background].filter((c): c is string => !!c) : undefined;
+    const avoidStyles = profile?.avoidStyles && profile.avoidStyles.length > 0 ? profile.avoidStyles : undefined;
+    const preferredSubjects = profile?.preferredSubjects && profile.preferredSubjects.length > 0 ? profile.preferredSubjects : undefined;
+    const avoidSubjects = profile?.avoidSubjects && profile.avoidSubjects.length > 0 ? profile.avoidSubjects : undefined;
+
+    if (!tone && !style && !(colors && colors.length > 0) && !avoidStyles && !preferredSubjects && !avoidSubjects && !hasLogoReference) {
+      return undefined;
+    }
+    return {
+      tone,
+      style,
+      colors: colors && colors.length > 0 ? colors : undefined,
+      avoidStyles,
+      preferredSubjects,
+      avoidSubjects,
+      hasLogoReference: hasLogoReference || undefined,
+    };
   }
 
   // Content-context mapping differs per creative kind/content kind: social

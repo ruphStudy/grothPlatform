@@ -3,6 +3,7 @@ import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import CampaignDetailPage from './pages/CampaignDetailPage';
 import CampaignsPage from './pages/CampaignsPage';
+import CreativeReviewPage from './pages/CreativeReviewPage';
 import DashboardPage from './pages/DashboardPage';
 import LoginPage from './pages/LoginPage';
 import OrganizationPage from './pages/OrganizationPage';
@@ -52,6 +53,14 @@ function App() {
           element={
             <ProtectedRoute>
               <CampaignDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/organizations/:organizationId/products/:productId/campaigns/:campaignId/creative"
+          element={
+            <ProtectedRoute>
+              <CreativeReviewPage />
             </ProtectedRoute>
           }
         />

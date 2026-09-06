@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
 import { AppLayout } from '../components/AppLayout';
 import { Card } from '../components/Card';
@@ -3023,7 +3023,14 @@ export default function CampaignDetailPage() {
       <PageHeader
         backTo={{ to: `/organizations/${organizationId}/products/${productId}/campaigns`, label: 'Campaigns' }}
         title={campaign.name}
-        actions={<span className={`quality-badge ${statusQualityClass(campaign.status)}`}>{labelize(campaign.status)}</span>}
+        actions={
+          <>
+            <Link to={`${basePath}/creative`} className="btn btn-secondary">
+              Creative
+            </Link>
+            <span className={`quality-badge ${statusQualityClass(campaign.status)}`}>{labelize(campaign.status)}</span>
+          </>
+        }
       />
 
       {/* A. Campaign Overview */}

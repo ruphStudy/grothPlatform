@@ -4,6 +4,10 @@ import { CREATIVE_KINDS } from '../types/creative.types';
 import type { CreativeKind } from '../types/creative.types';
 
 export type CreativeAssetStatus = 'generated' | 'failed';
+// 17G: creative *selection* only — deliberately distinct from Sprint 16
+// Human Review and the Sprint 28 approval workflow. Never named
+// approved/approval_required to avoid any collision with that later work.
+export type CreativeAssetReviewStatus = 'unreviewed' | 'preferred' | 'rejected';
 export type CreativeAssetDocument = HydratedDocument<CreativeAsset>;
 
 // Denormalized reference to the ContentVersion this creative was generated
@@ -127,6 +131,9 @@ export class CreativeAsset {
 
   @Prop({ type: String, enum: ['generated', 'failed'], required: true })
   status: CreativeAssetStatus;
+
+  @Prop({ type: String, enum: ['unreviewed', 'preferred', 'rejected'], required: true, default: 'unreviewed' })
+  reviewStatus: CreativeAssetReviewStatus;
 
   @Prop({ type: Types.ObjectId, ref: 'User' })
   createdBy?: Types.ObjectId;

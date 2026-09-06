@@ -31,11 +31,19 @@ export interface ImagePromptContentContext {
 }
 
 // Only ever populated from genuinely configured/persisted brand data
-// (e.g. a 16E brandVoiceSnapshot). Never fabricated when absent.
+// (e.g. a 16E brandVoiceSnapshot, or a 17F BrandVisualProfile). Never
+// fabricated when absent.
 export interface ImagePromptBrandDirection {
   tone?: string;
   style?: string;
   colors?: string[];
+  avoidStyles?: string[];
+  preferredSubjects?: string[];
+  avoidSubjects?: string[];
+  // 17F: true only when a genuine logo/reference BrandAsset exists. The
+  // builder never instructs the provider to recreate/invent that logo —
+  // see buildBrandDirection() in image-prompt-builder.service.ts.
+  hasLogoReference?: boolean;
 }
 
 export interface ImagePromptTextOverlayInput {
