@@ -3189,3 +3189,23 @@ export interface PublishingCalendarItem {
   providerPostUrl?: string;
   errorCode?: string;
 }
+
+// Sprint 20A/20B — CMS provider abstraction + WordPress connections. No
+// article publishing exists yet — connections only prove a site/
+// credential pair genuinely works.
+export type CmsPlatform = 'wordpress';
+export type CmsConnectionStatus = 'active' | 'invalid' | 'revoked' | 'error';
+
+export interface CmsConnectionSummary {
+  id: string;
+  platform: CmsPlatform;
+  siteUrl: string;
+  siteName?: string;
+  username?: string;
+  status: CmsConnectionStatus;
+  capabilities?: string[];
+  lastValidatedAt?: string;
+  lastErrorCode?: string;
+  createdAt: string;
+  updatedAt: string;
+}

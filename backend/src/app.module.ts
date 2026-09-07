@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { AudienceIntelligenceModule } from './audience-intelligence/audience-intelligence.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
+import { CmsIntegrationsModule } from './cms-integrations/cms-integrations.module';
 import { ContentGenerationModule } from './content-generation/content-generation.module';
 import { ContentPlanningModule } from './content-planning/content-planning.module';
 import { CreativeModule } from './creative/creative.module';
@@ -48,6 +49,7 @@ import { WebsiteIntelligenceModule } from './website-intelligence/website-intell
     CreativeModule,
     SocialIntegrationsModule,
     SocialPublishingModule,
+    CmsIntegrationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

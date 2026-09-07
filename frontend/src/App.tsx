@@ -3,6 +3,7 @@ import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import CampaignDetailPage from './pages/CampaignDetailPage';
 import CampaignsPage from './pages/CampaignsPage';
+import CmsConnectionsPage from './pages/CmsConnectionsPage';
 import CreativeReviewPage from './pages/CreativeReviewPage';
 import DashboardPage from './pages/DashboardPage';
 import LoginPage from './pages/LoginPage';
@@ -60,6 +61,14 @@ function App() {
           }
         />
         <Route path="/social-connections/callback" element={<SocialConnectionsCallbackPage />} />
+        <Route
+          path="/organizations/:organizationId/products/:productId/cms-connections"
+          element={
+            <ProtectedRoute>
+              <CmsConnectionsPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/organizations/:organizationId/products/:productId/campaigns/:campaignId"
           element={
