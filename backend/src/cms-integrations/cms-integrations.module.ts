@@ -1,15 +1,22 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { CampaignsModule } from '../campaigns/campaigns.module';
+import { ContentGenerationModule } from '../content-generation/content-generation.module';
+import { CreativeModule } from '../creative/creative.module';
+import { GrowthStrategyModule } from '../growth-strategy/growth-strategy.module';
 import { ProductsModule } from '../products/products.module';
 import { WebsiteUrlSecurityService } from '../website-intelligence/website-url-security.service';
 import { CmsConnection, CmsConnectionSchema } from './connections/schemas/cms-connection.schema';
 import { CmsCredentialEncryptionService } from './connections/services/cms-credential-encryption.service';
 import { CmsConnectionsService } from './connections/services/cms-connections.service';
 import { CmsConnectionsController } from './connections/cms-connections.controller';
+import { CmsPublicationsController } from './cms-publications.controller';
 import { CmsEngineService } from './engine/cms-engine.service';
 import { CMS_PROVIDER_REGISTRY_TOKEN } from './providers/cms-provider.tokens';
 import type { CmsProvider } from './providers/cms-provider.interface';
 import { WordPressCmsProvider } from './providers/wordpress-cms.provider';
+import { CmsPublication, CmsPublicationSchema } from './schemas/cms-publication.schema';
+import { CmsPublicationsService } from './services/cms-publications.service';
 import type { CmsPlatform } from './types/cms.types';
 
 // 20A: CmsEngineService depends only on the provider-registry token — a
@@ -21,8 +28,18 @@ import type { CmsPlatform } from './types/cms.types';
 // doesn't export it) — it is a stateless, ConfigService-only service, so
 // instantiating it a second time carries no coupling risk.
 @Module({
-  imports: [MongooseModule.forFeature([{ name: CmsConnection.name, schema: CmsConnectionSchema }]), ProductsModule],
-  controllers: [CmsConnectionsController],
+  imports: [
+    MongooseModule.forFeature([
+      { name: CmsConnection.name, schema: CmsConnectionSchema },
+      { name: CmsPublication.name, schema: CmsPublicationSchema },
+    ]),
+    ProductsModule,
+    CampaignsModule,
+    GrowthStrategyModule,
+    ContentGenerationModule,
+    CreativeModule,
+  ],
+  controllers: [CmsConnectionsController, CmsPublicationsController],
   providers: [
     WordPressCmsProvider,
     {
@@ -38,7 +55,8 @@ import type { CmsPlatform } from './types/cms.types';
     WebsiteUrlSecurityService,
     CmsCredentialEncryptionService,
     CmsConnectionsService,
+    CmsPublicationsService,
   ],
-  exports: [CmsEngineService, CmsConnectionsService],
+  exports: [CmsEngineService, CmsConnectionsService, CmsPublicationsService],
 })
 export class CmsIntegrationsModule {}

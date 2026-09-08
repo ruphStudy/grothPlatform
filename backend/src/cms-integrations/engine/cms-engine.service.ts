@@ -2,7 +2,20 @@ import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common'
 import { CmsCapabilityUnsupportedError, CmsConfigurationError, CmsProviderError } from '../errors/cms.errors';
 import { CMS_PROVIDER_REGISTRY_TOKEN } from '../providers/cms-provider.tokens';
 import type { CmsProvider } from '../providers/cms-provider.interface';
-import type { CmsConnectionValidationResult, CmsPlatform, CmsProviderCapabilities, CmsSiteInfo, GetCmsSiteInfoInput, ValidateCmsConnectionInput } from '../types/cms.types';
+import type {
+  CmsConnectionValidationResult,
+  CmsCredential,
+  CmsMediaUploadRequest,
+  CmsMediaUploadResult,
+  CmsPlatform,
+  CmsPostRequest,
+  CmsPostResult,
+  CmsProviderCapabilities,
+  CmsSiteInfo,
+  CmsTaxonomyItem,
+  GetCmsSiteInfoInput,
+  ValidateCmsConnectionInput,
+} from '../types/cms.types';
 
 /**
  * Platform-agnostic CMS engine (20A). Resolves the configured provider
@@ -42,6 +55,42 @@ export class CmsEngineService {
       throw new CmsCapabilityUnsupportedError(`The ${platform} provider does not support site info fetch.`);
     }
     return this.callOnce(platform, () => provider.getSiteInfo!(input));
+  }
+
+  async createPost(platform: CmsPlatform, input: { siteUrl: string; credential: CmsCredential } & CmsPostRequest): Promise<CmsPostResult> {
+    const provider = this.resolveProvider(platform);
+    this.assertCapability(provider, input.status === 'publish' ? 'publishPost' : 'createDraft');
+    if (!provider.createPost) {
+      throw new CmsCapabilityUnsupportedError(`The ${platform} provider does not support post creation.`);
+    }
+    return this.callOnce(platform, () => provider.createPost!(input));
+  }
+
+  async uploadMedia(platform: CmsPlatform, input: { siteUrl: string; credential: CmsCredential } & CmsMediaUploadRequest): Promise<CmsMediaUploadResult> {
+    const provider = this.resolveProvider(platform);
+    this.assertCapability(provider, 'uploadMedia');
+    if (!provider.uploadMedia) {
+      throw new CmsCapabilityUnsupportedError(`The ${platform} provider does not support media uploads.`);
+    }
+    return this.callOnce(platform, () => provider.uploadMedia!(input));
+  }
+
+  async listCategories(platform: CmsPlatform, input: { siteUrl: string; credential: CmsCredential; limit?: number }): Promise<CmsTaxonomyItem[]> {
+    const provider = this.resolveProvider(platform);
+    this.assertCapability(provider, 'fetchCategories');
+    if (!provider.listCategories) {
+      throw new CmsCapabilityUnsupportedError(`The ${platform} provider does not support category listing.`);
+    }
+    return this.callOnce(platform, () => provider.listCategories!(input));
+  }
+
+  async listTags(platform: CmsPlatform, input: { siteUrl: string; credential: CmsCredential; limit?: number }): Promise<CmsTaxonomyItem[]> {
+    const provider = this.resolveProvider(platform);
+    this.assertCapability(provider, 'fetchTags');
+    if (!provider.listTags) {
+      throw new CmsCapabilityUnsupportedError(`The ${platform} provider does not support tag listing.`);
+    }
+    return this.callOnce(platform, () => provider.listTags!(input));
   }
 
   private assertCapability(provider: CmsProvider, capability: keyof CmsProviderCapabilities): void {

@@ -14,6 +14,8 @@ export interface CmsProviderCapabilities {
   uploadMedia: boolean;
   manageCategories: boolean;
   manageTags: boolean;
+  fetchCategories?: boolean;
+  fetchTags?: boolean;
 }
 
 export type CmsCredentialAuthType = 'application_password' | 'bearer_token';
@@ -56,7 +58,13 @@ export interface GetCmsSiteInfoInput {
 // Future (post-20B) shapes only — deliberately unused by any route yet
 // (item 6). Kept provider-neutral so a later publishing sprint can build
 // on this without another abstraction pass.
-export type CmsPostStatus = 'draft' | 'publish' | 'pending' | 'future';
+export type CmsPostStatus = 'draft' | 'publish';
+
+export interface CmsSeoMetadata {
+  metaTitle?: string;
+  metaDescription?: string;
+  focusKeyword?: string;
+}
 
 export interface CmsPostRequest {
   title: string;
@@ -64,13 +72,33 @@ export interface CmsPostRequest {
   excerpt?: string;
   slug?: string;
   status: CmsPostStatus;
-  categories?: string[];
-  tags?: string[];
-  featuredImage?: string;
+  featuredMediaId?: string;
+  categoryIds?: number[];
+  tagIds?: number[];
+  seo?: CmsSeoMetadata;
 }
 
 export interface CmsPostResult {
   externalPostId: string;
+  externalPostUrl?: string;
+  status: 'draft' | 'published';
+  publishedAt?: Date;
+}
+
+export interface CmsMediaUploadRequest {
+  filename: string;
+  mimeType: string;
+  bytes: Buffer;
+}
+
+export interface CmsMediaUploadResult {
+  externalMediaId: string;
   url?: string;
-  status: CmsPostStatus;
+}
+
+export interface CmsTaxonomyItem {
+  externalId: number;
+  name: string;
+  slug?: string;
+  count?: number;
 }

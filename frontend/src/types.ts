@@ -3209,3 +3209,47 @@ export interface CmsConnectionSummary {
   createdAt: string;
   updatedAt: string;
 }
+
+export type CmsPublishMode = 'draft' | 'publish';
+export type CmsPublicationStatus = 'pending' | 'publishing' | 'draft_created' | 'published' | 'failed';
+
+export interface CmsSeoMetadata {
+  metaTitle?: string;
+  metaDescription?: string;
+  focusKeyword?: string;
+}
+
+export interface CmsTaxonomyItem {
+  externalId: number;
+  name: string;
+  slug?: string;
+  count?: number;
+}
+
+export interface CmsPublicationSummary {
+  id: string;
+  platform: CmsPlatform;
+  cmsConnectionId: string;
+  contentArtifactId: string;
+  contentVersionId: string;
+  contentVersion: number;
+  status: CmsPublicationStatus;
+  publishMode: CmsPublishMode;
+  externalPostId?: string;
+  externalPostUrl?: string;
+  titleSnapshot: string;
+  excerptSnapshot?: string;
+  slugSnapshot?: string;
+  seo?: CmsSeoMetadata;
+  featuredCreativeAssetId?: string;
+  externalMediaId?: string;
+  categoryIds: number[];
+  tagIds: number[];
+  providerName?: string;
+  attemptCount: number;
+  lastAttemptAt?: string;
+  errorCode?: string;
+  publishedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}

@@ -90,6 +90,7 @@ import { ContentVersioningService } from './services/content-versioning.service'
     ContentBrandVoiceService,
     ContentOriginalityService,
     ContentQualityService,
+    ContentHumanReviewService,
   ],
 })
 export class ContentGenerationModule {}

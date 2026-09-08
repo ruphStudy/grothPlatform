@@ -59,8 +59,14 @@ import type {
   ContentImprovementResult,
   ContentHumanReviewResult,
   ContentHumanReviewSummary,
+  HumanReviewDecision,
   ContentVersionDetail,
   ContentVersionSummary,
+  CmsConnectionSummary,
+  CmsPublicationSummary,
+  CmsPublishMode,
+  CmsTaxonomyItem,
+  CreativeAssetSummary,
   SocialImageAsset,
   SocialImageGenerationOptions,
   SocialConnectionSummary,
@@ -1775,6 +1781,243 @@ function CreativeImagePanel({
                 )}
               </div>
               <div className="entity-card-meta">Generated {new Date(img.createdAt).toLocaleString()}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function slugPreview(value: string): string {
+  const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').replace(/-{2,}/g, '-');
+  return slug.slice(0, 80).replace(/-+$/g, '') || 'blog-post';
+}
+
+function plainTextPreview(value: string): string {
+  return value.replace(/[#*_`~[\]()>-]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function metaDescriptionPreview(content: string): string {
+  const text = plainTextPreview(content);
+  if (text.length <= 160) return text;
+  const clipped = text.slice(0, 161);
+  const idx = clipped.lastIndexOf(' ');
+  return `${(idx > 40 ? clipped.slice(0, idx) : clipped.slice(0, 160)).trim().replace(/[.,;:!?-]+$/g, '')}.`;
+}
+
+function newIdempotencyKey(): string {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function WordPressBlogPublishPanel({
+  basePath,
+  productBasePath,
+  draft,
+}: {
+  basePath: string;
+  productBasePath: string;
+  draft: BlogDraftResult;
+}) {
+  const [connections, setConnections] = useState<CmsConnectionSummary[] | null>(null);
+  const [selectedConnectionId, setSelectedConnectionId] = useState('');
+  const [humanReviewDecision, setHumanReviewDecision] = useState<HumanReviewDecision | null>(null);
+  const [heroes, setHeroes] = useState<CreativeAssetSummary[] | null>(null);
+  const [selectedHeroId, setSelectedHeroId] = useState('');
+  const [categories, setCategories] = useState<CmsTaxonomyItem[]>([]);
+  const [tags, setTags] = useState<CmsTaxonomyItem[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
+  const [selectedTags, setSelectedTags] = useState<number[]>([]);
+  const [mode, setMode] = useState<CmsPublishMode>('draft');
+  const [history, setHistory] = useState<CmsPublicationSummary[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [loadingTaxonomy, setLoadingTaxonomy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const idempotencyKeyRef = useState<{ current: string | null }>(() => ({ current: null }))[0];
+
+  const activeConnections = (connections ?? []).filter((c) => c.platform === 'wordpress' && c.status === 'active');
+  const selectedConnection = activeConnections.find((c) => c.id === selectedConnectionId);
+  const eligibleHeroes = (heroes ?? []).filter((h) => h.kind === 'blog_hero' && h.reviewStatus !== 'rejected' && h.asset.url);
+  const reviewBlocks = humanReviewDecision !== 'auto_clear' && humanReviewDecision !== 'review_recommended';
+  const seoPreview = {
+    title: draft.title,
+    slug: slugPreview(draft.title),
+    metaDescription: metaDescriptionPreview(draft.content),
+    focusKeyword: undefined as string | undefined,
+  };
+
+  async function loadBasics() {
+    try {
+      const [conns, review, imgs, pubs] = await Promise.all([
+        apiRequest<CmsConnectionSummary[]>(`${productBasePath}/cms-connections`),
+        apiRequest<ContentHumanReviewResult | null>(`${basePath}/content-generation/artifacts/${draft.artifactId}/versions/${draft.version}/human-review`).catch(() => null),
+        apiRequest<CreativeAssetSummary[]>(`${basePath}/creative/blog-hero/${draft.artifactId}/versions/${draft.version}`).catch(() => []),
+        apiRequest<CmsPublicationSummary[]>(`${basePath}/cms-publications?contentArtifactId=${draft.artifactId}`).catch(() => []),
+      ]);
+      setConnections(conns);
+      setHumanReviewDecision(review?.decision ?? null);
+      setHeroes(imgs);
+      setHistory(pubs);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to load WordPress publishing options');
+    }
+  }
+
+  useEffect(() => {
+    loadBasics();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.artifactId, draft.version]);
+
+  useEffect(() => {
+    if (!selectedConnectionId) {
+      setCategories([]);
+      setTags([]);
+      setSelectedCategories([]);
+      setSelectedTags([]);
+      return;
+    }
+    (async () => {
+      setLoadingTaxonomy(true);
+      try {
+        const [cats, tagList] = await Promise.all([
+          apiRequest<CmsTaxonomyItem[]>(`${productBasePath}/cms-connections/${selectedConnectionId}/categories`),
+          apiRequest<CmsTaxonomyItem[]>(`${productBasePath}/cms-connections/${selectedConnectionId}/tags`),
+        ]);
+        setCategories(cats);
+        setTags(tagList);
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : 'Failed to load WordPress taxonomy');
+      } finally {
+        setLoadingTaxonomy(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedConnectionId]);
+
+  function toggleId(id: number, current: number[], set: (ids: number[]) => void) {
+    set(current.includes(id) ? current.filter((v) => v !== id) : [...current, id]);
+  }
+
+  async function handleSend() {
+    if (!selectedConnectionId || reviewBlocks) return;
+    const warning = humanReviewDecision === 'review_recommended' ? ' Human review is recommended for this content.' : '';
+    const confirmed = window.confirm(`${mode === 'draft' ? 'Create this blog as a WordPress draft?' : 'Publish this blog to WordPress now?'}${warning}`);
+    if (!confirmed) return;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    if (!idempotencyKeyRef.current) idempotencyKeyRef.current = newIdempotencyKey();
+    try {
+      const result = await apiRequest<CmsPublicationSummary>(`${basePath}/cms-publications/${draft.artifactId}/versions/${draft.version}`, {
+        method: 'POST',
+        body: {
+          connectionId: selectedConnectionId,
+          mode,
+          idempotencyKey: idempotencyKeyRef.current,
+          featuredCreativeAssetId: selectedHeroId || undefined,
+          categoryIds: selectedCategories,
+          tagIds: selectedTags,
+        },
+      });
+      setMessage(`${result.status === 'published' ? 'Published' : 'Draft created'}${selectedConnection?.siteName ? ` on ${selectedConnection.siteName}` : ''}. Source v${result.contentVersion}.`);
+      setHistory((prev) => [result, ...(prev ?? []).filter((p) => p.id !== result.id)]);
+      idempotencyKeyRef.current = null;
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to send blog to WordPress');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 10, padding: 10, border: '1px solid var(--border-color, #ddd)', borderRadius: 6 }}>
+      <span className="summary-label">WordPress Publishing</span>
+      <ErrorMessage message={error} />
+      {message && <div className="success-message" style={{ marginTop: 6 }}>{message}</div>}
+      {reviewBlocks && <div className="content-warning" style={{ marginTop: 6 }}>Human review is required before publishing.</div>}
+      {humanReviewDecision === 'review_recommended' && <div className="content-warning" style={{ marginTop: 6 }}>Human review is recommended before publishing.</div>}
+      <div className="form form-grid-2" style={{ marginTop: 8 }}>
+        <div className="field">
+          <label>WordPress Connection</label>
+          <select value={selectedConnectionId} onChange={(e) => setSelectedConnectionId(e.target.value)}>
+            <option value="">Select connection</option>
+            {activeConnections.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.siteName ?? c.siteUrl}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label>Mode</label>
+          <select value={mode} onChange={(e) => setMode(e.target.value as CmsPublishMode)}>
+            <option value="draft">Save as Draft</option>
+            <option value="publish">Publish Now</option>
+          </select>
+        </div>
+        <div className="field">
+          <label>Featured Hero Image</label>
+          <select value={selectedHeroId} onChange={(e) => setSelectedHeroId(e.target.value)}>
+            <option value="">No featured image</option>
+            {eligibleHeroes.map((h) => (
+              <option key={h.id} value={h.id}>
+                {h.reviewStatus === 'preferred' ? 'Preferred hero' : 'Hero image'} — {new Date(h.createdAt).toLocaleString()}
+              </option>
+            ))}
+          </select>
+          {selectedHeroId && eligibleHeroes.find((h) => h.id === selectedHeroId)?.asset.url && (
+            <img src={eligibleHeroes.find((h) => h.id === selectedHeroId)?.asset.url} alt="Selected blog hero" style={{ maxWidth: '100%', marginTop: 6, borderRadius: 4 }} />
+          )}
+        </div>
+        <div className="field">
+          <label>SEO Preview</label>
+          <div className="entity-card-meta">Title: {seoPreview.title}</div>
+          <div className="entity-card-meta">Slug: {seoPreview.slug}</div>
+          <div className="entity-card-meta">Meta Description: {seoPreview.metaDescription || '-'}</div>
+          <div className="entity-card-meta">Focus Keyword: {seoPreview.focusKeyword ?? '-'}</div>
+          <div className="entity-card-meta">SEO plugin fields are only written when safely supported by backend configuration.</div>
+        </div>
+      </div>
+      {loadingTaxonomy && <Loading />}
+      {(categories.length > 0 || tags.length > 0) && (
+        <div className="form form-grid-2" style={{ marginTop: 8 }}>
+          <div>
+            <span className="summary-label">Categories</span>
+            {categories.map((c) => (
+              <label key={c.externalId} className="entity-card-meta" style={{ display: 'block' }}>
+                <input type="checkbox" checked={selectedCategories.includes(c.externalId)} onChange={() => toggleId(c.externalId, selectedCategories, setSelectedCategories)} /> {c.name}
+              </label>
+            ))}
+          </div>
+          <div>
+            <span className="summary-label">Tags</span>
+            {tags.map((t) => (
+              <label key={t.externalId} className="entity-card-meta" style={{ display: 'block' }}>
+                <input type="checkbox" checked={selectedTags.includes(t.externalId)} onChange={() => toggleId(t.externalId, selectedTags, setSelectedTags)} /> {t.name}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+      <button className="btn btn-primary" style={{ marginTop: 8 }} onClick={handleSend} disabled={busy || reviewBlocks || !selectedConnectionId}>
+        {busy ? (mode === 'draft' ? 'Creating Draft...' : 'Publishing...') : 'Send to WordPress'}
+      </button>
+      {history && history.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <span className="summary-label">WordPress Publishing History</span>
+          {history.map((item) => (
+            <div key={item.id} className="entity-card-meta" style={{ marginTop: 4 }}>
+              v{item.contentVersion} · {item.publishMode === 'draft' ? 'Draft' : 'Publish'} · {labelize(item.status)} · {new Date(item.createdAt).toLocaleString()}
+              {item.externalPostUrl && (
+                <>
+                  {' · '}
+                  <a href={item.externalPostUrl} target="_blank" rel="noreferrer">Open</a>
+                </>
+              )}
+              {item.errorCode && ` · ${labelize(item.errorCode)}`}
             </div>
           ))}
         </div>
@@ -4763,6 +5006,11 @@ export default function CampaignDetailPage() {
                                         allowedRatios={['16:9', '3:2', '1:1']}
                                         defaultRatioLabel="Default ratio (16:9)"
                                         overlayMaxChars={80}
+                                      />
+                                      <WordPressBlogPublishPanel
+                                        basePath={basePath}
+                                        productBasePath={productBasePath}
+                                        draft={blogDrafts[item.id]}
                                       />
                                       <CreativeImagePanel
                                         basePath={basePath}

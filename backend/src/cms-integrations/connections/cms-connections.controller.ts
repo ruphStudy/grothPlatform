@@ -4,6 +4,7 @@ import { ProductsService } from '../../products/products.service';
 import { ConnectWordPressDto } from './dto/connect-wordpress.dto';
 import { UpdateCmsConnectionDto } from './dto/update-cms-connection.dto';
 import { CmsConnectionsService } from './services/cms-connections.service';
+import { CmsPublicationsService } from '../services/cms-publications.service';
 
 // Tenant safety: the same cheap Product ownership check used by
 // SocialConnectionsController — connections are product-scoped only, no
@@ -14,6 +15,7 @@ export class CmsConnectionsController {
   constructor(
     private readonly productsService: ProductsService,
     private readonly cmsConnectionsService: CmsConnectionsService,
+    private readonly cmsPublicationsService: CmsPublicationsService,
   ) {}
 
   @Post('wordpress')
@@ -31,6 +33,28 @@ export class CmsConnectionsController {
   async list(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string) {
     await this.productsService.findOne(organizationId, productId, req.user.userId);
     return this.cmsConnectionsService.list(organizationId, productId);
+  }
+
+  @Get(':connectionId/categories')
+  async categories(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('connectionId') connectionId: string,
+  ) {
+    await this.productsService.findOne(organizationId, productId, req.user.userId);
+    return this.cmsPublicationsService.listCategories(organizationId, productId, connectionId);
+  }
+
+  @Get(':connectionId/tags')
+  async tags(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('connectionId') connectionId: string,
+  ) {
+    await this.productsService.findOne(organizationId, productId, req.user.userId);
+    return this.cmsPublicationsService.listTags(organizationId, productId, connectionId);
   }
 
   @Get(':connectionId')

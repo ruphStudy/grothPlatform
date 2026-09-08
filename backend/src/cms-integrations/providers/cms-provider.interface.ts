@@ -1,11 +1,14 @@
 import type {
   CmsConnectionValidationResult,
   CmsCredential,
+  CmsMediaUploadRequest,
+  CmsMediaUploadResult,
   CmsPlatform,
   CmsPostRequest,
   CmsPostResult,
   CmsProviderCapabilities,
   CmsSiteInfo,
+  CmsTaxonomyItem,
   GetCmsSiteInfoInput,
   ValidateCmsConnectionInput,
 } from '../types/cms.types';
@@ -38,5 +41,9 @@ export interface CmsProvider {
 
   updatePost?(input: { siteUrl: string; credential: CmsCredential; externalPostId: string } & Partial<CmsPostRequest>): Promise<CmsPostResult>;
 
-  uploadMedia?(input: { siteUrl: string; credential: CmsCredential; fileUrl: string; filename?: string }): Promise<{ externalMediaId: string; url: string }>;
+  uploadMedia?(input: { siteUrl: string; credential: CmsCredential } & CmsMediaUploadRequest): Promise<CmsMediaUploadResult>;
+
+  listCategories?(input: { siteUrl: string; credential: CmsCredential; limit?: number }): Promise<CmsTaxonomyItem[]>;
+
+  listTags?(input: { siteUrl: string; credential: CmsCredential; limit?: number }): Promise<CmsTaxonomyItem[]>;
 }

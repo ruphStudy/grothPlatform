@@ -49,7 +49,8 @@ export async function fetchWordPressJson(
   siteUrl: string,
   path: string,
   auth?: { username: string; applicationPassword: string },
-): Promise<{ status: number; body: Record<string, unknown> }> {
+  init?: { method?: 'GET' | 'POST'; body?: BodyInit; headers?: Record<string, string> },
+): Promise<{ status: number; body: Record<string, unknown> | unknown[] }> {
   const normalizedSiteUrl = normalizeSiteUrl(siteUrl);
   const url = new URL(path, `${normalizedSiteUrl}/`);
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
@@ -60,7 +61,7 @@ export async function fetchWordPressJson(
   }
   await urlSecurity.validateDestination(url);
 
-  const headers: Record<string, string> = { Accept: 'application/json' };
+  const headers: Record<string, string> = { Accept: 'application/json', ...(init?.headers ?? {}) };
   if (auth) {
     // Application Password Basic auth — never logged (item 17).
     headers.Authorization = `Basic ${Buffer.from(`${auth.username}:${auth.applicationPassword}`).toString('base64')}`;
@@ -69,8 +70,9 @@ export async function fetchWordPressJson(
   let response: Response;
   try {
     response = await fetch(url.toString(), {
-      method: 'GET',
+      method: init?.method ?? 'GET',
       headers,
+      body: init?.body,
       redirect: 'manual',
       signal: AbortSignal.timeout(getTimeoutMs(configService)),
     });
@@ -94,7 +96,7 @@ export async function fetchWordPressJson(
     throw new CmsProviderError('cms_provider_request_failed', 'The WordPress site returned an unexpected error.');
   }
 
-  let body: Record<string, unknown> = {};
+  let body: Record<string, unknown> | unknown[] = {};
   try {
     body = (await response.json()) as Record<string, unknown>;
   } catch {

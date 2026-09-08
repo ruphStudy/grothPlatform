@@ -75,6 +75,14 @@ export class CmsConnectionsService {
     return this.toResponse(doc);
   }
 
+  async findOwnedDocument(organizationId: string, productId: string, connectionId: string): Promise<CmsConnectionDocument> {
+    return this.findOwned(organizationId, productId, connectionId);
+  }
+
+  decryptCredential(doc: CmsConnectionDocument): CmsCredential {
+    return { authType: doc.authType, username: doc.username, secret: this.credentialEncryption.decrypt(doc.encryptedCredential) };
+  }
+
   // Exactly one logical provider validation operation (item 25/L):
   // decrypts the currently-stored credential and re-validates it. A
   // rejection here downgrades this EXISTING connection's own status —
