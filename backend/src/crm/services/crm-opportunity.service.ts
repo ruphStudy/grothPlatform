@@ -9,9 +9,10 @@ import { LeadQualification, LeadQualificationDocument } from '../../leads/schema
 import { LeadSourceEvent, LeadSourceEventDocument } from '../../leads/schemas/lead-source-event.schema';
 import { Lead, LeadDocument } from '../../leads/schemas/lead.schema';
 import { LeadCaptureService } from '../../leads/services/lead-capture.service';
-import { AddCrmOpportunityNoteDto, ConvertLeadToOpportunityDto, CreateCrmOpportunityDto, MoveCrmOpportunityStageDto, UpdateCrmOpportunityDto } from '../dto/crm.dto';
+import { AddCrmOpportunityNoteDto, ConvertLeadToOpportunityDto, CreateCrmOpportunityDto, LogCrmActivityDto, MoveCrmOpportunityStageDto, UpdateCrmOpportunityDto } from '../dto/crm.dto';
 import { CrmActivity, CrmActivityDocument } from '../schemas/crm-activity.schema';
 import { CrmConversionIdempotency, CrmConversionIdempotencyDocument } from '../schemas/crm-conversion-idempotency.schema';
+import { CrmFollowUp, CrmFollowUpDocument } from '../schemas/crm-follow-up.schema';
 import { CrmOpportunity, CrmOpportunityDocument } from '../schemas/crm-opportunity.schema';
 import { CrmPipeline, CrmPipelineDocument } from '../schemas/crm-pipeline.schema';
 import { CrmStage, CrmStageDocument } from '../schemas/crm-stage.schema';
@@ -28,6 +29,7 @@ export class CrmOpportunityService {
     @InjectModel(CrmOpportunity.name) private readonly opportunityModel: Model<CrmOpportunityDocument>,
     @InjectModel(CrmActivity.name) private readonly activityModel: Model<CrmActivityDocument>,
     @InjectModel(CrmConversionIdempotency.name) private readonly idempotencyModel: Model<CrmConversionIdempotencyDocument>,
+    @InjectModel(CrmFollowUp.name) private readonly followUpModel: Model<CrmFollowUpDocument>,
     @InjectModel(Lead.name) private readonly leadModel: Model<LeadDocument>,
     @InjectModel(LeadSourceEvent.name) private readonly eventModel: Model<LeadSourceEventDocument>,
     @InjectModel(LeadQualification.name) private readonly qualificationModel: Model<LeadQualificationDocument>,
@@ -173,6 +175,15 @@ export class CrmOpportunityService {
     return this.get(organizationId, productId, userId, opportunityId);
   }
 
+  async logActivity(organizationId: string, productId: string, userId: string, opportunityId: string, dto: LogCrmActivityDto) {
+    await this.productsService.findOne(organizationId, productId, userId);
+    const opportunity = await this.findOpportunity(organizationId, productId, opportunityId);
+    const occurredAt = dto.occurredAt ? new Date(dto.occurredAt) : undefined;
+    if (occurredAt && Number.isNaN(occurredAt.getTime())) throw new BadRequestException('crm_activity_invalid');
+    await this.recordActivity(opportunity, dto.type, userId, undefined, undefined, dto.note?.trim(), occurredAt, dto.outcome?.trim());
+    return this.get(organizationId, productId, userId, opportunityId);
+  }
+
   async board(organizationId: string, productId: string, userId: string, pipelineId: string) {
     await this.productsService.findOne(organizationId, productId, userId);
     const pipeline = await this.pipelineService.findPipelineDoc(organizationId, productId, pipelineId);
@@ -221,12 +232,13 @@ export class CrmOpportunityService {
     const pipelineIds = opportunities.map((item) => item.pipelineId);
     const stageIds = opportunities.map((item) => item.stageId);
     const campaignIds = opportunities.map((item) => item.campaignId).filter(Boolean) as Types.ObjectId[];
-    const [leads, qualifications, pipelines, stages, activities, campaigns] = await Promise.all([
+    const [leads, qualifications, pipelines, stages, activities, followUps, campaigns] = await Promise.all([
       this.leadModel.find({ organizationId: new Types.ObjectId(organizationId), productId: new Types.ObjectId(productId), _id: { $in: leadIds } }).exec(),
       this.qualificationModel.find({ organizationId: new Types.ObjectId(organizationId), productId: new Types.ObjectId(productId), leadId: { $in: leadIds } }).exec(),
       this.pipelineModelFind(organizationId, productId, pipelineIds),
       this.stageModelFind(organizationId, productId, stageIds),
       includeActivities ? this.activityModel.find({ organizationId: new Types.ObjectId(organizationId), productId: new Types.ObjectId(productId), opportunityId: { $in: opportunities.map((item) => item._id) } }).sort({ createdAt: -1 }).limit(100).exec() : Promise.resolve([]),
+      includeActivities ? this.followUpModel.find({ organizationId: new Types.ObjectId(organizationId), productId: new Types.ObjectId(productId), opportunityId: { $in: opportunities.map((item) => item._id) } }).sort({ dueAt: 1 }).limit(100).exec() : Promise.resolve([]),
       campaignIds.length && userId ? this.campaignsService.findAll(organizationId, productId, userId, {}) : Promise.resolve([]),
     ]);
     const leadMap = new Map(leads.map((lead) => [lead._id.toString(), lead]));
@@ -239,10 +251,15 @@ export class CrmOpportunityService {
       const key = activity.opportunityId.toString();
       activityMap.set(key, [...(activityMap.get(key) ?? []), this.toActivityResponse(activity)]);
     }
+    const followUpMap = new Map<string, any[]>();
+    for (const followUp of followUps) {
+      const key = followUp.opportunityId.toString();
+      followUpMap.set(key, [...(followUpMap.get(key) ?? []), this.toFollowUpResponse(followUp)]);
+    }
     return opportunities.map((opportunity) => {
       const lead = leadMap.get(opportunity.leadId.toString());
       const qualification = qualificationMap.get(opportunity.leadId.toString());
-      return { ...this.toOpportunityResponse(opportunity), lead: lead ? this.leadCaptureService.toLeadResponse(lead, qualification ? { score: qualification.score, grade: qualification.grade, qualificationStatus: qualification.qualificationStatus, reasons: qualification.reasons as any, scoringVersion: qualification.scoringVersion, communicationEligibility: qualification.communicationEligibility, evaluatedAt: qualification.evaluatedAt } : undefined) : undefined, pipeline: pipelineMap.get(opportunity.pipelineId.toString()), stage: stageMap.get(opportunity.stageId.toString()), campaign: opportunity.campaignId ? campaignMap.get(opportunity.campaignId.toString()) : undefined, activities: includeActivities ? activityMap.get(opportunity._id.toString()) ?? [] : undefined };
+      return { ...this.toOpportunityResponse(opportunity), lead: lead ? this.leadCaptureService.toLeadResponse(lead, qualification ? { score: qualification.score, grade: qualification.grade, qualificationStatus: qualification.qualificationStatus, reasons: qualification.reasons as any, scoringVersion: qualification.scoringVersion, communicationEligibility: qualification.communicationEligibility, evaluatedAt: qualification.evaluatedAt } : undefined) : undefined, pipeline: pipelineMap.get(opportunity.pipelineId.toString()), stage: stageMap.get(opportunity.stageId.toString()), campaign: opportunity.campaignId ? campaignMap.get(opportunity.campaignId.toString()) : undefined, activities: includeActivities ? activityMap.get(opportunity._id.toString()) ?? [] : undefined, followUps: includeActivities ? followUpMap.get(opportunity._id.toString()) ?? [] : undefined };
     });
   }
 
@@ -270,6 +287,10 @@ export class CrmOpportunityService {
     return opportunity;
   }
 
+  async findOpportunityDoc(organizationId: string, productId: string, opportunityId: string) {
+    return this.findOpportunity(organizationId, productId, opportunityId);
+  }
+
   private async assertNoIdentityConflict(organizationId: string, productId: string, leadId: Types.ObjectId) {
     const conflict = await this.conflictModel.exists({ organizationId: new Types.ObjectId(organizationId), productId: new Types.ObjectId(productId), status: 'unresolved', $or: [{ emailLeadId: leadId }, { phoneLeadId: leadId }] });
     if (conflict) throw new BadRequestException('crm_identity_conflict');
@@ -281,8 +302,15 @@ export class CrmOpportunityService {
     return leads.map((lead) => lead._id);
   }
 
-  private async recordActivity(opportunity: CrmOpportunityDocument, type: CrmActivityType, userId: string, fromStageId?: Types.ObjectId, toStageId?: Types.ObjectId, note?: string) {
-    await new this.activityModel({ organizationId: opportunity.organizationId, productId: opportunity.productId, opportunityId: opportunity._id, leadId: opportunity.leadId, type, fromStageId, toStageId, note, metadata: {}, actorUserId: Types.ObjectId.isValid(userId) ? new Types.ObjectId(userId) : undefined }).save();
+  async recordOpportunityActivity(organizationId: string, productId: string, userId: string, opportunityId: string, type: CrmActivityType, note?: string, metadata: Record<string, string | number | boolean> = {}) {
+    await this.productsService.findOne(organizationId, productId, userId);
+    const opportunity = await this.findOpportunity(organizationId, productId, opportunityId);
+    await this.recordActivity(opportunity, type, userId, undefined, undefined, note, undefined, undefined, metadata);
+    return this.toActivityResponse(await this.activityModel.findOne({ opportunityId: opportunity._id, type }).sort({ createdAt: -1 }).exec() as CrmActivityDocument);
+  }
+
+  private async recordActivity(opportunity: CrmOpportunityDocument, type: CrmActivityType, userId: string, fromStageId?: Types.ObjectId, toStageId?: Types.ObjectId, note?: string, occurredAt?: Date, outcome?: string, metadata: Record<string, string | number | boolean> = {}) {
+    await new this.activityModel({ organizationId: opportunity.organizationId, productId: opportunity.productId, opportunityId: opportunity._id, leadId: opportunity.leadId, type, fromStageId, toStageId, note, metadata: { ...metadata, ...(outcome ? { outcome } : {}) }, actorUserId: Types.ObjectId.isValid(userId) ? new Types.ObjectId(userId) : undefined, ...(occurredAt ? { createdAt: occurredAt } : {}) }).save();
   }
 
   private resolveSort(sort?: string, order?: string): Record<string, 1 | -1> {
@@ -319,5 +347,9 @@ export class CrmOpportunityService {
 
   private toActivityResponse(activity: CrmActivityDocument) {
     return { id: activity._id.toString(), opportunityId: activity.opportunityId.toString(), leadId: activity.leadId?.toString(), type: activity.type, fromStageId: activity.fromStageId?.toString(), toStageId: activity.toStageId?.toString(), note: activity.note, metadata: Object.fromEntries((activity.metadata as unknown as Map<string, unknown>)?.entries?.() ?? Object.entries(activity.metadata ?? {})), actorUserId: activity.actorUserId?.toString(), createdAt: activity.createdAt };
+  }
+
+  private toFollowUpResponse(followUp: CrmFollowUpDocument) {
+    return { id: followUp._id.toString(), opportunityId: followUp.opportunityId.toString(), leadId: followUp.leadId.toString(), type: followUp.type, title: followUp.title, description: followUp.description, dueAt: followUp.dueAt, timezone: followUp.timezone, status: followUp.status === 'pending' && followUp.dueAt.getTime() < Date.now() ? 'overdue' : followUp.status, assignedToUserId: followUp.assignedToUserId?.toString(), completedAt: followUp.completedAt, cancelledAt: followUp.cancelledAt, outcome: followUp.outcome, createdByUserId: followUp.createdByUserId?.toString(), createdAt: followUp.createdAt, updatedAt: followUp.updatedAt };
   }
 }

@@ -3494,6 +3494,8 @@ export interface LeadDashboardResponse {
 
 export type CrmStageCategory = 'open' | 'won' | 'lost';
 export type CrmOpportunityStatus = 'open' | 'won' | 'lost' | 'archived';
+export type CrmFollowUpType = 'call' | 'meeting' | 'email' | 'demo' | 'proposal' | 'reminder' | 'other';
+export type CrmFollowUpStatus = 'pending' | 'completed' | 'cancelled' | 'overdue';
 
 export interface CrmStage {
   id: string;
@@ -3536,6 +3538,26 @@ export interface CrmActivity {
   createdAt: string;
 }
 
+export interface CrmFollowUp {
+  id: string;
+  opportunityId: string;
+  leadId: string;
+  type: CrmFollowUpType;
+  title: string;
+  description?: string;
+  dueAt: string;
+  timezone?: string;
+  status: CrmFollowUpStatus;
+  storedStatus?: CrmFollowUpStatus;
+  assignedToUserId?: string;
+  completedAt?: string;
+  cancelledAt?: string;
+  outcome?: string;
+  createdByUserId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CrmOpportunity {
   id: string;
   organizationId: string;
@@ -3563,6 +3585,7 @@ export interface CrmOpportunity {
   stage?: CrmStage;
   campaign?: Campaign;
   activities?: CrmActivity[];
+  followUps?: CrmFollowUp[];
   createdAt: string;
   updatedAt: string;
 }
@@ -3577,6 +3600,48 @@ export interface CrmBoardResponse {
   stages: CrmBoardStage[];
   totalCards: number;
   truncated: boolean;
+}
+
+export interface CrmDashboardResponse {
+  range: { from: string; to: string; timezone: string };
+  pipelines: CrmPipeline[];
+  summary: {
+    openOpportunities: number;
+    wonOpportunities: number;
+    lostOpportunities: number;
+    archivedOpportunities: number;
+    totalOpenAmountByCurrency: { currency: string; amount: number }[];
+    wonAmountByCurrency: { currency: string; amount: number }[];
+    wonCount: number;
+    lostCount: number;
+    closedOpportunityWinRate: number | null;
+    expectedCloseOverdueCount: number;
+  };
+  stageDistribution: { stageId: string; stageName: string; category: CrmStageCategory; opportunityCount: number; amountByCurrency: { currency: string; amount: number }[] }[];
+  followUps: {
+    pending: number;
+    dueToday: number;
+    dueNext7Days: number;
+    overdue: number;
+    completedInRange: number;
+    overdueItems: CrmFollowUp[];
+  };
+  pipelineHealth: {
+    staleOpportunityCount: number;
+    staleOpportunities: CrmOpportunity[];
+    opportunitiesWithoutNextFollowUp: number;
+    expectedCloseOverdueCount: number;
+    overdueFollowUpCount: number;
+  };
+  recentActivities: CrmActivity[];
+  largestOpenOpportunities: CrmOpportunity[];
+}
+
+export interface CrmFollowUpListResponse {
+  items: CrmFollowUp[];
+  total: number;
+  page: number;
+  limit: number;
 }
 
 export interface LeadCaptureEndpointSummary {

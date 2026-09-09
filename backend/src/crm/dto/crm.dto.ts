@@ -1,6 +1,6 @@
 import { ArrayMaxSize, IsArray, IsBoolean, IsEnum, IsISO8601, IsMongoId, IsNumber, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
-import { CRM_OPPORTUNITY_STATUSES, CRM_STAGE_CATEGORIES } from '../types/crm.types';
-import type { CrmOpportunityStatus, CrmStageCategory } from '../types/crm.types';
+import { CRM_FOLLOW_UP_STATUSES, CRM_FOLLOW_UP_TYPES, CRM_OPPORTUNITY_STATUSES, CRM_STAGE_CATEGORIES } from '../types/crm.types';
+import type { CrmActivityType, CrmFollowUpStatus, CrmFollowUpType, CrmOpportunityStatus, CrmStageCategory } from '../types/crm.types';
 
 export class CreateCrmPipelineDto {
   @IsString() @MinLength(2) @MaxLength(160) name!: string;
@@ -69,4 +69,35 @@ export class MoveCrmOpportunityStageDto {
 
 export class AddCrmOpportunityNoteDto {
   @IsString() @MinLength(1) @MaxLength(5000) note!: string;
+}
+
+export class CreateCrmFollowUpDto {
+  @IsEnum(CRM_FOLLOW_UP_TYPES) type!: CrmFollowUpType;
+  @IsString() @MinLength(1) @MaxLength(200) title!: string;
+  @IsOptional() @IsString() @MaxLength(5000) description?: string;
+  @IsISO8601() dueAt!: string;
+  @IsOptional() @IsString() @MaxLength(80) timezone?: string;
+  @IsOptional() @IsMongoId() assignedToUserId?: string;
+}
+
+export class UpdateCrmFollowUpDto {
+  @IsOptional() @IsEnum(CRM_FOLLOW_UP_TYPES) type?: CrmFollowUpType;
+  @IsOptional() @IsString() @MinLength(1) @MaxLength(200) title?: string;
+  @IsOptional() @IsString() @MaxLength(5000) description?: string;
+  @IsOptional() @IsISO8601() dueAt?: string;
+  @IsOptional() @IsString() @MaxLength(80) timezone?: string;
+  @IsOptional() @IsMongoId() assignedToUserId?: string;
+  @IsOptional() @IsEnum(CRM_FOLLOW_UP_STATUSES) status?: CrmFollowUpStatus;
+}
+
+export class CompleteCrmFollowUpDto {
+  @IsOptional() @IsString() @MaxLength(2000) outcome?: string;
+}
+
+export class LogCrmActivityDto {
+  @IsEnum(['call_logged', 'meeting_logged', 'note_added', 'other'])
+  type!: Extract<CrmActivityType, 'call_logged' | 'meeting_logged' | 'note_added' | 'other'>;
+  @IsOptional() @IsString() @MaxLength(5000) note?: string;
+  @IsOptional() @IsISO8601() occurredAt?: string;
+  @IsOptional() @IsString() @MaxLength(2000) outcome?: string;
 }

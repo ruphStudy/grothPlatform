@@ -1,13 +1,20 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { AddCrmOpportunityNoteDto, ConvertLeadToOpportunityDto, CreateCrmOpportunityDto, CreateCrmPipelineDto, CreateCrmStageDto, MoveCrmOpportunityStageDto, ReorderCrmStagesDto, UpdateCrmOpportunityDto, UpdateCrmPipelineDto, UpdateCrmStageDto } from './dto/crm.dto';
+import { AddCrmOpportunityNoteDto, CompleteCrmFollowUpDto, ConvertLeadToOpportunityDto, CreateCrmFollowUpDto, CreateCrmOpportunityDto, CreateCrmPipelineDto, CreateCrmStageDto, LogCrmActivityDto, MoveCrmOpportunityStageDto, ReorderCrmStagesDto, UpdateCrmFollowUpDto, UpdateCrmOpportunityDto, UpdateCrmPipelineDto, UpdateCrmStageDto } from './dto/crm.dto';
+import { CrmDashboardService } from './services/crm-dashboard.service';
+import { CrmFollowUpService } from './services/crm-follow-up.service';
 import { CrmOpportunityService } from './services/crm-opportunity.service';
 import { CrmPipelineService } from './services/crm-pipeline.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('organizations/:organizationId/products/:productId')
 export class CrmController {
-  constructor(private readonly pipelineService: CrmPipelineService, private readonly opportunityService: CrmOpportunityService) {}
+  constructor(
+    private readonly pipelineService: CrmPipelineService,
+    private readonly opportunityService: CrmOpportunityService,
+    private readonly followUpService: CrmFollowUpService,
+    private readonly dashboardService: CrmDashboardService,
+  ) {}
 
   @Post('crm/initialize')
   initialize(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string) {
@@ -102,5 +109,50 @@ export class CrmController {
   @Post('crm/opportunities/:opportunityId/notes')
   addNote(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Param('opportunityId') opportunityId: string, @Body() body: AddCrmOpportunityNoteDto) {
     return this.opportunityService.addNote(organizationId, productId, req.user.userId, opportunityId, body);
+  }
+
+  @Post('crm/opportunities/:opportunityId/activities')
+  logActivity(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Param('opportunityId') opportunityId: string, @Body() body: LogCrmActivityDto) {
+    return this.opportunityService.logActivity(organizationId, productId, req.user.userId, opportunityId, body);
+  }
+
+  @Post('crm/opportunities/:opportunityId/follow-ups')
+  createFollowUp(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Param('opportunityId') opportunityId: string, @Body() body: CreateCrmFollowUpDto) {
+    return this.followUpService.create(organizationId, productId, req.user.userId, opportunityId, body);
+  }
+
+  @Get('crm/follow-ups')
+  listFollowUps(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Query() query: Record<string, string | undefined>) {
+    return this.followUpService.list(organizationId, productId, req.user.userId, query);
+  }
+
+  @Get('crm/follow-ups/:followUpId')
+  getFollowUp(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Param('followUpId') followUpId: string) {
+    return this.followUpService.get(organizationId, productId, req.user.userId, followUpId);
+  }
+
+  @Patch('crm/follow-ups/:followUpId')
+  updateFollowUp(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Param('followUpId') followUpId: string, @Body() body: UpdateCrmFollowUpDto) {
+    return this.followUpService.update(organizationId, productId, req.user.userId, followUpId, body);
+  }
+
+  @Post('crm/follow-ups/:followUpId/complete')
+  completeFollowUp(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Param('followUpId') followUpId: string, @Body() body: CompleteCrmFollowUpDto) {
+    return this.followUpService.complete(organizationId, productId, req.user.userId, followUpId, body);
+  }
+
+  @Post('crm/follow-ups/:followUpId/cancel')
+  cancelFollowUp(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Param('followUpId') followUpId: string) {
+    return this.followUpService.cancel(organizationId, productId, req.user.userId, followUpId);
+  }
+
+  @Post('crm/follow-ups/:followUpId/reopen')
+  reopenFollowUp(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Param('followUpId') followUpId: string) {
+    return this.followUpService.reopen(organizationId, productId, req.user.userId, followUpId);
+  }
+
+  @Get('crm/dashboard')
+  dashboard(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Query() query: Record<string, string | undefined>) {
+    return this.dashboardService.getDashboard(organizationId, productId, req.user.userId, query);
   }
 }
