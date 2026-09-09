@@ -10,6 +10,7 @@ import { CmsIntegrationsModule } from './cms-integrations/cms-integrations.modul
 import { ContentGenerationModule } from './content-generation/content-generation.module';
 import { ContentPlanningModule } from './content-planning/content-planning.module';
 import { CreativeModule } from './creative/creative.module';
+import { CrmModule } from './crm/crm.module';
 import { GrowthStrategyModule } from './growth-strategy/growth-strategy.module';
 import { MarketIntelligenceModule } from './market-intelligence/market-intelligence.module';
 import { OrganizationsModule } from './organizations/organizations.module';
@@ -52,6 +53,7 @@ import { WebsiteIntelligenceModule } from './website-intelligence/website-intell
     SocialPublishingModule,
     CmsIntegrationsModule,
     LeadsModule,
+    CrmModule,
   ],
   controllers: [AppController],
   providers: [AppService],

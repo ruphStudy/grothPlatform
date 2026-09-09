@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { CampaignsModule } from '../campaigns/campaigns.module';
 import { ProductsModule } from '../products/products.module';
+import { CrmOpportunity, CrmOpportunitySchema } from '../crm/schemas/crm-opportunity.schema';
 import { LeadCaptureEndpointsController, PublicLeadCaptureController } from './lead-capture-endpoints.controller';
 import { LeadCaptureFormsController, PublicLeadCaptureFormsController } from './lead-capture-forms.controller';
 import { LeadsController } from './leads.controller';
@@ -28,6 +29,7 @@ import { LeadsService } from './services/leads.service';
       { name: LeadSourceEvent.name, schema: LeadSourceEventSchema },
       { name: LeadCaptureEndpoint.name, schema: LeadCaptureEndpointSchema },
       { name: LeadCaptureForm.name, schema: LeadCaptureFormSchema },
+      { name: CrmOpportunity.name, schema: CrmOpportunitySchema },
       { name: LeadIdentityConflict.name, schema: LeadIdentityConflictSchema },
       { name: LeadQualification.name, schema: LeadQualificationSchema },
       { name: LeadSubmissionIdempotency.name, schema: LeadSubmissionIdempotencySchema },

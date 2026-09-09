@@ -102,7 +102,7 @@ export class LeadCaptureFormsService {
     if (dto.appearance !== undefined) form.appearance = dto.appearance;
     if (form.status === 'active') this.assertHasIdentityField(form.fields);
     await form.save();
-    await this.endpointsService.update(organizationId, productId, userId, form.captureEndpointId.toString(), this.endpointDto(form, form.fields));
+    await this.endpointsService.update(organizationId, productId, userId, form.captureEndpointId.toString(), this.endpointDto({ name: form.name, campaignId: form.campaignId?.toString(), consent: form.consent }, form.fields));
     const endpoint = await this.endpointModel.findById(form.captureEndpointId).exec();
     return this.toResponse(form, endpoint?.publicKey);
   }

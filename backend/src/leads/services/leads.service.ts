@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { CampaignsService } from '../../campaigns/campaigns.service';
+import { CrmOpportunity, CrmOpportunityDocument } from '../../crm/schemas/crm-opportunity.schema';
 import { ProductsService } from '../../products/products.service';
 import { BulkLeadStatusDto, ExportLeadsCsvDto, ImportLeadsCsvDto, ManualLeadDto, UpdateLeadDto } from '../dto/lead-common.dto';
 import { LeadIdentityConflict, LeadIdentityConflictDocument } from '../schemas/lead-identity-conflict.schema';
@@ -35,6 +36,7 @@ export class LeadsService {
     @InjectModel(Lead.name) private readonly leadModel: Model<LeadDocument>,
     @InjectModel(LeadSourceEvent.name) private readonly eventModel: Model<LeadSourceEventDocument>,
     @InjectModel(LeadIdentityConflict.name) private readonly conflictModel: Model<LeadIdentityConflictDocument>,
+    @InjectModel(CrmOpportunity.name) private readonly opportunityModel: Model<CrmOpportunityDocument>,
     private readonly productsService: ProductsService,
     private readonly campaignsService: CampaignsService,
     private readonly leadCaptureService: LeadCaptureService,
@@ -90,11 +92,16 @@ export class LeadsService {
   async get(organizationId: string, productId: string, userId: string, leadId: string): Promise<LeadDetailResponse> {
     await this.productsService.findOne(organizationId, productId, userId);
     const lead = await this.findOwned(organizationId, productId, leadId);
-    const [events, qualifications] = await Promise.all([
+    const [events, qualifications, opportunities] = await Promise.all([
       this.eventModel.find({ leadId: lead._id, organizationId: lead.organizationId, productId: lead.productId }).sort({ occurredAt: -1 }).limit(50).exec(),
       this.qualificationService.getByLeadIds(organizationId, productId, [lead._id]),
+      this.opportunityModel.find({ leadId: lead._id, organizationId: lead.organizationId, productId: lead.productId }).sort({ updatedAt: -1 }).limit(20).exec(),
     ]);
-    return { ...this.leadCaptureService.toLeadResponse(lead, qualifications.get(lead._id.toString())), sourceEvents: events.map((event) => this.leadCaptureService.toEventResponse(event)) };
+    return {
+      ...this.leadCaptureService.toLeadResponse(lead, qualifications.get(lead._id.toString())),
+      sourceEvents: events.map((event) => this.leadCaptureService.toEventResponse(event)),
+      crmOpportunities: opportunities.map((opportunity) => ({ id: opportunity._id.toString(), name: opportunity.name, status: opportunity.status, amount: opportunity.amount, currency: opportunity.currency, probability: opportunity.probability, stageId: opportunity.stageId.toString(), pipelineId: opportunity.pipelineId.toString(), expectedCloseDate: opportunity.expectedCloseDate, updatedAt: opportunity.updatedAt })),
+    };
   }
 
   async update(organizationId: string, productId: string, userId: string, leadId: string, dto: UpdateLeadDto): Promise<LeadResponse> {

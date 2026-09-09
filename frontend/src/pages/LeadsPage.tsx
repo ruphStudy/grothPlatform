@@ -11,6 +11,7 @@ import type {
   LeadCaptureFormField,
   LeadCaptureFormFieldType,
   LeadCaptureFormSummary,
+  CrmPipeline,
   LeadCommunicationEligibility,
   LeadConsentStatus,
   LeadDetail,
@@ -90,6 +91,7 @@ export default function LeadsPage() {
   const [leads, setLeads] = useState<LeadListResponse | null>(null);
   const [endpoints, setEndpoints] = useState<LeadCaptureEndpointSummary[]>([]);
   const [forms, setForms] = useState<LeadCaptureFormSummary[]>([]);
+  const [crmPipelines, setCrmPipelines] = useState<CrmPipeline[]>([]);
   const [conflicts, setConflicts] = useState<LeadIdentityConflictSummary[]>([]);
   const [selectedLead, setSelectedLead] = useState<LeadDetail | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -102,6 +104,7 @@ export default function LeadsPage() {
   const [formDraft, setFormDraft] = useState(emptyFormDraft);
   const [editingFormId, setEditingFormId] = useState<string | null>(null);
   const [importDraft, setImportDraft] = useState({ sourceName: '', csv: '' });
+  const [conversionDraft, setConversionDraft] = useState({ pipelineId: '', stageId: '', name: '', amount: '', currency: '', probability: '', expectedCloseDate: '', assignedToUserId: '', description: '' });
   const [importSummary, setImportSummary] = useState<LeadImportSummary | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -119,16 +122,18 @@ export default function LeadsPage() {
       Object.entries(filters).forEach(([key, value]) => {
         if (String(value).trim()) qs.set(key, String(value));
       });
-      const [leadData, endpointData, formData, conflictData] = await Promise.all([
+      const [leadData, endpointData, formData, conflictData, pipelineData] = await Promise.all([
         apiRequest<LeadListResponse>(`${basePath}/leads${qs.toString() ? `?${qs}` : ''}`),
         apiRequest<LeadCaptureEndpointSummary[]>(`${basePath}/lead-capture-endpoints`),
         apiRequest<LeadCaptureFormSummary[]>(`${basePath}/lead-forms`),
         apiRequest<LeadIdentityConflictSummary[]>(`${basePath}/leads/identity-conflicts`),
+        apiRequest<CrmPipeline[]>(`${basePath}/crm/pipelines`).catch(() => []),
       ]);
       setLeads(leadData);
       setEndpoints(endpointData);
       setForms(formData);
       setConflicts(conflictData);
+      setCrmPipelines(pipelineData);
       setSelectedIds((prev) => prev.filter((id) => leadData.items.some((lead) => lead.id === id)));
       if (selectedLead && !leadData.items.some((lead) => lead.id === selectedLead.id)) setSelectedLead(null);
     } catch (err) {
@@ -209,6 +214,38 @@ export default function LeadsPage() {
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to recalculate qualification');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function convertSelectedLead(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedLead) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await apiRequest(`${basePath}/leads/${selectedLead.id}/convert-to-opportunity`, {
+        method: 'POST',
+        body: {
+          pipelineId: conversionDraft.pipelineId || undefined,
+          stageId: conversionDraft.stageId || undefined,
+          name: conversionDraft.name || undefined,
+          amount: conversionDraft.amount ? Number(conversionDraft.amount) : undefined,
+          currency: conversionDraft.currency || undefined,
+          probability: conversionDraft.probability ? Number(conversionDraft.probability) : undefined,
+          expectedCloseDate: conversionDraft.expectedCloseDate || undefined,
+          assignedToUserId: conversionDraft.assignedToUserId || undefined,
+          description: conversionDraft.description || undefined,
+          idempotencyKey: `lead-${selectedLead.id}-${Date.now()}`,
+        },
+      });
+      setConversionDraft({ pipelineId: '', stageId: '', name: '', amount: '', currency: '', probability: '', expectedCloseDate: '', assignedToUserId: '', description: '' });
+      await openLead(selectedLead.id);
+      await load();
+      setNotice('Lead converted to opportunity.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to convert lead');
     } finally {
       setBusy(false);
     }
@@ -317,7 +354,7 @@ export default function LeadsPage() {
       submitButtonText: form.submitButtonText,
       successTitle: form.successTitle ?? '',
       successMessage: form.successMessage ?? '',
-      consent: form.consent,
+      consent: { ...form.consent, label: form.consent.label ?? '' },
       fields: form.fields,
     });
   }
@@ -517,6 +554,24 @@ export default function LeadsPage() {
               ))}
             </>
           )}
+          <h3 className="section-title">CRM Opportunities</h3>
+          {(selectedLead.crmOpportunities ?? []).map((opportunity) => (
+            <div key={opportunity.id} className="entity-card-meta">
+              <Link to={`/organizations/${organizationId}/products/${productId}/crm`}>{opportunity.name}</Link> · {labelize(opportunity.status)} · {opportunity.currency && opportunity.amount !== undefined ? `${opportunity.currency} ${opportunity.amount}` : '-'}
+            </div>
+          ))}
+          <form className="form form-grid-2" onSubmit={convertSelectedLead} style={{ marginTop: 12 }}>
+            <div className="field"><label>Pipeline</label><select value={conversionDraft.pipelineId} onChange={(e) => setConversionDraft({ ...conversionDraft, pipelineId: e.target.value, stageId: '' })}><option value="">Default pipeline</option>{crmPipelines.map((pipeline) => <option key={pipeline.id} value={pipeline.id}>{pipeline.name}</option>)}</select></div>
+            <div className="field"><label>Stage</label><select value={conversionDraft.stageId} onChange={(e) => setConversionDraft({ ...conversionDraft, stageId: e.target.value })}><option value="">First open stage</option>{crmPipelines.find((pipeline) => pipeline.id === conversionDraft.pipelineId)?.stages?.filter((stage) => stage.isActive && stage.category === 'open').map((stage) => <option key={stage.id} value={stage.id}>{stage.name}</option>)}</select></div>
+            <div className="field"><label>Opportunity Name</label><input value={conversionDraft.name} onChange={(e) => setConversionDraft({ ...conversionDraft, name: e.target.value })} /></div>
+            <div className="field"><label>Amount</label><input type="number" min="0" value={conversionDraft.amount} onChange={(e) => setConversionDraft({ ...conversionDraft, amount: e.target.value })} /></div>
+            <div className="field"><label>Currency</label><input maxLength={3} value={conversionDraft.currency} onChange={(e) => setConversionDraft({ ...conversionDraft, currency: e.target.value.toUpperCase() })} /></div>
+            <div className="field"><label>Probability</label><input type="number" min="0" max="100" value={conversionDraft.probability} onChange={(e) => setConversionDraft({ ...conversionDraft, probability: e.target.value })} /></div>
+            <div className="field"><label>Expected Close</label><input type="date" value={conversionDraft.expectedCloseDate} onChange={(e) => setConversionDraft({ ...conversionDraft, expectedCloseDate: e.target.value })} /></div>
+            <div className="field"><label>Assignee User ID</label><input value={conversionDraft.assignedToUserId} onChange={(e) => setConversionDraft({ ...conversionDraft, assignedToUserId: e.target.value })} /></div>
+            <div className="field field-full"><label>Description</label><textarea value={conversionDraft.description} onChange={(e) => setConversionDraft({ ...conversionDraft, description: e.target.value })} /></div>
+            <button className="btn btn-primary" disabled={busy || selectedLead.status === 'archived'}>Convert to Opportunity</button>
+          </form>
           {selectedLead.notes && <p className="entity-card-meta">Notes: {selectedLead.notes}</p>}
           {Object.keys(selectedLead.customFields ?? {}).length > 0 && <pre>{JSON.stringify(selectedLead.customFields, null, 2)}</pre>}
           <h3 className="section-title">Source History</h3>

@@ -4,6 +4,7 @@ import { ProtectedRoute } from './auth/ProtectedRoute';
 import CampaignDetailPage from './pages/CampaignDetailPage';
 import CampaignsPage from './pages/CampaignsPage';
 import CmsConnectionsPage from './pages/CmsConnectionsPage';
+import CrmPage from './pages/CrmPage';
 import CreativeReviewPage from './pages/CreativeReviewPage';
 import DashboardPage from './pages/DashboardPage';
 import LeadDashboardPage from './pages/LeadDashboardPage';
@@ -86,6 +87,14 @@ function App() {
           element={
             <ProtectedRoute>
               <LeadDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/organizations/:organizationId/products/:productId/crm"
+          element={
+            <ProtectedRoute>
+              <CrmPage />
             </ProtectedRoute>
           }
         />

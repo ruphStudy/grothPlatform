@@ -145,4 +145,16 @@ export interface LeadSourceEventResponse {
 
 export interface LeadDetailResponse extends LeadResponse {
   sourceEvents: LeadSourceEventResponse[];
+  crmOpportunities?: {
+    id: string;
+    name: string;
+    status: string;
+    amount?: number;
+    currency?: string;
+    probability?: number;
+    stageId: string;
+    pipelineId: string;
+    expectedCloseDate?: Date;
+    updatedAt?: Date;
+  }[];
 }

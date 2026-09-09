@@ -39,8 +39,8 @@ export class CreateLeadCaptureFormDto {
 }
 
 export class UpdateLeadCaptureFormDto extends CreateLeadCaptureFormDto {
-  @IsOptional() @IsString() @MinLength(2) @MaxLength(160) name!: string;
-  @IsOptional() @IsArray() @ArrayMaxSize(30) @ValidateNested({ each: true }) fields!: LeadCaptureFormFieldDto[];
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(160) declare name: string;
+  @IsOptional() @IsArray() @ArrayMaxSize(30) @ValidateNested({ each: true }) declare fields: LeadCaptureFormFieldDto[];
 }
 
 export class PublicLeadCaptureFormSubmissionDto {

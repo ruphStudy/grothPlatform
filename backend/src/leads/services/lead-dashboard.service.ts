@@ -126,7 +126,7 @@ export class LeadDashboardService {
   }
 
   private async withQualifiedCounts(items: any[], organizationId: string, productId: string, key: 'campaignId' | 'formId', names?: Map<string, string>) {
-    const rows = [];
+    const rows: Record<string, unknown>[] = [];
     for (const item of items.slice(0, 50)) {
       const qualified = item.leadIds?.length ? await this.qualificationModel.countDocuments({ organizationId: new Types.ObjectId(organizationId), productId: new Types.ObjectId(productId), leadId: { $in: item.leadIds }, qualificationStatus: 'qualified' }).exec() : 0;
       const id = item[key]?.toString();

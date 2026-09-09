@@ -3363,6 +3363,18 @@ export interface LeadSourceEventSummary {
 
 export interface LeadDetail extends LeadSummary {
   sourceEvents: LeadSourceEventSummary[];
+  crmOpportunities?: {
+    id: string;
+    name: string;
+    status: CrmOpportunityStatus;
+    amount?: number;
+    currency?: string;
+    probability?: number;
+    stageId: string;
+    pipelineId: string;
+    expectedCloseDate?: string;
+    updatedAt?: string;
+  }[];
 }
 
 export interface LeadListResponse {
@@ -3478,6 +3490,93 @@ export interface LeadDashboardResponse {
     identityConflictCount: number;
     communicationNotReady: number;
   };
+}
+
+export type CrmStageCategory = 'open' | 'won' | 'lost';
+export type CrmOpportunityStatus = 'open' | 'won' | 'lost' | 'archived';
+
+export interface CrmStage {
+  id: string;
+  organizationId: string;
+  productId: string;
+  pipelineId: string;
+  name: string;
+  key: string;
+  order: number;
+  category: CrmStageCategory;
+  probability?: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CrmPipeline {
+  id: string;
+  organizationId: string;
+  productId: string;
+  name: string;
+  slug: string;
+  description?: string;
+  isDefault: boolean;
+  isActive: boolean;
+  stages?: CrmStage[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CrmActivity {
+  id: string;
+  opportunityId: string;
+  leadId?: string;
+  type: string;
+  fromStageId?: string;
+  toStageId?: string;
+  note?: string;
+  actorUserId?: string;
+  createdAt: string;
+}
+
+export interface CrmOpportunity {
+  id: string;
+  organizationId: string;
+  productId: string;
+  pipelineId: string;
+  stageId: string;
+  leadId: string;
+  campaignId?: string;
+  name: string;
+  status: CrmOpportunityStatus;
+  amount?: number;
+  currency?: string;
+  probability?: number;
+  probabilitySource?: 'stage' | 'manual';
+  expectedCloseDate?: string;
+  assignedToUserId?: string;
+  sourceType?: LeadSourceType;
+  sourceEventId?: string;
+  description?: string;
+  wonAt?: string;
+  lostAt?: string;
+  lostReason?: string;
+  lead?: LeadSummary;
+  pipeline?: CrmPipeline;
+  stage?: CrmStage;
+  campaign?: Campaign;
+  activities?: CrmActivity[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CrmBoardStage extends CrmStage {
+  opportunities: CrmOpportunity[];
+  totalCount: number;
+}
+
+export interface CrmBoardResponse {
+  pipeline: CrmPipeline;
+  stages: CrmBoardStage[];
+  totalCards: number;
+  truncated: boolean;
 }
 
 export interface LeadCaptureEndpointSummary {
