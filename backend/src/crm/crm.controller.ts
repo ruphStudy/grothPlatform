@@ -1,7 +1,9 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { AddCrmOpportunityNoteDto, CompleteCrmFollowUpDto, ConvertLeadToOpportunityDto, CreateCrmFollowUpDto, CreateCrmOpportunityDto, CreateCrmPipelineDto, CreateCrmStageDto, LogCrmActivityDto, MoveCrmOpportunityStageDto, ReorderCrmStagesDto, UpdateCrmFollowUpDto, UpdateCrmOpportunityDto, UpdateCrmPipelineDto, UpdateCrmStageDto } from './dto/crm.dto';
+import { AddCrmOpportunityNoteDto, CompleteCrmFollowUpDto, ConvertLeadToOpportunityDto, CreateCrmAccountDto, CreateCrmFollowUpDto, CreateCrmOpportunityDto, CreateCrmPipelineDto, CreateCrmStageDto, ExportCrmOpportunitiesDto, LogCrmActivityDto, MoveCrmOpportunityStageDto, ReorderCrmStagesDto, UpdateCrmAccountDto, UpdateCrmFollowUpDto, UpdateCrmOpportunityDto, UpdateCrmPipelineDto, UpdateCrmStageDto } from './dto/crm.dto';
+import { CrmAccountService } from './services/crm-account.service';
 import { CrmDashboardService } from './services/crm-dashboard.service';
+import { CrmDataHealthService } from './services/crm-data-health.service';
 import { CrmFollowUpService } from './services/crm-follow-up.service';
 import { CrmOpportunityService } from './services/crm-opportunity.service';
 import { CrmPipelineService } from './services/crm-pipeline.service';
@@ -14,6 +16,8 @@ export class CrmController {
     private readonly opportunityService: CrmOpportunityService,
     private readonly followUpService: CrmFollowUpService,
     private readonly dashboardService: CrmDashboardService,
+    private readonly accountService: CrmAccountService,
+    private readonly dataHealthService: CrmDataHealthService,
   ) {}
 
   @Post('crm/initialize')
@@ -69,6 +73,56 @@ export class CrmController {
   @Post('crm/opportunities')
   createOpportunity(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Body() body: CreateCrmOpportunityDto) {
     return this.opportunityService.create(organizationId, productId, req.user.userId, body);
+  }
+
+  @Post('crm/accounts')
+  createAccount(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Body() body: CreateCrmAccountDto) {
+    return this.accountService.create(organizationId, productId, req.user.userId, body);
+  }
+
+  @Get('crm/accounts')
+  listAccounts(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Query() query: Record<string, string | undefined>) {
+    return this.accountService.list(organizationId, productId, req.user.userId, query);
+  }
+
+  @Get('crm/accounts/suggestions/leads/:leadId')
+  suggestAccountsForLead(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Param('leadId') leadId: string) {
+    return this.accountService.suggestionsForLead(organizationId, productId, req.user.userId, leadId);
+  }
+
+  @Post('crm/accounts/export-opportunities')
+  exportCrmOpportunities(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Body() body: ExportCrmOpportunitiesDto) {
+    return this.accountService.exportOpportunities(organizationId, productId, req.user.userId, body);
+  }
+
+  @Get('crm/data-health')
+  dataHealth(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string) {
+    return this.dataHealthService.getDataHealth(organizationId, productId, req.user.userId);
+  }
+
+  @Get('crm/accounts/:accountId')
+  getAccount(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Param('accountId') accountId: string) {
+    return this.accountService.get(organizationId, productId, req.user.userId, accountId);
+  }
+
+  @Patch('crm/accounts/:accountId')
+  updateAccount(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Param('accountId') accountId: string, @Body() body: UpdateCrmAccountDto) {
+    return this.accountService.update(organizationId, productId, req.user.userId, accountId, body);
+  }
+
+  @Post('crm/accounts/:accountId/archive')
+  archiveAccount(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Param('accountId') accountId: string) {
+    return this.accountService.archive(organizationId, productId, req.user.userId, accountId);
+  }
+
+  @Post('crm/accounts/:accountId/leads/:leadId/link')
+  linkLeadToAccount(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Param('accountId') accountId: string, @Param('leadId') leadId: string) {
+    return this.accountService.linkLead(organizationId, productId, req.user.userId, accountId, leadId);
+  }
+
+  @Post('crm/accounts/:accountId/leads/:leadId/unlink')
+  unlinkLeadFromAccount(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Param('accountId') accountId: string, @Param('leadId') leadId: string) {
+    return this.accountService.unlinkLead(organizationId, productId, req.user.userId, accountId, leadId);
   }
 
   @Get('crm/opportunities')

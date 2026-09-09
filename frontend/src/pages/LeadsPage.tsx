@@ -11,6 +11,8 @@ import type {
   LeadCaptureFormField,
   LeadCaptureFormFieldType,
   LeadCaptureFormSummary,
+  CrmAccount,
+  CrmAccountListResponse,
   CrmPipeline,
   LeadCommunicationEligibility,
   LeadConsentStatus,
@@ -92,6 +94,7 @@ export default function LeadsPage() {
   const [endpoints, setEndpoints] = useState<LeadCaptureEndpointSummary[]>([]);
   const [forms, setForms] = useState<LeadCaptureFormSummary[]>([]);
   const [crmPipelines, setCrmPipelines] = useState<CrmPipeline[]>([]);
+  const [crmAccounts, setCrmAccounts] = useState<CrmAccount[]>([]);
   const [conflicts, setConflicts] = useState<LeadIdentityConflictSummary[]>([]);
   const [selectedLead, setSelectedLead] = useState<LeadDetail | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -105,6 +108,7 @@ export default function LeadsPage() {
   const [editingFormId, setEditingFormId] = useState<string | null>(null);
   const [importDraft, setImportDraft] = useState({ sourceName: '', csv: '' });
   const [conversionDraft, setConversionDraft] = useState({ pipelineId: '', stageId: '', name: '', amount: '', currency: '', probability: '', expectedCloseDate: '', assignedToUserId: '', description: '' });
+  const [leadAccountId, setLeadAccountId] = useState('');
   const [importSummary, setImportSummary] = useState<LeadImportSummary | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -122,18 +126,20 @@ export default function LeadsPage() {
       Object.entries(filters).forEach(([key, value]) => {
         if (String(value).trim()) qs.set(key, String(value));
       });
-      const [leadData, endpointData, formData, conflictData, pipelineData] = await Promise.all([
+      const [leadData, endpointData, formData, conflictData, pipelineData, accountData] = await Promise.all([
         apiRequest<LeadListResponse>(`${basePath}/leads${qs.toString() ? `?${qs}` : ''}`),
         apiRequest<LeadCaptureEndpointSummary[]>(`${basePath}/lead-capture-endpoints`),
         apiRequest<LeadCaptureFormSummary[]>(`${basePath}/lead-forms`),
         apiRequest<LeadIdentityConflictSummary[]>(`${basePath}/leads/identity-conflicts`),
         apiRequest<CrmPipeline[]>(`${basePath}/crm/pipelines`).catch(() => []),
+        apiRequest<CrmAccountListResponse>(`${basePath}/crm/accounts?status=active&limit=100`).catch(() => ({ items: [], total: 0, page: 1, limit: 100 })),
       ]);
       setLeads(leadData);
       setEndpoints(endpointData);
       setForms(formData);
       setConflicts(conflictData);
       setCrmPipelines(pipelineData);
+      setCrmAccounts(accountData.items);
       setSelectedIds((prev) => prev.filter((id) => leadData.items.some((lead) => lead.id === id)));
       if (selectedLead && !leadData.items.some((lead) => lead.id === selectedLead.id)) setSelectedLead(null);
     } catch (err) {
@@ -150,7 +156,9 @@ export default function LeadsPage() {
 
   async function openLead(leadId: string) {
     try {
-      setSelectedLead(await apiRequest<LeadDetail>(`${basePath}/leads/${leadId}`));
+      const lead = await apiRequest<LeadDetail>(`${basePath}/leads/${leadId}`);
+      setSelectedLead(lead);
+      setLeadAccountId(lead.crmAccountId || '');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load lead');
     }
@@ -246,6 +254,63 @@ export default function LeadsPage() {
       setNotice('Lead converted to opportunity.');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to convert lead');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function linkSelectedLeadAccount() {
+    if (!selectedLead || !leadAccountId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await apiRequest(`${basePath}/crm/accounts/${leadAccountId}/leads/${selectedLead.id}/link`, { method: 'POST' });
+      await openLead(selectedLead.id);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to link account');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function unlinkSelectedLeadAccount() {
+    if (!selectedLead?.crmAccountId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await apiRequest(`${basePath}/crm/accounts/${selectedLead.crmAccountId}/leads/${selectedLead.id}/unlink`, { method: 'POST' });
+      setLeadAccountId('');
+      await openLead(selectedLead.id);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to unlink account');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createAccountFromSelectedLead() {
+    if (!selectedLead?.companyName) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const account = await apiRequest<CrmAccount>(`${basePath}/crm/accounts`, {
+        method: 'POST',
+        body: {
+          name: selectedLead.companyName,
+          country: selectedLead.country,
+          region: selectedLead.region,
+          city: selectedLead.city,
+          notes: selectedLead.jobTitle ? `Created from lead role: ${selectedLead.jobTitle}` : undefined,
+        },
+      });
+      await apiRequest(`${basePath}/crm/accounts/${account.id}/leads/${selectedLead.id}/link`, { method: 'POST' });
+      setLeadAccountId(account.id);
+      await openLead(selectedLead.id);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to create account');
     } finally {
       setBusy(false);
     }
@@ -541,10 +606,20 @@ export default function LeadsPage() {
           <div className="summary-grid">
             <div><span className="summary-label">Contact</span><p>{selectedLead.email || '-'}<br />{selectedLead.phone || '-'}</p></div>
             <div><span className="summary-label">Company</span><p>{selectedLead.companyName || '-'}<br />{selectedLead.jobTitle || '-'}</p></div>
+            <div><span className="summary-label">Account</span><p>{crmAccounts.find((account) => account.id === selectedLead.crmAccountId)?.name || selectedLead.crmAccountId || '-'}</p></div>
             <div><span className="summary-label">Consent</span><p>{labelize(selectedLead.consentStatus)}</p></div>
             <div><span className="summary-label">Qualification</span><p>{selectedLead.qualification ? `${selectedLead.qualification.score} / ${labelize(selectedLead.qualification.grade)}` : '-'}</p></div>
             <div><span className="summary-label">Eligibility</span><p>{selectedLead.qualification ? labelize(selectedLead.qualification.communicationEligibility) : '-'}</p></div>
             <div><span className="summary-label">Version</span><p>{selectedLead.qualification?.scoringVersion || '-'}</p></div>
+          </div>
+          <div className="tag-list" style={{ marginTop: 12 }}>
+            <select value={leadAccountId} onChange={(e) => setLeadAccountId(e.target.value)}>
+              <option value="">No account</option>
+              {crmAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+            </select>
+            <button className="btn btn-secondary" onClick={linkSelectedLeadAccount} disabled={busy || !leadAccountId}>Link Account</button>
+            <button className="btn btn-secondary" onClick={unlinkSelectedLeadAccount} disabled={busy || !selectedLead.crmAccountId}>Unlink</button>
+            <button className="btn btn-secondary" onClick={createAccountFromSelectedLead} disabled={busy || !selectedLead.companyName}>Create Account From Lead</button>
           </div>
           {selectedLead.qualification && (
             <>

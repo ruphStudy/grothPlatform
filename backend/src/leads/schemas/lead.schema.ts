@@ -40,6 +40,9 @@ export class Lead {
   @Prop()
   companyName?: string;
 
+  @Prop({ type: Types.ObjectId })
+  crmAccountId?: Types.ObjectId;
+
   @Prop()
   jobTitle?: string;
 
@@ -104,3 +107,4 @@ LeadSchema.index(
 LeadSchema.index({ organizationId: 1, productId: 1, status: 1 });
 LeadSchema.index({ organizationId: 1, productId: 1, latestCapturedAt: -1 });
 LeadSchema.index({ organizationId: 1, productId: 1, campaignId: 1 });
+LeadSchema.index({ organizationId: 1, productId: 1, crmAccountId: 1 });

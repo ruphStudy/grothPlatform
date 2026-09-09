@@ -8,13 +8,16 @@ import { Lead, LeadSchema } from '../leads/schemas/lead.schema';
 import { LeadsModule } from '../leads/leads.module';
 import { ProductsModule } from '../products/products.module';
 import { CrmController } from './crm.controller';
+import { CrmAccount, CrmAccountSchema } from './schemas/crm-account.schema';
 import { CrmActivity, CrmActivitySchema } from './schemas/crm-activity.schema';
 import { CrmConversionIdempotency, CrmConversionIdempotencySchema } from './schemas/crm-conversion-idempotency.schema';
 import { CrmFollowUp, CrmFollowUpSchema } from './schemas/crm-follow-up.schema';
 import { CrmOpportunity, CrmOpportunitySchema } from './schemas/crm-opportunity.schema';
 import { CrmPipeline, CrmPipelineSchema } from './schemas/crm-pipeline.schema';
 import { CrmStage, CrmStageSchema } from './schemas/crm-stage.schema';
+import { CrmAccountService } from './services/crm-account.service';
 import { CrmDashboardService } from './services/crm-dashboard.service';
+import { CrmDataHealthService } from './services/crm-data-health.service';
 import { CrmFollowUpService } from './services/crm-follow-up.service';
 import { CrmOpportunityService } from './services/crm-opportunity.service';
 import { CrmPipelineService } from './services/crm-pipeline.service';
@@ -23,6 +26,7 @@ import { CrmPipelineService } from './services/crm-pipeline.service';
   imports: [
     MongooseModule.forFeature([
       { name: CrmPipeline.name, schema: CrmPipelineSchema },
+      { name: CrmAccount.name, schema: CrmAccountSchema },
       { name: CrmStage.name, schema: CrmStageSchema },
       { name: CrmOpportunity.name, schema: CrmOpportunitySchema },
       { name: CrmActivity.name, schema: CrmActivitySchema },
@@ -38,7 +42,7 @@ import { CrmPipelineService } from './services/crm-pipeline.service';
     LeadsModule,
   ],
   controllers: [CrmController],
-  providers: [CrmPipelineService, CrmOpportunityService, CrmFollowUpService, CrmDashboardService],
-  exports: [CrmPipelineService, CrmOpportunityService],
+  providers: [CrmPipelineService, CrmOpportunityService, CrmFollowUpService, CrmDashboardService, CrmAccountService, CrmDataHealthService],
+  exports: [CrmPipelineService, CrmOpportunityService, CrmAccountService],
 })
 export class CrmModule {}

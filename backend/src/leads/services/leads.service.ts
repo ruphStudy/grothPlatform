@@ -100,7 +100,7 @@ export class LeadsService {
     return {
       ...this.leadCaptureService.toLeadResponse(lead, qualifications.get(lead._id.toString())),
       sourceEvents: events.map((event) => this.leadCaptureService.toEventResponse(event)),
-      crmOpportunities: opportunities.map((opportunity) => ({ id: opportunity._id.toString(), name: opportunity.name, status: opportunity.status, amount: opportunity.amount, currency: opportunity.currency, probability: opportunity.probability, stageId: opportunity.stageId.toString(), pipelineId: opportunity.pipelineId.toString(), expectedCloseDate: opportunity.expectedCloseDate, updatedAt: opportunity.updatedAt })),
+      crmOpportunities: opportunities.map((opportunity) => ({ id: opportunity._id.toString(), name: opportunity.name, status: opportunity.status, amount: opportunity.amount, currency: opportunity.currency, probability: opportunity.probability, stageId: opportunity.stageId.toString(), pipelineId: opportunity.pipelineId.toString(), crmAccountId: opportunity.crmAccountId?.toString(), expectedCloseDate: opportunity.expectedCloseDate, updatedAt: opportunity.updatedAt })),
     };
   }
 

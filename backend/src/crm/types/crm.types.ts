@@ -4,6 +4,9 @@ export const CRM_STAGE_CATEGORIES: CrmStageCategory[] = ['open', 'won', 'lost'];
 export type CrmOpportunityStatus = 'open' | 'won' | 'lost' | 'archived';
 export const CRM_OPPORTUNITY_STATUSES: CrmOpportunityStatus[] = ['open', 'won', 'lost', 'archived'];
 
+export type CrmAccountStatus = 'active' | 'inactive' | 'archived';
+export const CRM_ACCOUNT_STATUSES: CrmAccountStatus[] = ['active', 'inactive', 'archived'];
+
 export type CrmProbabilitySource = 'stage' | 'manual';
 
 export type CrmActivityType =

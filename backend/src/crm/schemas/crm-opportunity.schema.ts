@@ -23,6 +23,9 @@ export class CrmOpportunity {
   leadId: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId })
+  crmAccountId?: Types.ObjectId;
+
+  @Prop({ type: Types.ObjectId })
   campaignId?: Types.ObjectId;
 
   @Prop({ required: true })
@@ -76,4 +79,5 @@ CrmOpportunitySchema.index({ organizationId: 1, productId: 1, leadId: 1 });
 CrmOpportunitySchema.index({ organizationId: 1, productId: 1, stageId: 1 });
 CrmOpportunitySchema.index({ organizationId: 1, productId: 1, status: 1 });
 CrmOpportunitySchema.index({ organizationId: 1, productId: 1, campaignId: 1 });
+CrmOpportunitySchema.index({ organizationId: 1, productId: 1, crmAccountId: 1 });
 CrmOpportunitySchema.index({ organizationId: 1, productId: 1, pipelineId: 1, stageId: 1 });

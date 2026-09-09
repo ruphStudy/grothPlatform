@@ -3316,6 +3316,7 @@ export interface LeadSummary {
   email?: string;
   phone?: string;
   companyName?: string;
+  crmAccountId?: string;
   jobTitle?: string;
   country?: string;
   region?: string;
@@ -3372,6 +3373,7 @@ export interface LeadDetail extends LeadSummary {
     probability?: number;
     stageId: string;
     pipelineId: string;
+    crmAccountId?: string;
     expectedCloseDate?: string;
     updatedAt?: string;
   }[];
@@ -3494,8 +3496,45 @@ export interface LeadDashboardResponse {
 
 export type CrmStageCategory = 'open' | 'won' | 'lost';
 export type CrmOpportunityStatus = 'open' | 'won' | 'lost' | 'archived';
+export type CrmAccountStatus = 'active' | 'inactive' | 'archived';
 export type CrmFollowUpType = 'call' | 'meeting' | 'email' | 'demo' | 'proposal' | 'reminder' | 'other';
 export type CrmFollowUpStatus = 'pending' | 'completed' | 'cancelled' | 'overdue';
+
+export interface CrmAccount {
+  id: string;
+  organizationId: string;
+  productId: string;
+  name: string;
+  normalizedName: string;
+  website?: string;
+  domain?: string;
+  industry?: string;
+  country?: string;
+  region?: string;
+  city?: string;
+  phone?: string;
+  status: CrmAccountStatus;
+  ownerUserId?: string;
+  notes?: string;
+  contactsCount?: number;
+  openOpportunitiesCount?: number;
+  duplicateCandidates?: CrmAccount[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CrmContactSummary {
+  leadId: string;
+  displayName: string;
+  email?: string;
+  phone?: string;
+  account?: { id: string; name: string; domain?: string };
+  communicationEligibility: LeadCommunicationEligibility;
+  status: LeadStatus;
+  qualification?: LeadQualificationStatus;
+  score?: number;
+  grade?: LeadQualificationGrade;
+}
 
 export interface CrmStage {
   id: string;
@@ -3565,6 +3604,7 @@ export interface CrmOpportunity {
   pipelineId: string;
   stageId: string;
   leadId: string;
+  crmAccountId?: string;
   campaignId?: string;
   name: string;
   status: CrmOpportunityStatus;
@@ -3583,6 +3623,7 @@ export interface CrmOpportunity {
   lead?: LeadSummary;
   pipeline?: CrmPipeline;
   stage?: CrmStage;
+  account?: Pick<CrmAccount, 'id' | 'name' | 'domain' | 'industry' | 'status'>;
   campaign?: Campaign;
   activities?: CrmActivity[];
   followUps?: CrmFollowUp[];
@@ -3600,6 +3641,36 @@ export interface CrmBoardResponse {
   stages: CrmBoardStage[];
   totalCards: number;
   truncated: boolean;
+}
+
+export interface CrmAccountDetail extends CrmAccount {
+  contacts: CrmContactSummary[];
+  openOpportunities: CrmOpportunity[];
+  wonLostSummary: { won: { count: number; amount: number }; lost: { count: number; amount: number } };
+  pendingFollowUps: CrmFollowUp[];
+  recentActivities: CrmActivity[];
+}
+
+export interface CrmAccountListResponse {
+  items: CrmAccount[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface CrmDataHealthIssue {
+  code: string;
+  severity: 'critical' | 'warning';
+  entityType: string;
+  entityId: string;
+  message: string;
+}
+
+export interface CrmDataHealthResponse {
+  issueCount: number;
+  criticalCount: number;
+  warningCount: number;
+  issues: CrmDataHealthIssue[];
 }
 
 export interface CrmDashboardResponse {

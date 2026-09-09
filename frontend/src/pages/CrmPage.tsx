@@ -6,7 +6,7 @@ import { Card } from '../components/Card';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { Loading } from '../components/Loading';
 import { PageHeader } from '../components/PageHeader';
-import type { CrmBoardResponse, CrmDashboardResponse, CrmFollowUp, CrmFollowUpListResponse, CrmFollowUpType, CrmOpportunity, CrmPipeline, CrmStage } from '../types';
+import type { CrmAccount, CrmAccountDetail, CrmAccountListResponse, CrmBoardResponse, CrmDashboardResponse, CrmDataHealthResponse, CrmFollowUp, CrmFollowUpListResponse, CrmFollowUpType, CrmOpportunity, CrmPipeline, CrmStage } from '../types';
 
 function labelize(value: string): string {
   return value.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -34,10 +34,14 @@ export default function CrmPage() {
   const [board, setBoard] = useState<CrmBoardResponse | null>(null);
   const [dashboard, setDashboard] = useState<CrmDashboardResponse | null>(null);
   const [followUps, setFollowUps] = useState<CrmFollowUp[]>([]);
+  const [accounts, setAccounts] = useState<CrmAccount[]>([]);
+  const [selectedAccount, setSelectedAccount] = useState<CrmAccountDetail | null>(null);
+  const [dataHealth, setDataHealth] = useState<CrmDataHealthResponse | null>(null);
   const [selectedOpportunity, setSelectedOpportunity] = useState<CrmOpportunity | null>(null);
   const [note, setNote] = useState('');
   const [activityDraft, setActivityDraft] = useState({ type: 'call_logged', note: '', outcome: '' });
   const [followUpDraft, setFollowUpDraft] = useState({ type: 'call' as CrmFollowUpType, title: '', dueAt: '', assignedToUserId: '', description: '' });
+  const [accountDraft, setAccountDraft] = useState({ name: '', website: '', industry: '', country: '', region: '', city: '', phone: '', ownerUserId: '', notes: '' });
   const [pipelineName, setPipelineName] = useState('');
   const [range, setRange] = useState('30d');
   const [loading, setLoading] = useState(true);
@@ -57,12 +61,16 @@ export default function CrmPage() {
       const pipelineId = selectedPipelineId || loaded.find((pipeline) => pipeline.isDefault)?.id || loaded[0]?.id || '';
       setSelectedPipelineId(pipelineId);
       if (pipelineId) setBoard(await apiRequest<CrmBoardResponse>(`${basePath}/crm/pipelines/${pipelineId}/board`));
-      const [dashboardData, followUpData] = await Promise.all([
+      const [dashboardData, followUpData, accountData, healthData] = await Promise.all([
         apiRequest<CrmDashboardResponse>(`${basePath}/crm/dashboard?range=${range}${pipelineId ? `&pipelineId=${pipelineId}` : ''}&timezone=UTC`),
         apiRequest<CrmFollowUpListResponse>(`${basePath}/crm/follow-ups?limit=50`),
+        apiRequest<CrmAccountListResponse>(`${basePath}/crm/accounts?limit=50`),
+        apiRequest<CrmDataHealthResponse>(`${basePath}/crm/data-health`),
       ]);
       setDashboard(dashboardData);
       setFollowUps(followUpData.items);
+      setAccounts(accountData.items);
+      setDataHealth(healthData);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load CRM');
     } finally {
@@ -80,6 +88,75 @@ export default function CrmPage() {
       setSelectedOpportunity(await apiRequest<CrmOpportunity>(`${basePath}/crm/opportunities/${id}`));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load opportunity');
+    }
+  }
+
+  async function openAccount(id: string) {
+    try {
+      setSelectedAccount(await apiRequest<CrmAccountDetail>(`${basePath}/crm/accounts/${id}`));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to load account');
+    }
+  }
+
+  async function createAccount(event: FormEvent) {
+    event.preventDefault();
+    if (!accountDraft.name.trim()) return;
+    setBusy(true);
+    try {
+      const created = await apiRequest<CrmAccount>(`${basePath}/crm/accounts`, {
+        method: 'POST',
+        body: Object.fromEntries(Object.entries(accountDraft).filter(([, value]) => value.trim())),
+      });
+      setAccountDraft({ name: '', website: '', industry: '', country: '', region: '', city: '', phone: '', ownerUserId: '', notes: '' });
+      await load();
+      await openAccount(created.id);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to create account');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function archiveAccount(account: CrmAccount) {
+    setBusy(true);
+    try {
+      await apiRequest(`${basePath}/crm/accounts/${account.id}/archive`, { method: 'POST' });
+      setSelectedAccount(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to archive account');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function assignOpportunityAccount(accountId: string) {
+    if (!selectedOpportunity) return;
+    setBusy(true);
+    try {
+      await apiRequest(`${basePath}/crm/opportunities/${selectedOpportunity.id}`, { method: 'PATCH', body: { crmAccountId: accountId || undefined } });
+      await load();
+      await openOpportunity(selectedOpportunity.id);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to update opportunity account');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function exportCrm() {
+    try {
+      const result = await apiRequest<{ csv: string; rowCount: number }>(`${basePath}/crm/accounts/export-opportunities`, { method: 'POST', body: { filters: selectedPipelineId ? { pipelineId: selectedPipelineId } : {} } });
+      const blob = new Blob([result.csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `crm-opportunities-${productId}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to export CRM');
     }
   }
 
@@ -219,6 +296,80 @@ export default function CrmPage() {
       <ErrorMessage message={error} />
       {loading && <Loading />}
 
+      {dataHealth && (
+        <Card>
+          <div className="entity-card-header">
+            <h2 className="card-title">Data Health</h2>
+            <button className="btn btn-secondary" onClick={exportCrm}>Export Opportunities CSV</button>
+          </div>
+          <div className="summary-grid">
+            <div><span className="summary-label">Status</span><p>{dataHealth.issueCount === 0 ? 'Healthy' : 'Needs Review'}</p></div>
+            <div><span className="summary-label">Warnings</span><p>{dataHealth.warningCount}</p></div>
+            <div><span className="summary-label">Critical</span><p>{dataHealth.criticalCount}</p></div>
+          </div>
+          {dataHealth.issues.slice(0, 20).map((issue) => (
+            <p key={`${issue.code}-${issue.entityId}`} className="entity-card-meta">{labelize(issue.severity)} · {issue.message}</p>
+          ))}
+        </Card>
+      )}
+
+      <Card>
+        <div className="entity-card-header">
+          <h2 className="card-title">Accounts</h2>
+          <span className="entity-card-meta">{accounts.length} listed</span>
+        </div>
+        <form className="form" onSubmit={createAccount}>
+          <div className="summary-grid">
+            <div className="field"><label>Name</label><input value={accountDraft.name} onChange={(e) => setAccountDraft((draft) => ({ ...draft, name: e.target.value }))} /></div>
+            <div className="field"><label>Website</label><input value={accountDraft.website} onChange={(e) => setAccountDraft((draft) => ({ ...draft, website: e.target.value }))} /></div>
+            <div className="field"><label>Industry</label><input value={accountDraft.industry} onChange={(e) => setAccountDraft((draft) => ({ ...draft, industry: e.target.value }))} /></div>
+            <div className="field"><label>Country</label><input value={accountDraft.country} onChange={(e) => setAccountDraft((draft) => ({ ...draft, country: e.target.value }))} /></div>
+          </div>
+          <div className="field"><label>Notes</label><textarea value={accountDraft.notes} onChange={(e) => setAccountDraft((draft) => ({ ...draft, notes: e.target.value }))} /></div>
+          <button className="btn btn-primary" disabled={busy || !accountDraft.name.trim()}>Create Account</button>
+        </form>
+        {accounts.map((account) => (
+          <div key={account.id} className="entity-card" style={{ borderTop: '1px solid var(--border-color, #ddd)', paddingTop: 10, marginTop: 10 }}>
+            <div className="entity-card-header">
+              <h3>{account.name}</h3>
+              <span className={`quality-badge ${account.status === 'active' ? 'quality-good' : 'quality-unavailable'}`}>{labelize(account.status)}</span>
+            </div>
+            <p className="entity-card-meta">{account.domain || '-'} · {account.industry || '-'} · Contacts {account.contactsCount ?? 0} · Open Opportunities {account.openOpportunitiesCount ?? 0}</p>
+            <div className="tag-list">
+              <button className="btn btn-secondary" onClick={() => openAccount(account.id)}>Open</button>
+              {account.status !== 'archived' && <button className="btn btn-secondary" onClick={() => archiveAccount(account)} disabled={busy}>Archive</button>}
+            </div>
+          </div>
+        ))}
+        {!accounts.length && <p className="entity-card-meta">No accounts yet.</p>}
+      </Card>
+
+      {selectedAccount && (
+        <Card>
+          <div className="entity-card-header">
+            <h2 className="card-title">{selectedAccount.name}</h2>
+            <button className="btn btn-secondary" onClick={() => setSelectedAccount(null)}>Close</button>
+          </div>
+          <div className="summary-grid">
+            <div><span className="summary-label">Domain</span><p>{selectedAccount.domain || '-'}</p></div>
+            <div><span className="summary-label">Industry</span><p>{selectedAccount.industry || '-'}</p></div>
+            <div><span className="summary-label">Location</span><p>{[selectedAccount.city, selectedAccount.region, selectedAccount.country].filter(Boolean).join(', ') || '-'}</p></div>
+            <div><span className="summary-label">Status</span><p>{labelize(selectedAccount.status)}</p></div>
+          </div>
+          {selectedAccount.notes && <p className="entity-card-meta">Notes: {selectedAccount.notes}</p>}
+          {!!selectedAccount.duplicateCandidates?.length && <p className="entity-card-meta">Duplicate candidates: {selectedAccount.duplicateCandidates.map((account) => account.name).join(', ')}</p>}
+          <h3 className="section-title">Contacts</h3>
+          {selectedAccount.contacts.map((contact) => <p key={contact.leadId} className="entity-card-meta">{contact.displayName} · {contact.email || contact.phone || '-'} · {labelize(contact.communicationEligibility)}</p>)}
+          <h3 className="section-title">Opportunities</h3>
+          {selectedAccount.openOpportunities.map((opportunity) => <p key={opportunity.id} className="entity-card-meta">{opportunity.name} · {money(opportunity)}</p>)}
+          <p className="entity-card-meta">Won {selectedAccount.wonLostSummary.won.count} · Lost {selectedAccount.wonLostSummary.lost.count}</p>
+          <h3 className="section-title">Pending Follow-ups</h3>
+          {selectedAccount.pendingFollowUps.map((followUp) => <p key={followUp.id} className="entity-card-meta">{formatDate(followUp.dueAt)} · {followUp.title}</p>)}
+          <h3 className="section-title">Recent Activity</h3>
+          {selectedAccount.recentActivities.map((activity) => <p key={activity.id} className="entity-card-meta">{formatDate(activity.createdAt)} · {labelize(activity.type)}</p>)}
+        </Card>
+      )}
+
       {dashboard && (
         <Card>
           <div className="entity-card-header">
@@ -349,11 +500,19 @@ export default function CrmPage() {
           </div>
           <div className="summary-grid">
             <div><span className="summary-label">Lead</span><p>{selectedOpportunity.lead?.fullName || selectedOpportunity.lead?.email || '-'}</p></div>
+            <div><span className="summary-label">Account</span><p>{selectedOpportunity.account?.name || '-'}</p></div>
             <div><span className="summary-label">Stage</span><p>{selectedOpportunity.stage?.name || '-'}</p></div>
             <div><span className="summary-label">Status</span><p>{labelize(selectedOpportunity.status)}</p></div>
             <div><span className="summary-label">Amount</span><p>{money(selectedOpportunity)}</p></div>
             <div><span className="summary-label">Probability</span><p>{selectedOpportunity.probability ?? '-'}%</p></div>
             <div><span className="summary-label">Expected Close</span><p>{selectedOpportunity.expectedCloseDate ? new Date(selectedOpportunity.expectedCloseDate).toLocaleDateString() : '-'}</p></div>
+          </div>
+          <div className="field">
+            <label>Linked Account</label>
+            <select value={selectedOpportunity.crmAccountId || ''} onChange={(e) => assignOpportunityAccount(e.target.value)} disabled={busy}>
+              <option value="">No account</option>
+              {accounts.filter((account) => account.status !== 'archived').map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+            </select>
           </div>
           {selectedOpportunity.description && <p>{selectedOpportunity.description}</p>}
           <h3 className="section-title">Plan Follow-up</h3>

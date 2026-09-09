@@ -228,6 +228,7 @@ export class LeadCaptureService {
       email: lead.email,
       phone: lead.phone,
       companyName: lead.companyName,
+      crmAccountId: lead.crmAccountId?.toString(),
       jobTitle: lead.jobTitle,
       country: lead.country,
       region: lead.region,

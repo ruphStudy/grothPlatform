@@ -76,6 +76,7 @@ export class CrmPipelineService {
     if (dto.isDefault !== undefined) pipeline.isDefault = dto.isDefault;
     if (dto.isActive !== undefined) {
       if (!dto.isActive && pipeline.isDefault) throw new BadRequestException('crm_pipeline_inactive');
+      if (!dto.isActive) await this.assertNoOpenOpportunitiesInPipeline(pipeline);
       pipeline.isActive = dto.isActive;
     }
     await pipeline.save();
@@ -172,11 +173,16 @@ export class CrmPipelineService {
   }
 
   private async assertPipelineUsableAfterStageChange(organizationId: string, productId: string, stage: CrmStageDocument): Promise<void> {
-    const inUse = await this.opportunityModel.exists({ organizationId: stage.organizationId, productId: stage.productId, stageId: stage._id });
-    if (inUse) return;
+    const openInUse = await this.opportunityModel.exists({ organizationId: stage.organizationId, productId: stage.productId, stageId: stage._id, status: 'open' });
+    if (openInUse) throw new BadRequestException('crm_stage_in_use');
     const counts = await this.stageModel.aggregate([{ $match: { organizationId: new Types.ObjectId(organizationId), productId: new Types.ObjectId(productId), pipelineId: stage.pipelineId, isActive: true, _id: { $ne: stage._id } } }, { $group: { _id: '$category', count: { $sum: 1 } } }]).exec();
     const map = new Map(counts.map((item) => [item._id, item.count]));
     if (!map.get('open') || !map.get('won') || !map.get('lost')) throw new BadRequestException('crm_invalid_stage_transition');
+  }
+
+  private async assertNoOpenOpportunitiesInPipeline(pipeline: CrmPipelineDocument): Promise<void> {
+    const openInUse = await this.opportunityModel.exists({ organizationId: pipeline.organizationId, productId: pipeline.productId, pipelineId: pipeline._id, status: 'open' });
+    if (openInUse) throw new BadRequestException('crm_pipeline_in_use');
   }
 
   private async assertOrderFree(organizationId: string, productId: string, pipelineId: string, order: number, excludeStageId?: string) {

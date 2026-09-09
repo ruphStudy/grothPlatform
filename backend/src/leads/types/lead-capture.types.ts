@@ -98,6 +98,7 @@ export interface LeadResponse {
   email?: string;
   phone?: string;
   companyName?: string;
+  crmAccountId?: string;
   jobTitle?: string;
   country?: string;
   region?: string;

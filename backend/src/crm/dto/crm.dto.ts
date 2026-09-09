@@ -1,6 +1,36 @@
-import { ArrayMaxSize, IsArray, IsBoolean, IsEnum, IsISO8601, IsMongoId, IsNumber, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
-import { CRM_FOLLOW_UP_STATUSES, CRM_FOLLOW_UP_TYPES, CRM_OPPORTUNITY_STATUSES, CRM_STAGE_CATEGORIES } from '../types/crm.types';
-import type { CrmActivityType, CrmFollowUpStatus, CrmFollowUpType, CrmOpportunityStatus, CrmStageCategory } from '../types/crm.types';
+import { ArrayMaxSize, IsArray, IsBoolean, IsEnum, IsISO8601, IsMongoId, IsNumber, IsObject, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { CRM_ACCOUNT_STATUSES, CRM_FOLLOW_UP_STATUSES, CRM_FOLLOW_UP_TYPES, CRM_OPPORTUNITY_STATUSES, CRM_STAGE_CATEGORIES } from '../types/crm.types';
+import type { CrmAccountStatus, CrmActivityType, CrmFollowUpStatus, CrmFollowUpType, CrmOpportunityStatus, CrmStageCategory } from '../types/crm.types';
+
+export class CreateCrmAccountDto {
+  @IsString() @MinLength(2) @MaxLength(200) name!: string;
+  @IsOptional() @IsString() @MaxLength(2048) website?: string;
+  @IsOptional() @IsString() @MaxLength(160) industry?: string;
+  @IsOptional() @IsString() @MaxLength(100) country?: string;
+  @IsOptional() @IsString() @MaxLength(100) region?: string;
+  @IsOptional() @IsString() @MaxLength(100) city?: string;
+  @IsOptional() @IsString() @MaxLength(40) phone?: string;
+  @IsOptional() @IsMongoId() ownerUserId?: string;
+  @IsOptional() @IsString() @MaxLength(5000) notes?: string;
+}
+
+export class UpdateCrmAccountDto {
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(200) name?: string;
+  @IsOptional() @IsString() @MaxLength(2048) website?: string;
+  @IsOptional() @IsString() @MaxLength(160) industry?: string;
+  @IsOptional() @IsString() @MaxLength(100) country?: string;
+  @IsOptional() @IsString() @MaxLength(100) region?: string;
+  @IsOptional() @IsString() @MaxLength(100) city?: string;
+  @IsOptional() @IsString() @MaxLength(40) phone?: string;
+  @IsOptional() @IsMongoId() ownerUserId?: string;
+  @IsOptional() @IsString() @MaxLength(5000) notes?: string;
+  @IsOptional() @IsEnum(CRM_ACCOUNT_STATUSES) status?: CrmAccountStatus;
+}
+
+export class ExportCrmOpportunitiesDto {
+  @IsOptional() @IsArray() @IsMongoId({ each: true }) opportunityIds?: string[];
+  @IsOptional() @IsObject() filters?: Record<string, unknown>;
+}
 
 export class CreateCrmPipelineDto {
   @IsString() @MinLength(2) @MaxLength(160) name!: string;
@@ -43,6 +73,7 @@ export class ConvertLeadToOpportunityDto {
   @IsOptional() @IsNumber() @Min(0) @Max(100) probability?: number;
   @IsOptional() @IsISO8601() expectedCloseDate?: string;
   @IsOptional() @IsMongoId() assignedToUserId?: string;
+  @IsOptional() @IsMongoId() crmAccountId?: string;
   @IsOptional() @IsString() @MaxLength(5000) description?: string;
   @IsString() @MaxLength(200) idempotencyKey!: string;
 }
@@ -58,6 +89,7 @@ export class UpdateCrmOpportunityDto {
   @IsOptional() @IsNumber() @Min(0) @Max(100) probability?: number;
   @IsOptional() @IsISO8601() expectedCloseDate?: string;
   @IsOptional() @IsMongoId() assignedToUserId?: string;
+  @IsOptional() @IsMongoId() crmAccountId?: string;
   @IsOptional() @IsString() @MaxLength(5000) description?: string;
   @IsOptional() @IsEnum(CRM_OPPORTUNITY_STATUSES) status?: CrmOpportunityStatus;
 }
