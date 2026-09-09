@@ -6,6 +6,7 @@ import { LeadCaptureEndpointsController, PublicLeadCaptureController } from './l
 import { LeadsController } from './leads.controller';
 import { LeadCaptureEndpoint, LeadCaptureEndpointSchema } from './schemas/lead-capture-endpoint.schema';
 import { LeadIdentityConflict, LeadIdentityConflictSchema } from './schemas/lead-identity-conflict.schema';
+import { LeadQualification, LeadQualificationSchema } from './schemas/lead-qualification.schema';
 import { LeadSourceEvent, LeadSourceEventSchema } from './schemas/lead-source-event.schema';
 import { LeadSubmissionIdempotency, LeadSubmissionIdempotencySchema } from './schemas/lead-submission-idempotency.schema';
 import { Lead, LeadSchema } from './schemas/lead.schema';
@@ -13,6 +14,7 @@ import { LeadCaptureEndpointsService } from './services/lead-capture-endpoints.s
 import { LeadCaptureService } from './services/lead-capture.service';
 import { LeadDeduplicationService } from './services/lead-deduplication.service';
 import { LeadNormalizationService } from './services/lead-normalization.service';
+import { LeadQualificationService } from './services/lead-qualification.service';
 import { LeadsService } from './services/leads.service';
 
 @Module({
@@ -22,13 +24,14 @@ import { LeadsService } from './services/leads.service';
       { name: LeadSourceEvent.name, schema: LeadSourceEventSchema },
       { name: LeadCaptureEndpoint.name, schema: LeadCaptureEndpointSchema },
       { name: LeadIdentityConflict.name, schema: LeadIdentityConflictSchema },
+      { name: LeadQualification.name, schema: LeadQualificationSchema },
       { name: LeadSubmissionIdempotency.name, schema: LeadSubmissionIdempotencySchema },
     ]),
     ProductsModule,
     CampaignsModule,
   ],
   controllers: [LeadsController, LeadCaptureEndpointsController, PublicLeadCaptureController],
-  providers: [LeadNormalizationService, LeadDeduplicationService, LeadCaptureService, LeadsService, LeadCaptureEndpointsService],
-  exports: [LeadCaptureService, LeadsService],
+  providers: [LeadNormalizationService, LeadDeduplicationService, LeadQualificationService, LeadCaptureService, LeadsService, LeadCaptureEndpointsService],
+  exports: [LeadCaptureService, LeadsService, LeadQualificationService],
 })
 export class LeadsModule {}

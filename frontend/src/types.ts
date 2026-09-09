@@ -3284,6 +3284,26 @@ export interface CmsScheduleSummary {
 export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'unqualified' | 'converted' | 'archived';
 export type LeadSourceType = 'website_form' | 'landing_page' | 'manual' | 'social' | 'cms' | 'campaign' | 'api' | 'import' | 'other';
 export type LeadConsentStatus = 'unknown' | 'granted' | 'denied';
+export type LeadQualificationGrade = 'hot' | 'warm' | 'cool' | 'low';
+export type LeadQualificationStatus = 'qualified' | 'needs_review' | 'unqualified' | 'insufficient_data';
+export type LeadCommunicationEligibility = 'allowed' | 'restricted' | 'unknown';
+
+export interface LeadQualificationReason {
+  ruleId: string;
+  label: string;
+  points: number;
+  direction: 'positive' | 'negative' | 'neutral';
+}
+
+export interface LeadQualification {
+  score: number;
+  grade: LeadQualificationGrade;
+  qualificationStatus: LeadQualificationStatus;
+  reasons: LeadQualificationReason[];
+  scoringVersion: string;
+  communicationEligibility: LeadCommunicationEligibility;
+  evaluatedAt: string;
+}
 
 export interface LeadSummary {
   id: string;
@@ -3314,6 +3334,7 @@ export interface LeadSummary {
   notes?: string;
   createdAt: string;
   updatedAt: string;
+  qualification?: LeadQualification;
 }
 
 export interface LeadSourceEventSummary {
@@ -3347,6 +3368,33 @@ export interface LeadListResponse {
   total: number;
   page: number;
   limit: number;
+}
+
+export interface LeadImportSummary {
+  totalRows: number;
+  created: number;
+  matched: number;
+  conflicts: number;
+  invalid: number;
+  errors: { row: number; outcome: string; error?: string }[];
+}
+
+export interface LeadExportResponse {
+  fileName: string;
+  contentType: string;
+  rowCount: number;
+  csv: string;
+}
+
+export interface LeadIdentityConflictSummary {
+  id: string;
+  emailLeadId: string;
+  phoneLeadId: string;
+  maskedEmail: string;
+  maskedPhone: string;
+  status: 'unresolved' | 'resolved';
+  createdAt: string;
+  resolvedAt?: string;
 }
 
 export interface LeadCaptureEndpointSummary {

@@ -13,5 +13,16 @@ export const LEAD_CAPTURE_METHODS: LeadCaptureMethod[] = ['manual', 'public_form
 export type LeadIdentityConflictStatus = 'unresolved' | 'resolved';
 export const LEAD_IDENTITY_CONFLICT_STATUSES: LeadIdentityConflictStatus[] = ['unresolved', 'resolved'];
 
+export type LeadQualificationGrade = 'hot' | 'warm' | 'cool' | 'low';
+export const LEAD_QUALIFICATION_GRADES: LeadQualificationGrade[] = ['hot', 'warm', 'cool', 'low'];
+
+export type LeadQualificationStatus = 'qualified' | 'needs_review' | 'unqualified' | 'insufficient_data';
+export const LEAD_QUALIFICATION_STATUSES: LeadQualificationStatus[] = ['qualified', 'needs_review', 'unqualified', 'insufficient_data'];
+
+export type LeadCommunicationEligibility = 'allowed' | 'restricted' | 'unknown';
+export const LEAD_COMMUNICATION_ELIGIBILITIES: LeadCommunicationEligibility[] = ['allowed', 'restricted', 'unknown'];
+
+export type LeadQualificationReasonDirection = 'positive' | 'negative' | 'neutral';
+
 export type LeadCustomFieldValue = string | number | boolean;
 export type LeadCustomFields = Record<string, LeadCustomFieldValue>;

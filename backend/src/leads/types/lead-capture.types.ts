@@ -1,4 +1,4 @@
-import type { LeadConsentStatus, LeadCustomFields, LeadSourceType } from './lead.types';
+import type { LeadCommunicationEligibility, LeadConsentStatus, LeadCustomFields, LeadQualificationGrade, LeadQualificationReasonDirection, LeadQualificationStatus, LeadSourceType } from './lead.types';
 
 export interface CaptureLeadInput {
   organizationId: string;
@@ -52,9 +52,35 @@ export interface LeadListFilter {
   search?: string;
   createdFrom?: string;
   createdTo?: string;
+  latestCapturedFrom?: string;
+  latestCapturedTo?: string;
+  qualificationStatus?: string;
+  grade?: string;
+  communicationEligibility?: string;
+  consentStatus?: string;
+  hasEmail?: string;
+  hasPhone?: string;
   limit?: number;
   page?: number;
   sort?: string;
+  order?: string;
+}
+
+export interface LeadQualificationReasonResponse {
+  ruleId: string;
+  label: string;
+  points: number;
+  direction: LeadQualificationReasonDirection;
+}
+
+export interface LeadQualificationResponse {
+  score: number;
+  grade: LeadQualificationGrade;
+  qualificationStatus: LeadQualificationStatus;
+  reasons: LeadQualificationReasonResponse[];
+  scoringVersion: string;
+  communicationEligibility: LeadCommunicationEligibility;
+  evaluatedAt: Date;
 }
 
 export interface LeadResponse {
@@ -86,6 +112,7 @@ export interface LeadResponse {
   notes?: string;
   createdAt: Date;
   updatedAt: Date;
+  qualification?: LeadQualificationResponse;
 }
 
 export interface LeadSourceEventResponse {

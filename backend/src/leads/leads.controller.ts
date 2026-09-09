@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { ManualLeadDto, UpdateLeadDto } from './dto/lead-common.dto';
+import { BulkLeadStatusDto, ExportLeadsCsvDto, ImportLeadsCsvDto, ManualLeadDto, UpdateLeadDto } from './dto/lead-common.dto';
 import { LeadsService } from './services/leads.service';
 
 @UseGuards(JwtAuthGuard)
@@ -19,9 +19,18 @@ export class LeadsController {
     @Query('search') search?: string,
     @Query('createdFrom') createdFrom?: string,
     @Query('createdTo') createdTo?: string,
+    @Query('latestCapturedFrom') latestCapturedFrom?: string,
+    @Query('latestCapturedTo') latestCapturedTo?: string,
+    @Query('qualificationStatus') qualificationStatus?: string,
+    @Query('grade') grade?: string,
+    @Query('communicationEligibility') communicationEligibility?: string,
+    @Query('consentStatus') consentStatus?: string,
+    @Query('hasEmail') hasEmail?: string,
+    @Query('hasPhone') hasPhone?: string,
     @Query('limit') limit?: string,
     @Query('page') page?: string,
     @Query('sort') sort?: string,
+    @Query('order') order?: string,
   ) {
     return this.leadsService.list(organizationId, productId, req.user.userId, {
       status,
@@ -30,10 +39,38 @@ export class LeadsController {
       search,
       createdFrom,
       createdTo,
+      latestCapturedFrom,
+      latestCapturedTo,
+      qualificationStatus,
+      grade,
+      communicationEligibility,
+      consentStatus,
+      hasEmail,
+      hasPhone,
       limit: limit ? Number(limit) : undefined,
       page: page ? Number(page) : undefined,
       sort,
+      order,
     });
+  }
+
+  @Get('identity-conflicts')
+  listIdentityConflicts(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.leadsService.listIdentityConflicts(organizationId, productId, req.user.userId);
+  }
+
+  @Patch('identity-conflicts/:conflictId/reviewed')
+  markIdentityConflictReviewed(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('conflictId') conflictId: string,
+  ) {
+    return this.leadsService.markIdentityConflictReviewed(organizationId, productId, req.user.userId, conflictId);
   }
 
   @Post('manual')
@@ -44,6 +81,36 @@ export class LeadsController {
     @Body() body: ManualLeadDto,
   ) {
     return this.leadsService.manualCreate(organizationId, productId, req.user.userId, body);
+  }
+
+  @Patch('bulk-status')
+  bulkStatus(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Body() body: BulkLeadStatusDto,
+  ) {
+    return this.leadsService.bulkStatus(organizationId, productId, req.user.userId, body);
+  }
+
+  @Post('import-csv')
+  importCsv(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Body() body: ImportLeadsCsvDto,
+  ) {
+    return this.leadsService.importCsv(organizationId, productId, req.user.userId, body);
+  }
+
+  @Post('export-csv')
+  exportCsv(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Body() body: ExportLeadsCsvDto,
+  ) {
+    return this.leadsService.exportCsv(organizationId, productId, req.user.userId, body);
   }
 
   @Get(':leadId')
@@ -65,5 +132,15 @@ export class LeadsController {
     @Body() body: UpdateLeadDto,
   ) {
     return this.leadsService.update(organizationId, productId, req.user.userId, leadId, body);
+  }
+
+  @Post(':leadId/recalculate-qualification')
+  recalculateQualification(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('leadId') leadId: string,
+  ) {
+    return this.leadsService.recalculateQualification(organizationId, productId, req.user.userId, leadId);
   }
 }

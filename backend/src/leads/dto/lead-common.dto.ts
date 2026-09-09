@@ -1,4 +1,4 @@
-import { IsBoolean, IsEnum, IsISO8601, IsMongoId, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsArray, IsBoolean, IsEnum, IsISO8601, IsMongoId, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 import { LEAD_CONSENT_STATUSES, LEAD_SOURCE_TYPES, LEAD_STATUSES } from '../types/lead.types';
 import type { LeadConsentStatus, LeadSourceType, LeadStatus } from '../types/lead.types';
 
@@ -71,4 +71,20 @@ export class PublicLeadCaptureDto {
   @IsOptional() @IsString() @MaxLength(200) externalSourceId?: string;
   @IsOptional() @IsString() @MaxLength(200) _hp?: string;
   @IsOptional() @IsString() @MaxLength(200) website?: string;
+}
+
+export class BulkLeadStatusDto {
+  @IsArray() @IsMongoId({ each: true }) leadIds!: string[];
+  @IsEnum(LEAD_STATUSES) status!: LeadStatus;
+}
+
+export class ImportLeadsCsvDto {
+  @IsString() csv!: string;
+  @IsOptional() @IsString() @MaxLength(200) sourceName?: string;
+}
+
+export class ExportLeadsCsvDto {
+  @IsOptional() @IsArray() @IsMongoId({ each: true }) leadIds?: string[];
+  @IsOptional() @IsObject() filters?: Record<string, unknown>;
+  @IsOptional() @IsBoolean() includeCustomFields?: boolean;
 }

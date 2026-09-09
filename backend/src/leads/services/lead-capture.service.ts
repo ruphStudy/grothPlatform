@@ -9,8 +9,9 @@ import { LeadSourceEvent, LeadSourceEventDocument } from '../schemas/lead-source
 import { LeadSubmissionIdempotency, LeadSubmissionIdempotencyDocument } from '../schemas/lead-submission-idempotency.schema';
 import type { LeadCaptureEndpointDocument } from '../schemas/lead-capture-endpoint.schema';
 import { LeadDeduplicationService } from './lead-deduplication.service';
+import { LeadQualificationService } from './lead-qualification.service';
 import { LeadNormalizationService } from './lead-normalization.service';
-import type { CaptureLeadInput, LeadCaptureOutcome, LeadResponse, LeadSourceEventResponse } from '../types/lead-capture.types';
+import type { CaptureLeadInput, LeadCaptureOutcome, LeadQualificationResponse, LeadResponse, LeadSourceEventResponse } from '../types/lead-capture.types';
 import type { LeadConsentStatus, LeadCustomFields } from '../types/lead.types';
 
 @Injectable()
@@ -23,6 +24,7 @@ export class LeadCaptureService {
     private readonly campaignsService: CampaignsService,
     private readonly normalization: LeadNormalizationService,
     private readonly deduplication: LeadDeduplicationService,
+    private readonly qualificationService: LeadQualificationService,
   ) {}
 
   async capture(input: CaptureLeadInput, idempotency?: { endpoint: LeadCaptureEndpointDocument; key?: string }): Promise<{ lead?: LeadResponse; event?: LeadSourceEventResponse; outcome: LeadCaptureOutcome }> {
@@ -67,7 +69,8 @@ export class LeadCaptureService {
     const event = await this.createEvent(input, lead, normalized, now);
     await this.applyCaptureToLead(lead, event, normalized, input.consent?.status, outcome);
     if (idempotency?.key && payloadHash) await this.saveIdempotency(idempotency.endpoint._id, idempotency.key, payloadHash, outcome, lead._id, event._id);
-    return { lead: this.toLeadResponse(lead), event: this.toEventResponse(event), outcome };
+    const qualification = await this.qualificationService.recalculateLead(lead);
+    return { lead: this.toLeadResponse(lead, qualification), event: this.toEventResponse(event), outcome };
   }
 
   private normalizeInput(input: CaptureLeadInput) {
@@ -211,7 +214,7 @@ export class LeadCaptureService {
     return createHash('sha256').update(JSON.stringify(value)).digest('hex');
   }
 
-  toLeadResponse(lead: LeadDocument): LeadResponse {
+  toLeadResponse(lead: LeadDocument, qualification?: LeadQualificationResponse): LeadResponse {
     return {
       id: lead._id.toString(),
       organizationId: lead.organizationId.toString(),
@@ -241,6 +244,7 @@ export class LeadCaptureService {
       notes: lead.notes,
       createdAt: lead.createdAt as Date,
       updatedAt: lead.updatedAt as Date,
+      qualification,
     };
   }
 
