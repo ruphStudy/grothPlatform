@@ -15,6 +15,7 @@ import { MarketIntelligenceModule } from './market-intelligence/market-intellige
 import { OrganizationsModule } from './organizations/organizations.module';
 import { ProductIntelligenceModule } from './product-intelligence/product-intelligence.module';
 import { KeywordIntelligenceModule } from './keyword-intelligence/keyword-intelligence.module';
+import { LeadsModule } from './leads/leads.module';
 import { ProductsModule } from './products/products.module';
 import { ResearchModule } from './research/research.module';
 import { SocialIntegrationsModule } from './social-integrations/social-integrations.module';
@@ -50,6 +51,7 @@ import { WebsiteIntelligenceModule } from './website-intelligence/website-intell
     SocialIntegrationsModule,
     SocialPublishingModule,
     CmsIntegrationsModule,
+    LeadsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

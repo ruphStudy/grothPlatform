@@ -14,7 +14,7 @@ async function bootstrap() {
       'http://127.0.0.1:5176',
     ],
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
     credentials: false,
   });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));

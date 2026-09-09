@@ -3280,3 +3280,87 @@ export interface CmsScheduleSummary {
   createdAt: string;
   updatedAt: string;
 }
+
+export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'unqualified' | 'converted' | 'archived';
+export type LeadSourceType = 'website_form' | 'landing_page' | 'manual' | 'social' | 'cms' | 'campaign' | 'api' | 'import' | 'other';
+export type LeadConsentStatus = 'unknown' | 'granted' | 'denied';
+
+export interface LeadSummary {
+  id: string;
+  organizationId: string;
+  productId: string;
+  campaignId?: string;
+  firstName?: string;
+  lastName?: string;
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  companyName?: string;
+  jobTitle?: string;
+  country?: string;
+  region?: string;
+  city?: string;
+  status: LeadStatus;
+  sourceType: LeadSourceType;
+  sourceName?: string;
+  firstSourceEventId?: string;
+  latestSourceEventId?: string;
+  firstCapturedAt: string;
+  latestCapturedAt: string;
+  consentStatus: LeadConsentStatus;
+  consentCapturedAt?: string;
+  consentSource?: string;
+  customFields: Record<string, string | number | boolean>;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LeadSourceEventSummary {
+  id: string;
+  campaignId?: string;
+  sourceType: LeadSourceType;
+  sourceName?: string;
+  channel?: string;
+  platform?: string;
+  sourceUrl?: string;
+  landingPageUrl?: string;
+  referrerUrl?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  utmTerm?: string;
+  utmContent?: string;
+  externalSourceId?: string;
+  captureMethod: string;
+  submittedDataSnapshot: Record<string, string | number | boolean>;
+  occurredAt: string;
+  createdAt: string;
+}
+
+export interface LeadDetail extends LeadSummary {
+  sourceEvents: LeadSourceEventSummary[];
+}
+
+export interface LeadListResponse {
+  items: LeadSummary[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface LeadCaptureEndpointSummary {
+  id: string;
+  organizationId: string;
+  productId: string;
+  campaignId?: string;
+  name: string;
+  publicKey: string;
+  sourceType: Extract<LeadSourceType, 'website_form' | 'landing_page'>;
+  sourceName?: string;
+  allowedOrigins: string[];
+  active: boolean;
+  requireConsent: boolean;
+  createdAt: string;
+  updatedAt: string;
+}

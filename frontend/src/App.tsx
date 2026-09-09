@@ -6,6 +6,7 @@ import CampaignsPage from './pages/CampaignsPage';
 import CmsConnectionsPage from './pages/CmsConnectionsPage';
 import CreativeReviewPage from './pages/CreativeReviewPage';
 import DashboardPage from './pages/DashboardPage';
+import LeadsPage from './pages/LeadsPage';
 import LoginPage from './pages/LoginPage';
 import OrganizationPage from './pages/OrganizationPage';
 import ProductPage from './pages/ProductPage';
@@ -66,6 +67,14 @@ function App() {
           element={
             <ProtectedRoute>
               <CmsConnectionsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/organizations/:organizationId/products/:productId/leads"
+          element={
+            <ProtectedRoute>
+              <LeadsPage />
             </ProtectedRoute>
           }
         />
