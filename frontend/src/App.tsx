@@ -6,10 +6,12 @@ import CampaignsPage from './pages/CampaignsPage';
 import CmsConnectionsPage from './pages/CmsConnectionsPage';
 import CreativeReviewPage from './pages/CreativeReviewPage';
 import DashboardPage from './pages/DashboardPage';
+import LeadDashboardPage from './pages/LeadDashboardPage';
 import LeadsPage from './pages/LeadsPage';
 import LoginPage from './pages/LoginPage';
 import OrganizationPage from './pages/OrganizationPage';
 import ProductPage from './pages/ProductPage';
+import PublicLeadFormPage from './pages/PublicLeadFormPage';
 import PublishingCalendarPage from './pages/PublishingCalendarPage';
 import RegisterPage from './pages/RegisterPage';
 import SocialConnectionsCallbackPage from './pages/SocialConnectionsCallbackPage';
@@ -21,6 +23,7 @@ function App() {
       <Routes>
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/forms/:publicKey" element={<PublicLeadFormPage />} />
         <Route
           path="/dashboard"
           element={
@@ -75,6 +78,14 @@ function App() {
           element={
             <ProtectedRoute>
               <LeadsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/organizations/:organizationId/products/:productId/leads/dashboard"
+          element={
+            <ProtectedRoute>
+              <LeadDashboardPage />
             </ProtectedRoute>
           }
         />

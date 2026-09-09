@@ -1,12 +1,13 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BulkLeadStatusDto, ExportLeadsCsvDto, ImportLeadsCsvDto, ManualLeadDto, UpdateLeadDto } from './dto/lead-common.dto';
+import { LeadDashboardService } from './services/lead-dashboard.service';
 import { LeadsService } from './services/leads.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('organizations/:organizationId/products/:productId/leads')
 export class LeadsController {
-  constructor(private readonly leadsService: LeadsService) {}
+  constructor(private readonly leadsService: LeadsService, private readonly dashboardService: LeadDashboardService) {}
 
   @Get()
   list(
@@ -61,6 +62,19 @@ export class LeadsController {
     @Param('productId') productId: string,
   ) {
     return this.leadsService.listIdentityConflicts(organizationId, productId, req.user.userId);
+  }
+
+  @Get('dashboard')
+  dashboard(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('range') range?: string,
+    @Query('timezone') timezone?: string,
+  ) {
+    return this.dashboardService.getDashboard(organizationId, productId, req.user.userId, { from, to, range, timezone });
   }
 
   @Patch('identity-conflicts/:conflictId/reviewed')

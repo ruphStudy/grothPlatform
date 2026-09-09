@@ -1,5 +1,5 @@
 import { type ChangeEvent, type FormEvent, useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
 import { AppLayout } from '../components/AppLayout';
 import { Card } from '../components/Card';
@@ -8,6 +8,9 @@ import { Loading } from '../components/Loading';
 import { PageHeader } from '../components/PageHeader';
 import type {
   LeadCaptureEndpointSummary,
+  LeadCaptureFormField,
+  LeadCaptureFormFieldType,
+  LeadCaptureFormSummary,
   LeadCommunicationEligibility,
   LeadConsentStatus,
   LeadDetail,
@@ -29,6 +32,7 @@ const QUALIFICATION_STATUSES: LeadQualificationStatus[] = ['qualified', 'needs_r
 const ELIGIBILITIES: LeadCommunicationEligibility[] = ['allowed', 'restricted', 'unknown'];
 const CONSENT_STATUSES: LeadConsentStatus[] = ['unknown', 'granted', 'denied'];
 const CAPTURE_SOURCE_TYPES: Extract<LeadSourceType, 'website_form' | 'landing_page'>[] = ['website_form', 'landing_page'];
+const FORM_FIELD_TYPES: LeadCaptureFormFieldType[] = ['full_name', 'email', 'phone', 'company_name', 'job_title', 'text', 'textarea', 'select', 'checkbox'];
 
 function labelize(value: string): string {
   return value.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -40,6 +44,22 @@ function leadName(lead: LeadSummary): string {
 
 const emptyManual = { fullName: '', firstName: '', lastName: '', email: '', phone: '', companyName: '', jobTitle: '', notes: '' };
 const emptyEndpoint = { name: '', sourceType: 'website_form' as Extract<LeadSourceType, 'website_form' | 'landing_page'>, sourceName: '', allowedOrigins: '', requireConsent: false };
+const defaultFormFields: LeadCaptureFormField[] = [
+  { key: 'full_name', type: 'full_name', label: 'Name', required: true, options: [], order: 10 },
+  { key: 'email', type: 'email', label: 'Email', required: true, options: [], order: 20 },
+  { key: 'company_name', type: 'company_name', label: 'Company', required: false, options: [], order: 30 },
+];
+const emptyFormDraft = {
+  name: '',
+  campaignId: '',
+  title: '',
+  description: '',
+  submitButtonText: 'Submit',
+  successTitle: 'Thanks',
+  successMessage: 'Your details were submitted.',
+  consent: { enabled: true, required: false, label: 'I agree to be contacted.' },
+  fields: defaultFormFields,
+};
 const emptyFilters = {
   search: '',
   status: '',
@@ -63,20 +83,24 @@ const emptyFilters = {
 
 export default function LeadsPage() {
   const { organizationId, productId } = useParams<{ organizationId: string; productId: string }>();
+  const [searchParams] = useSearchParams();
   const basePath = `/organizations/${organizationId}/products/${productId}`;
   const publicBase = `${window.location.origin}/api/v1/public/leads`;
 
   const [leads, setLeads] = useState<LeadListResponse | null>(null);
   const [endpoints, setEndpoints] = useState<LeadCaptureEndpointSummary[]>([]);
+  const [forms, setForms] = useState<LeadCaptureFormSummary[]>([]);
   const [conflicts, setConflicts] = useState<LeadIdentityConflictSummary[]>([]);
   const [selectedLead, setSelectedLead] = useState<LeadDetail | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [filters, setFilters] = useState(emptyFilters);
+  const [filters, setFilters] = useState(() => ({ ...emptyFilters, search: searchParams.get('search') ?? '', status: searchParams.get('status') ?? '', qualificationStatus: searchParams.get('qualificationStatus') ?? '', grade: searchParams.get('grade') ?? '', communicationEligibility: searchParams.get('communicationEligibility') ?? '' }));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [manual, setManual] = useState(emptyManual);
   const [endpointDraft, setEndpointDraft] = useState(emptyEndpoint);
+  const [formDraft, setFormDraft] = useState(emptyFormDraft);
+  const [editingFormId, setEditingFormId] = useState<string | null>(null);
   const [importDraft, setImportDraft] = useState({ sourceName: '', csv: '' });
   const [importSummary, setImportSummary] = useState<LeadImportSummary | null>(null);
   const [busy, setBusy] = useState(false);
@@ -95,13 +119,15 @@ export default function LeadsPage() {
       Object.entries(filters).forEach(([key, value]) => {
         if (String(value).trim()) qs.set(key, String(value));
       });
-      const [leadData, endpointData, conflictData] = await Promise.all([
+      const [leadData, endpointData, formData, conflictData] = await Promise.all([
         apiRequest<LeadListResponse>(`${basePath}/leads${qs.toString() ? `?${qs}` : ''}`),
         apiRequest<LeadCaptureEndpointSummary[]>(`${basePath}/lead-capture-endpoints`),
+        apiRequest<LeadCaptureFormSummary[]>(`${basePath}/lead-forms`),
         apiRequest<LeadIdentityConflictSummary[]>(`${basePath}/leads/identity-conflicts`),
       ]);
       setLeads(leadData);
       setEndpoints(endpointData);
+      setForms(formData);
       setConflicts(conflictData);
       setSelectedIds((prev) => prev.filter((id) => leadData.items.some((lead) => lead.id === id)));
       if (selectedLead && !leadData.items.some((lead) => lead.id === selectedLead.id)) setSelectedLead(null);
@@ -260,6 +286,79 @@ export default function LeadsPage() {
     }
   }
 
+  async function saveForm(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const body = { ...formDraft, campaignId: formDraft.campaignId || undefined };
+      const saved = await apiRequest<LeadCaptureFormSummary>(editingFormId ? `${basePath}/lead-forms/${editingFormId}` : `${basePath}/lead-forms`, {
+        method: editingFormId ? 'PATCH' : 'POST',
+        body,
+      });
+      setForms((prev) => editingFormId ? prev.map((item) => (item.id === saved.id ? saved : item)) : [saved, ...prev]);
+      setEditingFormId(null);
+      setFormDraft(emptyFormDraft);
+      setNotice('Lead capture form saved.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to save lead form');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function editForm(form: LeadCaptureFormSummary) {
+    setEditingFormId(form.id);
+    setFormDraft({
+      name: form.name,
+      campaignId: form.campaignId ?? '',
+      title: form.title ?? '',
+      description: form.description ?? '',
+      submitButtonText: form.submitButtonText,
+      successTitle: form.successTitle ?? '',
+      successMessage: form.successMessage ?? '',
+      consent: form.consent,
+      fields: form.fields,
+    });
+  }
+
+  async function transitionForm(form: LeadCaptureFormSummary, action: 'activate' | 'deactivate' | 'rotate-key') {
+    if (action === 'rotate-key' && !window.confirm('Rotate this public form link? Old embeds using the current key will stop working.')) return;
+    setBusy(true);
+    try {
+      const updated = await apiRequest<LeadCaptureFormSummary>(`${basePath}/lead-forms/${form.id}/${action}`, { method: 'POST' });
+      setForms((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      setNotice(action === 'rotate-key' ? 'Public link rotated.' : `Form ${action === 'activate' ? 'activated' : 'deactivated'}.`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to update lead form');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function updateField(index: number, patch: Partial<LeadCaptureFormField>) {
+    setFormDraft((prev) => ({ ...prev, fields: prev.fields.map((field, i) => (i === index ? { ...field, ...patch } : field)) }));
+  }
+
+  function moveField(index: number, direction: -1 | 1) {
+    setFormDraft((prev) => {
+      const next = [...prev.fields];
+      const target = index + direction;
+      if (target < 0 || target >= next.length) return prev;
+      [next[index], next[target]] = [next[target], next[index]];
+      return { ...prev, fields: next.map((field, i) => ({ ...field, order: (i + 1) * 10 })) };
+    });
+  }
+
+  function hostedFormUrl(publicKey?: string) {
+    return publicKey ? `${window.location.origin}/forms/${publicKey}` : '';
+  }
+
+  function embedSnippet(publicKey?: string) {
+    const url = hostedFormUrl(publicKey);
+    return url ? `<iframe src="${url}" style="width:100%;min-height:620px;border:0" loading="lazy"></iframe>` : '';
+  }
+
   async function rotateEndpoint(endpoint: LeadCaptureEndpointSummary) {
     if (!window.confirm('Rotate this public key? Existing embedded forms using the old key will stop working.')) return;
     setBusy(true);
@@ -305,6 +404,9 @@ export default function LeadsPage() {
   return (
     <AppLayout>
       <PageHeader title="Leads" backTo={{ to: `/organizations/${organizationId}/products/${productId}`, label: 'Product' }} />
+      <div className="tag-list" style={{ marginBottom: 12 }}>
+        <Link className="btn btn-secondary" to={`/organizations/${organizationId}/products/${productId}/leads/dashboard`}>Lead Dashboard</Link>
+      </div>
       <ErrorMessage message={error} />
       {notice && <p className="entity-card-meta">{notice}</p>}
       {loading && <Loading />}
@@ -435,6 +537,72 @@ export default function LeadsPage() {
           <button className="btn btn-primary" disabled={busy || !importDraft.csv.trim()}>Import CSV</button>
         </form>
         {importSummary && <p className="entity-card-meta">Rows {importSummary.totalRows}: {importSummary.created} created, {importSummary.matched} matched, {importSummary.conflicts} conflicts, {importSummary.invalid} invalid.</p>}
+      </Card>
+
+      <Card>
+        <h2 className="card-title">Capture Forms</h2>
+        <form className="form" onSubmit={saveForm}>
+          <div className="form-grid-2">
+            <div className="field"><label>Name</label><input required value={formDraft.name} onChange={(e) => setFormDraft({ ...formDraft, name: e.target.value })} /></div>
+            <div className="field"><label>Campaign ID</label><input value={formDraft.campaignId} onChange={(e) => setFormDraft({ ...formDraft, campaignId: e.target.value })} /></div>
+            <div className="field"><label>Title</label><input value={formDraft.title} onChange={(e) => setFormDraft({ ...formDraft, title: e.target.value })} /></div>
+            <div className="field"><label>Submit Button</label><input value={formDraft.submitButtonText} onChange={(e) => setFormDraft({ ...formDraft, submitButtonText: e.target.value })} /></div>
+            <div className="field field-full"><label>Description</label><textarea value={formDraft.description} onChange={(e) => setFormDraft({ ...formDraft, description: e.target.value })} /></div>
+            <div className="field"><label>Success Title</label><input value={formDraft.successTitle} onChange={(e) => setFormDraft({ ...formDraft, successTitle: e.target.value })} /></div>
+            <div className="field"><label>Success Message</label><input value={formDraft.successMessage} onChange={(e) => setFormDraft({ ...formDraft, successMessage: e.target.value })} /></div>
+            <label><input type="checkbox" checked={formDraft.consent.enabled} onChange={(e) => setFormDraft({ ...formDraft, consent: { ...formDraft.consent, enabled: e.target.checked } })} /> Consent field</label>
+            <label><input type="checkbox" checked={formDraft.consent.required} onChange={(e) => setFormDraft({ ...formDraft, consent: { ...formDraft.consent, required: e.target.checked } })} /> Require consent</label>
+            <div className="field field-full"><label>Consent Label</label><input value={formDraft.consent.label} onChange={(e) => setFormDraft({ ...formDraft, consent: { ...formDraft.consent, label: e.target.value } })} /></div>
+          </div>
+          <h3 className="section-title">Fields</h3>
+          {formDraft.fields.map((field, index) => (
+            <div key={`${field.key}-${index}`} className="form-grid-2" style={{ borderTop: '1px solid var(--border-color, #ddd)', paddingTop: 10, marginTop: 10 }}>
+              <div className="field"><label>Key</label><input value={field.key} onChange={(e) => updateField(index, { key: e.target.value })} /></div>
+              <div className="field"><label>Type</label><select value={field.type} onChange={(e) => updateField(index, { type: e.target.value as LeadCaptureFormFieldType })}>{FORM_FIELD_TYPES.map((type) => <option key={type} value={type}>{labelize(type)}</option>)}</select></div>
+              <div className="field"><label>Label</label><input value={field.label} onChange={(e) => updateField(index, { label: e.target.value })} /></div>
+              <div className="field"><label>Placeholder</label><input value={field.placeholder ?? ''} onChange={(e) => updateField(index, { placeholder: e.target.value })} /></div>
+              <div className="field"><label>Custom Key</label><input value={field.customFieldKey ?? ''} onChange={(e) => updateField(index, { customFieldKey: e.target.value })} /></div>
+              <div className="field"><label>Select Options</label><input value={field.options.join(', ')} onChange={(e) => updateField(index, { options: e.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} /></div>
+              <label><input type="checkbox" checked={field.required} onChange={(e) => updateField(index, { required: e.target.checked })} /> Required</label>
+              <div className="tag-list">
+                <button type="button" className="btn btn-secondary" onClick={() => moveField(index, -1)}>Up</button>
+                <button type="button" className="btn btn-secondary" onClick={() => moveField(index, 1)}>Down</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setFormDraft((prev) => ({ ...prev, fields: prev.fields.filter((_, i) => i !== index).map((item, i) => ({ ...item, order: (i + 1) * 10 })) }))}>Remove</button>
+              </div>
+            </div>
+          ))}
+          <div className="tag-list" style={{ marginTop: 12 }}>
+            <button type="button" className="btn btn-secondary" onClick={() => setFormDraft((prev) => ({ ...prev, fields: [...prev.fields, { key: `field_${prev.fields.length + 1}`, type: 'text', label: 'Custom Field', required: false, options: [], customFieldKey: `field_${prev.fields.length + 1}`, order: (prev.fields.length + 1) * 10 }] }))}>Add Field</button>
+            <button className="btn btn-primary" disabled={busy}>{editingFormId ? 'Save Form' : 'Create Form'}</button>
+          </div>
+        </form>
+        <h3 className="section-title">Preview</h3>
+        <div className="entity-card" style={{ border: '1px solid var(--border-color, #ddd)', borderRadius: 6, padding: 12 }}>
+          <h3>{formDraft.title || formDraft.name || 'Lead Capture Form'}</h3>
+          {formDraft.description && <p className="entity-card-meta">{formDraft.description}</p>}
+          {formDraft.fields.map((field) => <div key={field.key} className="field"><label>{field.label}{field.required ? ' *' : ''}</label><input placeholder={field.placeholder} disabled /></div>)}
+          {formDraft.consent.enabled && <label><input type="checkbox" disabled /> {formDraft.consent.label}</label>}
+          <button className="btn btn-primary" disabled>{formDraft.submitButtonText || 'Submit'}</button>
+        </div>
+        <div className="grid-cards" style={{ marginTop: 12 }}>
+          {forms.map((form) => (
+            <div key={form.id} className="entity-card" style={{ border: '1px solid var(--border-color, #ddd)', borderRadius: 6, padding: 12 }}>
+              <div className="entity-card-header">
+                <h3>{form.name}</h3>
+                <span className={`quality-badge ${form.status === 'active' ? 'quality-good' : 'quality-limited'}`}>{labelize(form.status)}</span>
+              </div>
+              <div className="entity-card-meta">{form.fields.length} fields · {form.publicKey ? hostedFormUrl(form.publicKey) : 'No public key'}</div>
+              <div className="tag-list">
+                <button className="btn btn-secondary" onClick={() => editForm(form)}>Edit</button>
+                {form.status !== 'active' && <button className="btn btn-secondary" onClick={() => transitionForm(form, 'activate')} disabled={busy}>Activate</button>}
+                {form.status === 'active' && <button className="btn btn-secondary" onClick={() => transitionForm(form, 'deactivate')} disabled={busy}>Deactivate</button>}
+                <button className="btn btn-secondary" onClick={() => transitionForm(form, 'rotate-key')} disabled={busy}>Rotate Public Link</button>
+                <button className="btn btn-secondary" onClick={() => navigator.clipboard.writeText(hostedFormUrl(form.publicKey))} disabled={!form.publicKey}>Copy Hosted Link</button>
+                <button className="btn btn-secondary" onClick={() => navigator.clipboard.writeText(embedSnippet(form.publicKey))} disabled={!form.publicKey}>Copy Embed Snippet</button>
+              </div>
+            </div>
+          ))}
+        </div>
       </Card>
 
       <Card>

@@ -157,6 +157,8 @@ export class LeadCaptureService {
       productId: new Types.ObjectId(input.productId),
       leadId: lead._id,
       campaignId: input.campaignId ? new Types.ObjectId(input.campaignId) : undefined,
+      formId: input.formContext?.formId ? new Types.ObjectId(input.formContext.formId) : undefined,
+      captureEndpointId: input.formContext?.captureEndpointId ? new Types.ObjectId(input.formContext.captureEndpointId) : undefined,
       sourceType: input.source.type,
       sourceName: n.sourceName,
       channel: n.channel,
@@ -252,6 +254,8 @@ export class LeadCaptureService {
     return {
       id: event._id.toString(),
       campaignId: event.campaignId?.toString(),
+      formId: event.formId?.toString(),
+      captureEndpointId: event.captureEndpointId?.toString(),
       sourceType: event.sourceType,
       sourceName: event.sourceName,
       channel: event.channel,

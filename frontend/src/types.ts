@@ -3340,6 +3340,8 @@ export interface LeadSummary {
 export interface LeadSourceEventSummary {
   id: string;
   campaignId?: string;
+  formId?: string;
+  captureEndpointId?: string;
   sourceType: LeadSourceType;
   sourceName?: string;
   channel?: string;
@@ -3395,6 +3397,87 @@ export interface LeadIdentityConflictSummary {
   status: 'unresolved' | 'resolved';
   createdAt: string;
   resolvedAt?: string;
+}
+
+export type LeadCaptureFormStatus = 'draft' | 'active' | 'inactive';
+export type LeadCaptureFormFieldType = 'first_name' | 'last_name' | 'full_name' | 'email' | 'phone' | 'company_name' | 'job_title' | 'country' | 'region' | 'city' | 'text' | 'textarea' | 'select' | 'checkbox';
+
+export interface LeadCaptureFormField {
+  key: string;
+  type: LeadCaptureFormFieldType;
+  label: string;
+  placeholder?: string;
+  required: boolean;
+  options: string[];
+  customFieldKey?: string;
+  order: number;
+}
+
+export interface LeadCaptureFormSummary {
+  id: string;
+  organizationId: string;
+  productId: string;
+  campaignId?: string;
+  captureEndpointId: string;
+  publicKey?: string;
+  name: string;
+  slug: string;
+  title?: string;
+  description?: string;
+  status: LeadCaptureFormStatus;
+  submitButtonText: string;
+  successTitle?: string;
+  successMessage?: string;
+  fields: LeadCaptureFormField[];
+  consent: { enabled: boolean; required: boolean; label?: string };
+  appearance?: { layout?: string; theme?: string };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PublicLeadCaptureFormConfig {
+  title: string;
+  description?: string;
+  fields: LeadCaptureFormField[];
+  consent: { enabled: boolean; required: boolean; label?: string };
+  submitButtonText: string;
+  successTitle?: string;
+  successMessage?: string;
+  appearance?: { layout?: string; theme?: string };
+}
+
+export interface LeadDashboardResponse {
+  range: { from: string; to: string; bucket: string; timezone: string };
+  summary: {
+    totalLeads: number;
+    newLeads: number;
+    qualifiedLeads: number;
+    needsReviewLeads: number;
+    convertedLeads: number;
+    averageLeadScore: number;
+    hotLeads: number;
+    warmLeads: number;
+    communicationAllowed: number;
+    identityConflictCount: number;
+    captureEvents: number;
+  };
+  trend: { period: string; uniqueLeadsCreated: number; captureEvents: number }[];
+  sourceBreakdown: { sourceType: LeadSourceType; uniqueLeads: number; captureEvents: number }[];
+  campaignBreakdown: { campaignId: string; name: string; uniqueLeads: number; captureEvents: number; qualifiedLeads: number }[];
+  formPerformance: { formId: string; name: string; submissions: number; uniqueLeads: number; qualifiedLeads: number }[];
+  qualificationBreakdown: {
+    grades: { grade: LeadQualificationGrade; count: number }[];
+    statuses: { qualificationStatus: LeadQualificationStatus; count: number }[];
+  };
+  statusBreakdown: { status: LeadStatus; count: number }[];
+  consentBreakdown: { consentStatus: LeadConsentStatus; count: number }[];
+  recentLeads: LeadSummary[];
+  needsAttention: {
+    hotNewLeads: { leadId: string; name: string; status: LeadStatus; score: number; grade: LeadQualificationGrade; qualificationStatus: LeadQualificationStatus; communicationEligibility: LeadCommunicationEligibility }[];
+    needsReview: { leadId: string; name: string; status: LeadStatus; score: number; grade: LeadQualificationGrade; qualificationStatus: LeadQualificationStatus; communicationEligibility: LeadCommunicationEligibility }[];
+    identityConflictCount: number;
+    communicationNotReady: number;
+  };
 }
 
 export interface LeadCaptureEndpointSummary {

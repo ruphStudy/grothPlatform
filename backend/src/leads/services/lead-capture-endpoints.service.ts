@@ -80,10 +80,8 @@ export class LeadCaptureEndpointsService {
   }
 
   async publicCapture(publicKey: string, dto: PublicLeadCaptureDto, meta: { origin?: string; ip?: string; idempotencyKey?: string }) {
-    const endpoint = await this.endpointModel.findOne({ publicKey }).exec();
-    if (!endpoint || !endpoint.active) throw new NotFoundException('Lead capture endpoint not found.');
-    this.assertRate(endpoint.publicKey, meta.ip);
-    this.assertOrigin(endpoint, meta.origin);
+    const endpoint = await this.resolvePublicEndpoint(publicKey);
+    this.assertPublicAccess(endpoint, meta);
     if (dto._hp || dto.website) return { success: true };
     if (endpoint.requireConsent && dto.consent !== true) throw new BadRequestException('Consent is required.');
     const result = await this.leadCaptureService.capture(
@@ -117,6 +115,17 @@ export class LeadCaptureEndpointsService {
     );
     if (result.outcome === 'conflict') throw new ConflictException('Lead submission could not be accepted.');
     return { success: true };
+  }
+
+  async resolvePublicEndpoint(publicKey: string): Promise<LeadCaptureEndpointDocument> {
+    const endpoint = await this.endpointModel.findOne({ publicKey }).exec();
+    if (!endpoint || !endpoint.active) throw new NotFoundException('Lead capture endpoint not found.');
+    return endpoint;
+  }
+
+  assertPublicAccess(endpoint: LeadCaptureEndpointDocument, meta: { origin?: string; ip?: string }): void {
+    this.assertRate(endpoint.publicKey, meta.ip);
+    this.assertOrigin(endpoint, meta.origin);
   }
 
   private async findOwned(organizationId: string, productId: string, endpointId: string): Promise<LeadCaptureEndpointDocument> {

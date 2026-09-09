@@ -19,6 +19,12 @@ export class LeadSourceEvent {
   @Prop({ type: Types.ObjectId })
   campaignId?: Types.ObjectId;
 
+  @Prop({ type: Types.ObjectId })
+  formId?: Types.ObjectId;
+
+  @Prop({ type: Types.ObjectId })
+  captureEndpointId?: Types.ObjectId;
+
   @Prop({ type: String, enum: LEAD_SOURCE_TYPES, required: true })
   sourceType: LeadSourceType;
 
@@ -74,3 +80,4 @@ export class LeadSourceEvent {
 export const LeadSourceEventSchema = SchemaFactory.createForClass(LeadSourceEvent);
 LeadSourceEventSchema.index({ leadId: 1, occurredAt: -1 });
 LeadSourceEventSchema.index({ organizationId: 1, productId: 1, campaignId: 1, occurredAt: -1 });
+LeadSourceEventSchema.index({ organizationId: 1, productId: 1, formId: 1, occurredAt: -1 });

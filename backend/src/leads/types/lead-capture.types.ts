@@ -40,6 +40,10 @@ export interface CaptureLeadInput {
   };
   customFields?: Record<string, unknown>;
   notes?: string;
+  formContext?: {
+    formId?: string;
+    captureEndpointId?: string;
+  };
   captureMethod: 'manual' | 'public_form' | 'api';
 }
 
@@ -118,6 +122,8 @@ export interface LeadResponse {
 export interface LeadSourceEventResponse {
   id: string;
   campaignId?: string;
+  formId?: string;
+  captureEndpointId?: string;
   sourceType: string;
   sourceName?: string;
   channel?: string;
