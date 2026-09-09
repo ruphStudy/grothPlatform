@@ -16,6 +16,7 @@ export interface CmsProviderCapabilities {
   manageTags: boolean;
   fetchCategories?: boolean;
   fetchTags?: boolean;
+  fetchPostStatus?: boolean;
 }
 
 export type CmsCredentialAuthType = 'application_password' | 'bearer_token';
@@ -83,6 +84,15 @@ export interface CmsPostResult {
   externalPostUrl?: string;
   status: 'draft' | 'published';
   publishedAt?: Date;
+}
+
+export type CmsRemotePostStatus = 'draft' | 'published' | 'pending' | 'private' | 'trashed' | 'unavailable' | 'unknown';
+
+export interface CmsPostStatusResult {
+  externalPostId: string;
+  status: CmsRemotePostStatus;
+  externalPostUrl?: string;
+  checkedAt: Date;
 }
 
 export interface CmsMediaUploadRequest {

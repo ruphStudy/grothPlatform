@@ -11,12 +11,16 @@ import { CmsCredentialEncryptionService } from './connections/services/cms-crede
 import { CmsConnectionsService } from './connections/services/cms-connections.service';
 import { CmsConnectionsController } from './connections/cms-connections.controller';
 import { CmsPublicationsController } from './cms-publications.controller';
+import { CmsSchedulesController } from './cms-schedules.controller';
 import { CmsEngineService } from './engine/cms-engine.service';
 import { CMS_PROVIDER_REGISTRY_TOKEN } from './providers/cms-provider.tokens';
 import type { CmsProvider } from './providers/cms-provider.interface';
 import { WordPressCmsProvider } from './providers/wordpress-cms.provider';
 import { CmsPublication, CmsPublicationSchema } from './schemas/cms-publication.schema';
+import { CmsSchedule, CmsScheduleSchema } from './schemas/cms-schedule.schema';
 import { CmsPublicationsService } from './services/cms-publications.service';
+import { CmsSchedulerService } from './services/cms-scheduler.service';
+import { CmsSchedulingService } from './services/cms-scheduling.service';
 import type { CmsPlatform } from './types/cms.types';
 
 // 20A: CmsEngineService depends only on the provider-registry token — a
@@ -32,6 +36,7 @@ import type { CmsPlatform } from './types/cms.types';
     MongooseModule.forFeature([
       { name: CmsConnection.name, schema: CmsConnectionSchema },
       { name: CmsPublication.name, schema: CmsPublicationSchema },
+      { name: CmsSchedule.name, schema: CmsScheduleSchema },
     ]),
     ProductsModule,
     CampaignsModule,
@@ -39,7 +44,7 @@ import type { CmsPlatform } from './types/cms.types';
     ContentGenerationModule,
     CreativeModule,
   ],
-  controllers: [CmsConnectionsController, CmsPublicationsController],
+  controllers: [CmsConnectionsController, CmsPublicationsController, CmsSchedulesController],
   providers: [
     WordPressCmsProvider,
     {
@@ -56,7 +61,9 @@ import type { CmsPlatform } from './types/cms.types';
     CmsCredentialEncryptionService,
     CmsConnectionsService,
     CmsPublicationsService,
+    CmsSchedulingService,
+    CmsSchedulerService,
   ],
-  exports: [CmsEngineService, CmsConnectionsService, CmsPublicationsService],
+  exports: [CmsEngineService, CmsConnectionsService, CmsPublicationsService, CmsSchedulingService],
 })
 export class CmsIntegrationsModule {}

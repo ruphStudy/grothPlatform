@@ -10,6 +10,7 @@ import type {
   CmsPlatform,
   CmsPostRequest,
   CmsPostResult,
+  CmsPostStatusResult,
   CmsProviderCapabilities,
   CmsSiteInfo,
   CmsTaxonomyItem,
@@ -91,6 +92,15 @@ export class CmsEngineService {
       throw new CmsCapabilityUnsupportedError(`The ${platform} provider does not support tag listing.`);
     }
     return this.callOnce(platform, () => provider.listTags!(input));
+  }
+
+  async getPostStatus(platform: CmsPlatform, input: { siteUrl: string; credential: CmsCredential; externalPostId: string }): Promise<CmsPostStatusResult> {
+    const provider = this.resolveProvider(platform);
+    this.assertCapability(provider, 'fetchPostStatus');
+    if (!provider.getPostStatus) {
+      throw new CmsCapabilityUnsupportedError(`The ${platform} provider does not support post status lookup.`);
+    }
+    return this.callOnce(platform, () => provider.getPostStatus!(input));
   }
 
   private assertCapability(provider: CmsProvider, capability: keyof CmsProviderCapabilities): void {

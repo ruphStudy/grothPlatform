@@ -14,7 +14,7 @@ import { CmsEngineService } from '../engine/cms-engine.service';
 import { CmsCapabilityUnsupportedError, CmsConfigurationError, CmsProviderError } from '../errors/cms.errors';
 import { CmsPublication, CmsPublicationDocument } from '../schemas/cms-publication.schema';
 import type { CmsPublicationListFilter, CmsPublicationResponse, PublishCmsBlogInput } from '../types/cms-publication.types';
-import type { CmsSeoMetadata, CmsTaxonomyItem } from '../types/cms.types';
+import type { CmsCredential, CmsRemotePostStatus, CmsSeoMetadata, CmsTaxonomyItem } from '../types/cms.types';
 
 const DEFAULT_MEDIA_MAX_BYTES = 10 * 1024 * 1024;
 const DEFAULT_TAXONOMY_MAX_ITEMS = 100;
@@ -28,6 +28,16 @@ interface BlogSnapshot {
   excerpt?: string;
   slug: string;
   seo: CmsSeoMetadata;
+}
+
+interface BlogPublicationIntent {
+  sourceVersion: ContentVersionDetail;
+  connection: Awaited<ReturnType<CmsConnectionsService['findOwnedDocument']>>;
+  credential: CmsCredential;
+  blog: BlogSnapshot;
+  categoryIds: number[];
+  tagIds: number[];
+  featuredCreativeAssetId?: Types.ObjectId;
 }
 
 @Injectable()
@@ -56,10 +66,8 @@ export class CmsPublicationsService {
     userId: string,
     input: PublishCmsBlogInput,
   ): Promise<CmsPublicationResponse> {
-    const sourceVersion = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
-    if (sourceVersion.kind !== 'blog') {
-      throw new BadRequestException('Only blog content versions can be sent to WordPress.');
-    }
+    const intent = await this.validateBlogPublicationIntent(organizationId, productId, campaignId, artifactId, version, userId, input);
+    const { sourceVersion, connection, credential, blog, categoryIds, tagIds } = intent;
 
     const existing = await this.publicationModel.findOne({
       organizationId: new Types.ObjectId(organizationId),
@@ -72,49 +80,20 @@ export class CmsPublicationsService {
       return this.toResponse(existing);
     }
 
-    await this.assertExternalActionApproved(organizationId, productId, campaignId, userId);
-    this.assertHumanReviewAllowsPublish(sourceVersion);
-
-    const connection = await this.cmsConnectionsService.findOwnedDocument(organizationId, productId, input.connectionId);
-    if (connection.platform !== 'wordpress') {
-      throw new BadRequestException('The selected CMS connection is not WordPress.');
-    }
-    if (connection.status !== 'active') {
-      throw new ConflictException('The selected WordPress connection is not active.');
-    }
-    const credential = this.cmsConnectionsService.decryptCredential(connection);
-
-    const blog = this.buildBlogSnapshot(sourceVersion);
-    const categoryIds = this.normalizeIdList(input.categoryIds, 20, 'categories');
-    const tagIds = this.normalizeIdList(input.tagIds, 30, 'tags');
-    await this.validateTaxonomy(connection.siteUrl, credential, categoryIds, tagIds);
-
-    let featuredCreativeAssetId: Types.ObjectId | undefined;
+    let featuredCreativeAssetId = intent.featuredCreativeAssetId;
     let externalMediaId: string | undefined;
     if (input.featuredCreativeAssetId) {
-      const creative = await this.creativeAssetsService.getOwnedForCampaign(organizationId, productId, campaignId, input.featuredCreativeAssetId);
-      if (creative.kind !== 'blog_hero') {
-        throw new BadRequestException('Only blog hero creative assets can be used as a WordPress featured image.');
-      }
-      if (creative.source.contentArtifactId !== sourceVersion.artifactId || creative.source.contentVersionId !== sourceVersion.id) {
-        throw new BadRequestException('The selected featured image does not belong to this blog version.');
-      }
-      if (creative.reviewStatus === 'rejected') {
-        throw new ConflictException('This creative asset has been marked rejected and cannot be published.');
-      }
-      if (!creative.asset.url) {
-        throw new BadRequestException('The selected featured image has no retrievable URL.');
-      }
-      const media = await this.fetchCreativeImage(creative.asset.url, creative.asset.mimeType);
+      const creative = await this.validateFeaturedCreativeIntent(organizationId, productId, campaignId, input.featuredCreativeAssetId, sourceVersion);
+      const creativeUrl = creative.asset.url!;
+      const media = await this.fetchCreativeImage(creativeUrl, creative.asset.mimeType);
       const uploaded = await this.cmsEngine.uploadMedia('wordpress', {
         siteUrl: connection.siteUrl,
         credential,
-        filename: this.filenameFromUrl(creative.asset.url, media.mimeType),
+        filename: this.filenameFromUrl(creativeUrl, media.mimeType),
         mimeType: media.mimeType,
         bytes: media.bytes,
       });
       externalMediaId = uploaded.externalMediaId;
-      featuredCreativeAssetId = new Types.ObjectId(input.featuredCreativeAssetId);
     }
 
     let doc: CmsPublicationDocument;
@@ -176,6 +155,9 @@ export class CmsPublicationsService {
       doc.status = input.mode === 'publish' ? 'published' : 'draft_created';
       doc.externalPostId = result.externalPostId;
       doc.externalPostUrl = result.externalPostUrl;
+      doc.remoteStatus = result.status;
+      doc.remoteStatusCheckedAt = new Date();
+      doc.remoteStatusErrorCode = undefined;
       doc.publishedAt = result.publishedAt ?? (input.mode === 'publish' ? new Date() : undefined);
       doc.errorCode = undefined;
       this.logger.log(`cmsPublicationId=${doc._id.toString()} platform=wordpress status=${doc.status} externalPostId=${result.externalPostId}`);
@@ -189,16 +171,66 @@ export class CmsPublicationsService {
     return this.toResponse(doc);
   }
 
+  async validateBlogPublicationIntent(
+    organizationId: string,
+    productId: string,
+    campaignId: string,
+    artifactId: string,
+    version: number,
+    userId: string,
+    input: PublishCmsBlogInput,
+  ): Promise<BlogPublicationIntent> {
+    const sourceVersion = await this.versioningService.getVersion(organizationId, productId, campaignId, artifactId, version);
+    if (sourceVersion.kind !== 'blog') {
+      throw new BadRequestException('Only blog content versions can be sent to WordPress.');
+    }
+    await this.assertExternalActionApproved(organizationId, productId, campaignId, userId);
+    this.assertHumanReviewAllowsPublish(sourceVersion);
+
+    const connection = await this.cmsConnectionsService.findOwnedDocument(organizationId, productId, input.connectionId);
+    if (connection.platform !== 'wordpress') {
+      throw new BadRequestException('The selected CMS connection is not WordPress.');
+    }
+    if (connection.status !== 'active') {
+      throw new ConflictException('The selected WordPress connection is not active.');
+    }
+    const credential = this.cmsConnectionsService.decryptCredential(connection);
+    const categoryIds = this.normalizeIdList(input.categoryIds, 20, 'categories');
+    const tagIds = this.normalizeIdList(input.tagIds, 30, 'tags');
+    await this.validateTaxonomy(connection.siteUrl, credential, categoryIds, tagIds);
+    const featuredCreativeAssetId = input.featuredCreativeAssetId
+      ? new Types.ObjectId((await this.validateFeaturedCreativeIntent(organizationId, productId, campaignId, input.featuredCreativeAssetId, sourceVersion)).id)
+      : undefined;
+
+    return {
+      sourceVersion,
+      connection,
+      credential,
+      blog: this.buildBlogSnapshot(sourceVersion),
+      categoryIds,
+      tagIds,
+      featuredCreativeAssetId,
+    };
+  }
+
   async list(organizationId: string, productId: string, campaignId: string, filter?: CmsPublicationListFilter): Promise<CmsPublicationResponse[]> {
     const query: Record<string, unknown> = {
       organizationId: new Types.ObjectId(organizationId),
       productId: new Types.ObjectId(productId),
       campaignId: new Types.ObjectId(campaignId),
     };
-    if (filter?.status) query.status = filter.status;
+    const localStatus = filter?.localStatus ?? filter?.status;
+    if (localStatus) query.status = localStatus;
+    if (filter?.remoteStatus) query.remoteStatus = filter.remoteStatus;
     if (filter?.mode) query.publishMode = filter.mode;
     if (filter?.connectionId) query.cmsConnectionId = new Types.ObjectId(filter.connectionId);
     if (filter?.contentArtifactId) query.contentArtifactId = new Types.ObjectId(filter.contentArtifactId);
+    if (filter?.start || filter?.end) {
+      const range: Record<string, Date> = {};
+      if (filter.start) range.$gte = new Date(filter.start);
+      if (filter.end) range.$lte = new Date(filter.end);
+      query.createdAt = range;
+    }
     const docs = await this.publicationModel.find(query).sort({ createdAt: -1 }).exec();
     return docs.map((d) => this.toResponse(d));
   }
@@ -216,6 +248,30 @@ export class CmsPublicationsService {
       throw new NotFoundException('CMS publication not found.');
     }
     if (!doc) throw new NotFoundException('CMS publication not found.');
+    return this.toResponse(doc);
+  }
+
+  async syncRemoteStatus(organizationId: string, productId: string, campaignId: string, publicationId: string): Promise<CmsPublicationResponse> {
+    const doc = await this.findOwnedPublication(organizationId, productId, campaignId, publicationId);
+    if (!doc.externalPostId) throw new ConflictException('This CMS publication does not have a remote WordPress post id.');
+    const connection = await this.cmsConnectionsService.findOwnedDocument(organizationId, productId, doc.cmsConnectionId.toString());
+    if (connection.platform !== 'wordpress') throw new BadRequestException('The selected CMS connection is not WordPress.');
+    if (connection.status !== 'active') throw new ConflictException('The selected WordPress connection is not active.');
+    try {
+      const result = await this.cmsEngine.getPostStatus('wordpress', {
+        siteUrl: connection.siteUrl,
+        credential: this.cmsConnectionsService.decryptCredential(connection),
+        externalPostId: doc.externalPostId,
+      });
+      doc.remoteStatus = result.status;
+      doc.remoteStatusCheckedAt = result.checkedAt;
+      doc.remoteStatusErrorCode = undefined;
+      if (result.externalPostUrl) doc.externalPostUrl = result.externalPostUrl;
+    } catch (err) {
+      doc.remoteStatusCheckedAt = new Date();
+      doc.remoteStatusErrorCode = this.extractErrorCode(err);
+    }
+    await doc.save();
     return this.toResponse(doc);
   }
 
@@ -245,6 +301,29 @@ export class CmsPublicationsService {
   private assertHumanReviewAllowsPublish(sourceVersion: ContentVersionDetail): void {
     if (!sourceVersion.humanReview) throw new ConflictException('Human Review has not been evaluated for this content yet; publishing is blocked until it has.');
     if (sourceVersion.humanReview.decision === 'review_required') throw new ConflictException('Human review is required before publishing.');
+  }
+
+  private async validateFeaturedCreativeIntent(
+    organizationId: string,
+    productId: string,
+    campaignId: string,
+    creativeAssetId: string,
+    sourceVersion: ContentVersionDetail,
+  ) {
+    const creative = await this.creativeAssetsService.getOwnedForCampaign(organizationId, productId, campaignId, creativeAssetId);
+    if (creative.kind !== 'blog_hero') {
+      throw new BadRequestException('Only blog hero creative assets can be used as a WordPress featured image.');
+    }
+    if (creative.source.contentArtifactId !== sourceVersion.artifactId || creative.source.contentVersionId !== sourceVersion.id) {
+      throw new BadRequestException('The selected featured image does not belong to this blog version.');
+    }
+    if (creative.reviewStatus === 'rejected') {
+      throw new ConflictException('This creative asset has been marked rejected and cannot be published.');
+    }
+    if (!creative.asset.url) {
+      throw new BadRequestException('The selected featured image has no retrievable URL.');
+    }
+    return creative;
   }
 
   private buildBlogSnapshot(version: ContentVersionDetail): BlogSnapshot {
@@ -400,6 +479,9 @@ export class CmsPublicationsService {
       publishMode: doc.publishMode,
       externalPostId: doc.externalPostId,
       externalPostUrl: doc.externalPostUrl,
+      remoteStatus: doc.remoteStatus,
+      remoteStatusCheckedAt: doc.remoteStatusCheckedAt,
+      remoteStatusErrorCode: doc.remoteStatusErrorCode,
       titleSnapshot: doc.titleSnapshot,
       excerptSnapshot: doc.excerptSnapshot,
       slugSnapshot: doc.slugSnapshot,
@@ -422,6 +504,22 @@ export class CmsPublicationsService {
     if (err instanceof CmsProviderError || err instanceof CmsCapabilityUnsupportedError || err instanceof CmsConfigurationError) return err.code;
     if (err instanceof BadRequestException) return 'cms_provider_request_failed';
     return 'cms_provider_request_failed';
+  }
+
+  private async findOwnedPublication(organizationId: string, productId: string, campaignId: string, publicationId: string): Promise<CmsPublicationDocument> {
+    let doc: CmsPublicationDocument | null;
+    try {
+      doc = await this.publicationModel.findOne({
+        _id: new Types.ObjectId(publicationId),
+        organizationId: new Types.ObjectId(organizationId),
+        productId: new Types.ObjectId(productId),
+        campaignId: new Types.ObjectId(campaignId),
+      });
+    } catch {
+      throw new NotFoundException('CMS publication not found.');
+    }
+    if (!doc) throw new NotFoundException('CMS publication not found.');
+    return doc;
   }
 
   private normalizeIdList(items: number[] | undefined, max: number, label: string): number[] {

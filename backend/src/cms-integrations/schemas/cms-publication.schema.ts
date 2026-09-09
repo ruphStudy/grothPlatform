@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 import { CMS_PLATFORMS } from '../types/cms.types';
-import type { CmsPlatform, CmsSeoMetadata } from '../types/cms.types';
+import type { CmsPlatform, CmsRemotePostStatus, CmsSeoMetadata } from '../types/cms.types';
 
 export type CmsPublicationDocument = HydratedDocument<CmsPublication>;
 export type CmsPublicationStatus = 'pending' | 'publishing' | 'draft_created' | 'published' | 'failed';
@@ -9,6 +9,7 @@ export type CmsPublishMode = 'draft' | 'publish';
 
 export const CMS_PUBLICATION_STATUSES: CmsPublicationStatus[] = ['pending', 'publishing', 'draft_created', 'published', 'failed'];
 export const CMS_PUBLISH_MODES: CmsPublishMode[] = ['draft', 'publish'];
+export const CMS_REMOTE_POST_STATUSES: CmsRemotePostStatus[] = ['draft', 'published', 'pending', 'private', 'trashed', 'unavailable', 'unknown'];
 
 @Schema({ _id: false })
 export class CmsPublicationSeoMetadata {
@@ -60,6 +61,15 @@ export class CmsPublication {
 
   @Prop()
   externalPostUrl?: string;
+
+  @Prop({ type: String, enum: CMS_REMOTE_POST_STATUSES })
+  remoteStatus?: CmsRemotePostStatus;
+
+  @Prop()
+  remoteStatusCheckedAt?: Date;
+
+  @Prop()
+  remoteStatusErrorCode?: string;
 
   @Prop({ required: true })
   titleSnapshot: string;

@@ -3212,6 +3212,8 @@ export interface CmsConnectionSummary {
 
 export type CmsPublishMode = 'draft' | 'publish';
 export type CmsPublicationStatus = 'pending' | 'publishing' | 'draft_created' | 'published' | 'failed';
+export type CmsScheduleStatus = 'scheduled' | 'processing' | 'completed' | 'failed' | 'cancelled';
+export type CmsRemotePostStatus = 'draft' | 'published' | 'pending' | 'private' | 'trashed' | 'unavailable' | 'unknown';
 
 export interface CmsSeoMetadata {
   metaTitle?: string;
@@ -3237,6 +3239,9 @@ export interface CmsPublicationSummary {
   publishMode: CmsPublishMode;
   externalPostId?: string;
   externalPostUrl?: string;
+  remoteStatus?: CmsRemotePostStatus;
+  remoteStatusCheckedAt?: string;
+  remoteStatusErrorCode?: string;
   titleSnapshot: string;
   excerptSnapshot?: string;
   slugSnapshot?: string;
@@ -3250,6 +3255,28 @@ export interface CmsPublicationSummary {
   lastAttemptAt?: string;
   errorCode?: string;
   publishedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CmsScheduleSummary {
+  id: string;
+  platform: CmsPlatform;
+  cmsConnectionId: string;
+  contentArtifactId: string;
+  contentVersionId: string;
+  contentVersion: number;
+  publishMode: CmsPublishMode;
+  featuredCreativeAssetId?: string;
+  categoryIds: number[];
+  tagIds: number[];
+  scheduledAt: string;
+  timezone: string;
+  status: CmsScheduleStatus;
+  publicationId?: string;
+  attemptCount: number;
+  lastAttemptAt?: string;
+  errorCode?: string;
   createdAt: string;
   updatedAt: string;
 }

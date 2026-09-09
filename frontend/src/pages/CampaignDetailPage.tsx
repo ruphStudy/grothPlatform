@@ -65,6 +65,7 @@ import type {
   CmsConnectionSummary,
   CmsPublicationSummary,
   CmsPublishMode,
+  CmsScheduleSummary,
   CmsTaxonomyItem,
   CreativeAssetSummary,
   SocialImageAsset,
@@ -1812,6 +1813,25 @@ function newIdempotencyKey(): string {
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function defaultScheduleLocalValue(): string {
+  const date = new Date(Date.now() + 60 * 60 * 1000);
+  date.setMinutes(Math.ceil(date.getMinutes() / 15) * 15, 0, 0);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function localDateTimeToIso(value: string): string {
+  return new Date(value).toISOString();
+}
+
+function formatScheduledAt(value: string, timezone: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: timezone,
+  }).format(new Date(value));
+}
+
 function WordPressBlogPublishPanel({
   basePath,
   productBasePath,
@@ -1832,7 +1852,13 @@ function WordPressBlogPublishPanel({
   const [selectedTags, setSelectedTags] = useState<number[]>([]);
   const [mode, setMode] = useState<CmsPublishMode>('draft');
   const [history, setHistory] = useState<CmsPublicationSummary[] | null>(null);
+  const [schedules, setSchedules] = useState<CmsScheduleSummary[] | null>(null);
+  const [scheduleAt, setScheduleAt] = useState(defaultScheduleLocalValue);
+  const [timezone, setTimezone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
   const [busy, setBusy] = useState(false);
+  const [scheduleBusy, setScheduleBusy] = useState(false);
+  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
+  const [syncBusyId, setSyncBusyId] = useState<string | null>(null);
   const [loadingTaxonomy, setLoadingTaxonomy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1851,16 +1877,18 @@ function WordPressBlogPublishPanel({
 
   async function loadBasics() {
     try {
-      const [conns, review, imgs, pubs] = await Promise.all([
+      const [conns, review, imgs, pubs, scheduled] = await Promise.all([
         apiRequest<CmsConnectionSummary[]>(`${productBasePath}/cms-connections`),
         apiRequest<ContentHumanReviewResult | null>(`${basePath}/content-generation/artifacts/${draft.artifactId}/versions/${draft.version}/human-review`).catch(() => null),
         apiRequest<CreativeAssetSummary[]>(`${basePath}/creative/blog-hero/${draft.artifactId}/versions/${draft.version}`).catch(() => []),
         apiRequest<CmsPublicationSummary[]>(`${basePath}/cms-publications?contentArtifactId=${draft.artifactId}`).catch(() => []),
+        apiRequest<CmsScheduleSummary[]>(`${basePath}/cms-schedules`).catch(() => []),
       ]);
       setConnections(conns);
       setHumanReviewDecision(review?.decision ?? null);
       setHeroes(imgs);
       setHistory(pubs);
+      setSchedules(scheduled);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load WordPress publishing options');
     }
@@ -1932,6 +1960,101 @@ function WordPressBlogPublishPanel({
     }
   }
 
+  async function handleSchedule() {
+    if (!selectedConnectionId || reviewBlocks || !scheduleAt || !timezone) return;
+    const warning = humanReviewDecision === 'review_recommended' ? ' Human review is recommended for this content. Schedule anyway?' : ' Schedule this WordPress post?';
+    if (!window.confirm(warning)) return;
+    setScheduleBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await apiRequest<CmsScheduleSummary>(`${basePath}/cms-schedules/${draft.artifactId}/versions/${draft.version}`, {
+        method: 'POST',
+        body: {
+          connectionId: selectedConnectionId,
+          mode,
+          scheduledAt: localDateTimeToIso(scheduleAt),
+          timezone,
+          idempotencyKey: newIdempotencyKey(),
+          featuredCreativeAssetId: selectedHeroId || undefined,
+          categoryIds: selectedCategories,
+          tagIds: selectedTags,
+        },
+      });
+      setMessage(`Scheduled for ${formatScheduledAt(result.scheduledAt, result.timezone)} ${result.timezone}.`);
+      setSchedules((prev) => [result, ...(prev ?? []).filter((s) => s.id !== result.id)]);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to schedule WordPress post');
+    } finally {
+      setScheduleBusy(false);
+    }
+  }
+
+  function handleEditSchedule(item: CmsScheduleSummary) {
+    setEditingScheduleId(item.id);
+    setSelectedConnectionId(item.cmsConnectionId);
+    setMode(item.publishMode);
+    setSelectedHeroId(item.featuredCreativeAssetId ?? '');
+    setSelectedCategories(item.categoryIds);
+    setSelectedTags(item.tagIds);
+    setTimezone(item.timezone);
+    const date = new Date(item.scheduledAt);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    setScheduleAt(`${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`);
+  }
+
+  async function handleUpdateSchedule() {
+    if (!editingScheduleId || !selectedConnectionId || reviewBlocks || !scheduleAt || !timezone) return;
+    setScheduleBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await apiRequest<CmsScheduleSummary>(`${basePath}/cms-schedules/${editingScheduleId}`, {
+        method: 'PATCH',
+        body: {
+          connectionId: selectedConnectionId,
+          mode,
+          scheduledAt: localDateTimeToIso(scheduleAt),
+          timezone,
+          featuredCreativeAssetId: selectedHeroId || undefined,
+          categoryIds: selectedCategories,
+          tagIds: selectedTags,
+        },
+      });
+      setSchedules((prev) => (prev ?? []).map((s) => (s.id === result.id ? result : s)));
+      setEditingScheduleId(null);
+      setMessage(`Updated schedule for ${formatScheduledAt(result.scheduledAt, result.timezone)} ${result.timezone}.`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to update scheduled WordPress post');
+    } finally {
+      setScheduleBusy(false);
+    }
+  }
+
+  async function handleCancelSchedule(scheduleId: string) {
+    if (!window.confirm('Cancel this scheduled WordPress post?')) return;
+    setError(null);
+    try {
+      const result = await apiRequest<CmsScheduleSummary>(`${basePath}/cms-schedules/${scheduleId}/cancel`, { method: 'POST' });
+      setSchedules((prev) => (prev ?? []).map((s) => (s.id === result.id ? result : s)));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to cancel scheduled WordPress post');
+    }
+  }
+
+  async function handleSyncStatus(publicationId: string) {
+    setSyncBusyId(publicationId);
+    setError(null);
+    try {
+      const result = await apiRequest<CmsPublicationSummary>(`${basePath}/cms-publications/${publicationId}/sync-status`, { method: 'POST' });
+      setHistory((prev) => (prev ?? []).map((p) => (p.id === result.id ? result : p)));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to sync WordPress status');
+    } finally {
+      setSyncBusyId(null);
+    }
+  }
+
   return (
     <div style={{ marginTop: 10, padding: 10, border: '1px solid var(--border-color, #ddd)', borderRadius: 6 }}>
       <span className="summary-label">WordPress Publishing</span>
@@ -1980,6 +2103,17 @@ function WordPressBlogPublishPanel({
           <div className="entity-card-meta">Focus Keyword: {seoPreview.focusKeyword ?? '-'}</div>
           <div className="entity-card-meta">SEO plugin fields are only written when safely supported by backend configuration.</div>
         </div>
+        <div className="field">
+          <label>Schedule Time</label>
+          <input type="datetime-local" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} />
+          <div className="entity-card-meta">
+            {scheduleAt ? `${formatScheduledAt(localDateTimeToIso(scheduleAt), timezone)} ${timezone}` : timezone}
+          </div>
+        </div>
+        <div className="field">
+          <label>Timezone</label>
+          <input value={timezone} onChange={(e) => setTimezone(e.target.value)} />
+        </div>
       </div>
       {loadingTaxonomy && <Loading />}
       {(categories.length > 0 || tags.length > 0) && (
@@ -2005,19 +2139,62 @@ function WordPressBlogPublishPanel({
       <button className="btn btn-primary" style={{ marginTop: 8 }} onClick={handleSend} disabled={busy || reviewBlocks || !selectedConnectionId}>
         {busy ? (mode === 'draft' ? 'Creating Draft...' : 'Publishing...') : 'Send to WordPress'}
       </button>
+      <button className="btn btn-secondary" style={{ marginTop: 8, marginLeft: 8 }} onClick={handleSchedule} disabled={scheduleBusy || reviewBlocks || !selectedConnectionId}>
+        {scheduleBusy ? 'Scheduling...' : 'Schedule'}
+      </button>
+      {editingScheduleId && (
+        <>
+          <button className="btn btn-secondary" style={{ marginTop: 8, marginLeft: 8 }} onClick={handleUpdateSchedule} disabled={scheduleBusy || reviewBlocks || !selectedConnectionId}>
+            {scheduleBusy ? 'Saving...' : 'Save Schedule'}
+          </button>
+          <button className="btn btn-secondary" style={{ marginTop: 8, marginLeft: 8 }} onClick={() => setEditingScheduleId(null)}>
+            Stop Editing
+          </button>
+        </>
+      )}
+      {schedules && schedules.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <span className="summary-label">Scheduled WordPress Posts</span>
+          {schedules
+            .filter((item) => item.contentArtifactId === draft.artifactId)
+            .map((item) => (
+              <div key={item.id} className="entity-card-meta" style={{ marginTop: 4 }}>
+                v{item.contentVersion} · {item.publishMode === 'draft' ? 'Draft' : 'Publish'} · {formatScheduledAt(item.scheduledAt, item.timezone)} {item.timezone} · {labelize(item.status)}
+                {item.status === 'scheduled' && (
+                  <>
+                    <button className="btn btn-secondary" style={{ marginLeft: 8, padding: '2px 8px' }} onClick={() => handleEditSchedule(item)}>
+                      Edit
+                    </button>
+                    <button className="btn btn-secondary" style={{ marginLeft: 8, padding: '2px 8px' }} onClick={() => handleCancelSchedule(item.id)}>
+                      Cancel
+                    </button>
+                  </>
+                )}
+                {item.errorCode && ` · ${labelize(item.errorCode)}`}
+              </div>
+            ))}
+        </div>
+      )}
       {history && history.length > 0 && (
         <div style={{ marginTop: 10 }}>
           <span className="summary-label">WordPress Publishing History</span>
           {history.map((item) => (
             <div key={item.id} className="entity-card-meta" style={{ marginTop: 4 }}>
               v{item.contentVersion} · {item.publishMode === 'draft' ? 'Draft' : 'Publish'} · {labelize(item.status)} · {new Date(item.createdAt).toLocaleString()}
+              {item.remoteStatus && ` · Remote: ${labelize(item.remoteStatus)}`}
               {item.externalPostUrl && (
                 <>
                   {' · '}
-                  <a href={item.externalPostUrl} target="_blank" rel="noreferrer">Open</a>
+                  <a href={item.externalPostUrl} target="_blank" rel="noopener noreferrer">Open</a>
                 </>
               )}
+              {item.externalPostId && (
+                <button className="btn btn-secondary" style={{ marginLeft: 8, padding: '2px 8px' }} onClick={() => handleSyncStatus(item.id)} disabled={syncBusyId === item.id}>
+                  {syncBusyId === item.id ? 'Checking...' : 'Sync Status'}
+                </button>
+              )}
               {item.errorCode && ` · ${labelize(item.errorCode)}`}
+              {item.remoteStatusErrorCode && ` · Sync: ${labelize(item.remoteStatusErrorCode)}`}
             </div>
           ))}
         </div>

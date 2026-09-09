@@ -15,6 +15,8 @@ import type {
   ValidateCmsConnectionInput,
   CmsMediaUploadRequest,
   CmsMediaUploadResult,
+  CmsPostStatusResult,
+  CmsRemotePostStatus,
 } from '../types/cms.types';
 import type { CmsProvider } from './cms-provider.interface';
 import { fetchWordPressJson } from './wordpress-http.util';
@@ -61,6 +63,7 @@ export class WordPressCmsProvider implements CmsProvider {
       manageTags: false,
       fetchCategories: true,
       fetchTags: true,
+      fetchPostStatus: true,
     };
   }
 
@@ -152,6 +155,32 @@ export class WordPressCmsProvider implements CmsProvider {
     return this.listTaxonomy(input, 'tags');
   }
 
+  async getPostStatus(input: { siteUrl: string; credential: CmsCredential; externalPostId: string }): Promise<CmsPostStatusResult> {
+    this.assertApplicationPassword(input.credential);
+    let body: Record<string, unknown> | unknown[];
+    try {
+      const result = await fetchWordPressJson(
+        this.urlSecurity,
+        this.configService,
+        input.siteUrl,
+        `/wp-json/wp/v2/posts/${encodeURIComponent(input.externalPostId)}?context=edit`,
+        { username: input.credential.username!, applicationPassword: input.credential.secret },
+      );
+      body = result.body;
+    } catch (err) {
+      if (err instanceof CmsProviderError && err.code === 'cms_invalid_site') {
+        return { externalPostId: input.externalPostId, status: 'unavailable', checkedAt: new Date() };
+      }
+      throw err;
+    }
+    const record = this.requireObject(body);
+    const rawStatus = typeof record.status === 'string' ? record.status : '';
+    const status = this.mapRemoteStatus(rawStatus);
+    const link = typeof record.link === 'string' && this.isSafeReturnedUrl(record.link) ? record.link : undefined;
+    const id = typeof record.id === 'number' || typeof record.id === 'string' ? String(record.id) : input.externalPostId;
+    return { externalPostId: id, status, externalPostUrl: link, checkedAt: new Date() };
+  }
+
   private async fetchSiteInfoInternal(siteUrl: string): Promise<CmsSiteInfo> {
     const { body } = await fetchWordPressJson(this.urlSecurity, this.configService, siteUrl, '/wp-json/');
     const record = this.requireObject(body);
@@ -216,6 +245,15 @@ export class WordPressCmsProvider implements CmsProvider {
   private safeFilename(filename: string): string {
     const cleaned = filename.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
     return cleaned || 'image';
+  }
+
+  private mapRemoteStatus(status: string): CmsRemotePostStatus {
+    if (status === 'draft') return 'draft';
+    if (status === 'publish') return 'published';
+    if (status === 'pending') return 'pending';
+    if (status === 'private') return 'private';
+    if (status === 'trash') return 'trashed';
+    return 'unknown';
   }
 
   private isSafeReturnedUrl(value: string): boolean {

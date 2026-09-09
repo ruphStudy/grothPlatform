@@ -6,6 +6,7 @@ import type {
   CmsPlatform,
   CmsPostRequest,
   CmsPostResult,
+  CmsPostStatusResult,
   CmsProviderCapabilities,
   CmsSiteInfo,
   CmsTaxonomyItem,
@@ -46,4 +47,6 @@ export interface CmsProvider {
   listCategories?(input: { siteUrl: string; credential: CmsCredential; limit?: number }): Promise<CmsTaxonomyItem[]>;
 
   listTags?(input: { siteUrl: string; credential: CmsCredential; limit?: number }): Promise<CmsTaxonomyItem[]>;
+
+  getPostStatus?(input: { siteUrl: string; credential: CmsCredential; externalPostId: string }): Promise<CmsPostStatusResult>;
 }

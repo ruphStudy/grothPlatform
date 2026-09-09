@@ -34,12 +34,28 @@ export class CmsPublicationsController {
     @Param('productId') productId: string,
     @Param('campaignId') campaignId: string,
     @Query('status') status?: CmsPublicationListFilter['status'],
+    @Query('localStatus') localStatus?: CmsPublicationListFilter['localStatus'],
+    @Query('remoteStatus') remoteStatus?: CmsPublicationListFilter['remoteStatus'],
     @Query('connectionId') connectionId?: string,
     @Query('mode') mode?: CmsPublicationListFilter['mode'],
     @Query('contentArtifactId') contentArtifactId?: string,
+    @Query('start') start?: string,
+    @Query('end') end?: string,
   ) {
     await this.productsService.findOne(organizationId, productId, req.user.userId);
-    return this.cmsPublicationsService.list(organizationId, productId, campaignId, { status, connectionId, mode, contentArtifactId });
+    return this.cmsPublicationsService.list(organizationId, productId, campaignId, { status, localStatus, remoteStatus, connectionId, mode, contentArtifactId, start, end });
+  }
+
+  @Post(':publicationId/sync-status')
+  async syncStatus(
+    @Req() req: { user: { userId: string } },
+    @Param('organizationId') organizationId: string,
+    @Param('productId') productId: string,
+    @Param('campaignId') campaignId: string,
+    @Param('publicationId') publicationId: string,
+  ) {
+    await this.productsService.findOne(organizationId, productId, req.user.userId);
+    return this.cmsPublicationsService.syncRemoteStatus(organizationId, productId, campaignId, publicationId);
   }
 
   @Get(':publicationId')
