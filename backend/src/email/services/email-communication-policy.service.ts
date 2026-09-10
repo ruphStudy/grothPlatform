@@ -8,7 +8,7 @@ export class EmailCommunicationPolicyService {
 
   async assertAllowedForLead(input: { organizationId: string; productId: string; leadId?: string; purpose: EmailPurpose }) {
     if (!input.leadId) return { allowed: true, eligibility: 'not_applicable' };
-    if (input.purpose !== 'manual_crm') throw new BadRequestException('email_capability_unsupported');
+    if (input.purpose !== 'manual_crm' && input.purpose !== 'marketing') throw new BadRequestException('email_capability_unsupported');
     return this.crmAccountService.assertLeadCommunicationAllowed(input.organizationId, input.productId, input.leadId);
   }
 }

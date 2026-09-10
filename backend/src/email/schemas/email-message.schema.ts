@@ -22,6 +22,15 @@ export class EmailMessage {
   @Prop({ type: Types.ObjectId })
   campaignId?: Types.ObjectId;
 
+  @Prop({ type: Types.ObjectId })
+  emailCampaignId?: Types.ObjectId;
+
+  @Prop({ type: Types.ObjectId })
+  templateId?: Types.ObjectId;
+
+  @Prop()
+  templateVersion?: number;
+
   @Prop({ type: Types.ObjectId, required: true })
   emailConnectionId: Types.ObjectId;
 

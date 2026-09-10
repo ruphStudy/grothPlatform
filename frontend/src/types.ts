@@ -3790,6 +3790,75 @@ export interface EmailMessage {
   updatedAt: string;
 }
 
+export type EmailTemplateType = 'marketing' | 'crm' | 'newsletter' | 'announcement' | 'follow_up' | 'generic';
+export type EmailTemplateStatus = 'draft' | 'active' | 'archived';
+export interface EmailTemplate {
+  id: string;
+  name: string;
+  slug: string;
+  type: EmailTemplateType;
+  status: EmailTemplateStatus;
+  latestVersion: number;
+  latest?: EmailTemplateVersion;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmailTemplateVersion {
+  id: string;
+  templateId: string;
+  version: number;
+  subjectTemplate: string;
+  htmlTemplate?: string;
+  textTemplate?: string;
+  previewText?: string;
+  variables: string[];
+  createdAt: string;
+}
+
+export interface EmailCampaign {
+  id: string;
+  name: string;
+  campaignId?: string;
+  emailTemplateId: string;
+  emailTemplateVersion: number;
+  senderId: string;
+  subjectOverride?: string;
+  status: 'draft' | 'ready' | 'sending' | 'completed' | 'partially_failed' | 'cancelled';
+  audienceDefinition: Record<string, string[]>;
+  recipientCount: number;
+  acceptedCount: number;
+  failedCount: number;
+  skippedCount: number;
+  createdAt: string;
+  updatedAt: string;
+  recipients?: EmailCampaignRecipient[];
+}
+
+export interface EmailCampaignRecipient {
+  id: string;
+  emailCampaignId: string;
+  leadId: string;
+  normalizedEmail: string;
+  status: 'pending' | 'sending' | 'accepted' | 'failed' | 'skipped';
+  skipReason?: string;
+  emailMessageId?: string;
+}
+
+export interface EmailAudiencePreview {
+  matched: number;
+  eligible: number;
+  restricted: number;
+  unknown: number;
+  missingEmail: number;
+  archived: number;
+  identityConflict: number;
+  suppressed: number;
+  otherSkipped: number;
+  sampleRecipients: { leadId: string; displayName: string; email: string; communicationEligibility?: string }[];
+  samplePreview?: { subject: string; html?: string; text?: string; missingVariables: string[] };
+}
+
 export interface LeadCaptureEndpointSummary {
   id: string;
   organizationId: string;

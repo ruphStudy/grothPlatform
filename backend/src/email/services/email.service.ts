@@ -12,6 +12,7 @@ import { EmailMessage, EmailMessageDocument } from '../schemas/email-message.sch
 import { EmailSender, EmailSenderDocument } from '../schemas/email-sender.schema';
 import type { EmailBodyType, EmailCredential, EmailSenderStatusResult } from '../types/email.types';
 import { EmailCommunicationPolicyService } from './email-communication-policy.service';
+import { EmailTemplateService } from './email-template.service';
 
 const MAX_RECIPIENTS = Number(process.env.EMAIL_SINGLE_SEND_MAX_RECIPIENTS || 1);
 const MAX_SUBJECT = Number(process.env.EMAIL_MAX_SUBJECT_LENGTH || 200);
@@ -29,6 +30,7 @@ export class EmailService {
     private readonly encryption: EmailCredentialEncryptionService,
     private readonly engine: EmailEngineService,
     private readonly policy: EmailCommunicationPolicyService,
+    private readonly templateService: EmailTemplateService,
   ) {}
 
   async createConnection(organizationId: string, productId: string, userId: string, dto: CreateEmailConnectionDto) {
@@ -162,6 +164,16 @@ export class EmailService {
 
   async sendTest(organizationId: string, productId: string, userId: string, dto: TestEmailSendDto) {
     await this.productsService.findOne(organizationId, productId, userId);
+    let subject = dto.subject;
+    let html = dto.html;
+    let text = dto.text;
+    if (dto.templateId) {
+      const template = await this.templateService.findTemplate(organizationId, productId, dto.templateId);
+      const rendered = await this.templateService.renderForSend(organizationId, productId, userId, dto.templateId, dto.templateVersion || template.latestVersion, { senderId: dto.senderId });
+      subject = rendered.subject;
+      html = rendered.html;
+      text = rendered.text;
+    }
     return this.send({
       organizationId,
       productId,
@@ -169,17 +181,19 @@ export class EmailService {
       senderId: dto.senderId,
       recipient: { email: dto.recipientEmail, name: dto.recipientName },
       purpose: dto.purpose || 'manual_crm',
-      subject: dto.subject,
-      html: dto.html,
-      text: dto.text,
+      subject,
+      html,
+      text,
       replyTo: dto.replyTo,
       idempotencyKey: dto.idempotencyKey,
       createdByUserId: userId,
       sendReason: 'manual',
+      templateId: dto.templateId,
+      templateVersion: dto.templateVersion,
     });
   }
 
-  async send(input: { organizationId: string; productId: string; connectionId: string; senderId: string; recipient: { email: string; name?: string }; purpose: 'manual_crm' | 'marketing'; subject: string; html?: string; text?: string; replyTo?: string; idempotencyKey: string; createdByUserId?: string; leadId?: string; opportunityId?: string; campaignId?: string; sendReason: 'manual' | 'crm_follow_up' | 'future_campaign' | 'future_sequence' }) {
+  async send(input: { organizationId: string; productId: string; connectionId: string; senderId: string; recipient: { email: string; name?: string }; purpose: 'manual_crm' | 'marketing'; subject: string; html?: string; text?: string; replyTo?: string; idempotencyKey: string; createdByUserId?: string; leadId?: string; opportunityId?: string; campaignId?: string; emailCampaignId?: string; templateId?: string; templateVersion?: number; sendReason: 'manual' | 'crm_follow_up' | 'future_campaign' | 'future_sequence' }) {
     this.validateSendInput(input);
     await this.policy.assertAllowedForLead({ organizationId: input.organizationId, productId: input.productId, leadId: input.leadId, purpose: input.purpose });
     const payloadHash = this.hashPayload(input);
@@ -201,6 +215,9 @@ export class EmailService {
       leadId: input.leadId ? new Types.ObjectId(input.leadId) : undefined,
       opportunityId: input.opportunityId ? new Types.ObjectId(input.opportunityId) : undefined,
       campaignId: input.campaignId ? new Types.ObjectId(input.campaignId) : undefined,
+      emailCampaignId: input.emailCampaignId ? new Types.ObjectId(input.emailCampaignId) : undefined,
+      templateId: input.templateId ? new Types.ObjectId(input.templateId) : undefined,
+      templateVersion: input.templateVersion,
       emailConnectionId: connection._id,
       emailSenderId: sender._id,
       provider: connection.platform,
@@ -311,6 +328,6 @@ export class EmailService {
   }
 
   private toMessageResponse(message: EmailMessageDocument) {
-    return { id: message._id.toString(), organizationId: message.organizationId.toString(), productId: message.productId.toString(), leadId: message.leadId?.toString(), opportunityId: message.opportunityId?.toString(), campaignId: message.campaignId?.toString(), emailConnectionId: message.emailConnectionId.toString(), emailSenderId: message.emailSenderId.toString(), provider: message.provider, providerMessageId: message.providerMessageId, fromEmail: message.fromEmail, fromName: message.fromName, toEmail: message.toEmail, toName: message.toName, replyTo: message.replyTo, subject: message.subject, bodyType: message.bodyType, status: message.status, sendReason: message.sendReason, errorCode: message.errorCode, acceptedAt: message.acceptedAt, failedAt: message.failedAt, createdAt: message.createdAt, updatedAt: message.updatedAt };
+    return { id: message._id.toString(), organizationId: message.organizationId.toString(), productId: message.productId.toString(), leadId: message.leadId?.toString(), opportunityId: message.opportunityId?.toString(), campaignId: message.campaignId?.toString(), emailCampaignId: message.emailCampaignId?.toString(), templateId: message.templateId?.toString(), templateVersion: message.templateVersion, emailConnectionId: message.emailConnectionId.toString(), emailSenderId: message.emailSenderId.toString(), provider: message.provider, providerMessageId: message.providerMessageId, fromEmail: message.fromEmail, fromName: message.fromName, toEmail: message.toEmail, toName: message.toName, replyTo: message.replyTo, subject: message.subject, bodyType: message.bodyType, status: message.status, sendReason: message.sendReason, errorCode: message.errorCode, acceptedAt: message.acceptedAt, failedAt: message.failedAt, createdAt: message.createdAt, updatedAt: message.updatedAt };
   }
 }
