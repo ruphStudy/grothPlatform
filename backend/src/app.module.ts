@@ -11,6 +11,7 @@ import { ContentGenerationModule } from './content-generation/content-generation
 import { ContentPlanningModule } from './content-planning/content-planning.module';
 import { CreativeModule } from './creative/creative.module';
 import { CrmModule } from './crm/crm.module';
+import { EmailModule } from './email/email.module';
 import { GrowthStrategyModule } from './growth-strategy/growth-strategy.module';
 import { MarketIntelligenceModule } from './market-intelligence/market-intelligence.module';
 import { OrganizationsModule } from './organizations/organizations.module';
@@ -54,6 +55,7 @@ import { WebsiteIntelligenceModule } from './website-intelligence/website-intell
     CmsIntegrationsModule,
     LeadsModule,
     CrmModule,
+    EmailModule,
   ],
   controllers: [AppController],
   providers: [AppService],

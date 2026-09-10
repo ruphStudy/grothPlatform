@@ -3715,6 +3715,81 @@ export interface CrmFollowUpListResponse {
   limit: number;
 }
 
+export type EmailPlatform = 'resend';
+export type EmailConnectionStatus = 'active' | 'invalid' | 'disabled' | 'error';
+export type EmailSenderStatus = 'pending' | 'verified' | 'failed' | 'disabled';
+export type EmailMessageStatus = 'pending' | 'sending' | 'accepted' | 'failed';
+
+export interface EmailProviderCapabilities {
+  sendEmail: boolean;
+  sendHtml: boolean;
+  sendText: boolean;
+  customFrom: boolean;
+  customReplyTo: boolean;
+  domainVerification: boolean;
+  fetchDeliveryStatus: boolean;
+  webhookEvents: boolean;
+  attachments: boolean;
+  batchSend: boolean;
+}
+
+export interface EmailConnection {
+  id: string;
+  platform: EmailPlatform;
+  name: string;
+  status: EmailConnectionStatus;
+  capabilities: EmailProviderCapabilities;
+  lastValidatedAt?: string;
+  errorCode?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmailDnsRecord {
+  type: 'TXT' | 'CNAME' | 'MX';
+  name: string;
+  value: string;
+  priority?: number;
+}
+
+export interface EmailSender {
+  id: string;
+  emailConnectionId: string;
+  platform?: EmailPlatform;
+  email: string;
+  name?: string;
+  domain: string;
+  type: 'email' | 'domain';
+  status: EmailSenderStatus;
+  providerDomainId?: string;
+  verificationDetails?: { dnsRecords?: EmailDnsRecord[]; message?: string };
+  lastCheckedAt?: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmailMessage {
+  id: string;
+  emailConnectionId: string;
+  emailSenderId: string;
+  provider: EmailPlatform;
+  providerMessageId?: string;
+  fromEmail: string;
+  fromName?: string;
+  toEmail: string;
+  toName?: string;
+  subject: string;
+  bodyType: 'html' | 'text' | 'both';
+  status: EmailMessageStatus;
+  sendReason: string;
+  errorCode?: string;
+  acceptedAt?: string;
+  failedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface LeadCaptureEndpointSummary {
   id: string;
   organizationId: string;

@@ -414,6 +414,9 @@ export default function ProductPage() {
             <Link to={`/organizations/${organizationId}/products/${productId}/crm`} className="btn btn-secondary">
               CRM
             </Link>
+            <Link to={`/organizations/${organizationId}/products/${productId}/email`} className="btn btn-secondary">
+              Email
+            </Link>
             {product && <Badge status={product.status} />}
           </>
         }

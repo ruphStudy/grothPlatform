@@ -7,6 +7,7 @@ import CmsConnectionsPage from './pages/CmsConnectionsPage';
 import CrmPage from './pages/CrmPage';
 import CreativeReviewPage from './pages/CreativeReviewPage';
 import DashboardPage from './pages/DashboardPage';
+import EmailSettingsPage from './pages/EmailSettingsPage';
 import LeadDashboardPage from './pages/LeadDashboardPage';
 import LeadsPage from './pages/LeadsPage';
 import LoginPage from './pages/LoginPage';
@@ -95,6 +96,14 @@ function App() {
           element={
             <ProtectedRoute>
               <CrmPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/organizations/:organizationId/products/:productId/email"
+          element={
+            <ProtectedRoute>
+              <EmailSettingsPage />
             </ProtectedRoute>
           }
         />
