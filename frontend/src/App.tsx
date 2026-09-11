@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
+import AnalyticsPage from './pages/AnalyticsPage';
 import CampaignDetailPage from './pages/CampaignDetailPage';
 import CampaignsPage from './pages/CampaignsPage';
 import CmsConnectionsPage from './pages/CmsConnectionsPage';
@@ -104,6 +105,14 @@ function App() {
           element={
             <ProtectedRoute>
               <EmailSettingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/organizations/:organizationId/products/:productId/analytics"
+          element={
+            <ProtectedRoute>
+              <AnalyticsPage />
             </ProtectedRoute>
           }
         />

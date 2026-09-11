@@ -3958,6 +3958,42 @@ export interface EmailAudiencePreview {
   samplePreview?: { subject: string; html?: string; text?: string; missingVariables: string[] };
 }
 
+export interface AnalyticsDashboard {
+  range: { from: string; to: string; timezone: string; bucket: 'day' | 'week' | 'month' };
+  summary: {
+    leadsCreated: number;
+    leadCaptures: number;
+    qualifiedLeads: number;
+    opportunitiesCreated: number;
+    opportunitiesWon: number;
+    opportunitiesLost: number;
+    closedOpportunityWinRate: number | null;
+    socialPostsPublished: number;
+    cmsDraftsCreated: number;
+    cmsPostsPublished: number;
+    emailsAccepted: number;
+    emailsDelivered: number;
+    recordedEmailOpens: number;
+    recordedEmailClicks: number;
+    emailsBounced: number;
+    emailsUnsubscribed: number;
+    emailDeliveryRate: number | null;
+    emailBounceRate: number | null;
+    recordedEmailOpenRate: number | null;
+    recordedEmailClickRate: number | null;
+    contentGenerated: number;
+    creativeGenerated: number;
+    wonOpportunityValueByCurrency: { currency: string; amount: number; count: number }[];
+  };
+  trends: Array<Record<string, string | number>>;
+  channels: Array<Record<string, string | number>>;
+  campaigns: Array<Record<string, string | number>>;
+  recentActivity: { id: string; eventType: string; channel: string; platform?: string; campaignId?: string; entityType: string; entityId: string; occurredAt: string }[];
+  analyticsCoverageStatus: 'complete' | 'partial' | 'unknown';
+  lastUpdatedAt: string | null;
+  attribution: null;
+}
+
 export interface LeadCaptureEndpointSummary {
   id: string;
   organizationId: string;
