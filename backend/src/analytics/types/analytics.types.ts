@@ -15,7 +15,12 @@ export type AnalyticsEventType =
   | 'cms_draft_created'
   | 'cms_published'
   | 'content_generated'
-  | 'creative_generated';
+  | 'creative_generated'
+  | 'web_page_view'
+  | 'web_cta_click'
+  | 'web_form_view'
+  | 'web_form_submit'
+  | 'web_custom_conversion';
 
 export const ANALYTICS_EVENT_TYPES: AnalyticsEventType[] = [
   'lead_created',
@@ -35,13 +40,18 @@ export const ANALYTICS_EVENT_TYPES: AnalyticsEventType[] = [
   'cms_published',
   'content_generated',
   'creative_generated',
+  'web_page_view',
+  'web_cta_click',
+  'web_form_view',
+  'web_form_submit',
+  'web_custom_conversion',
 ];
 
 export type AnalyticsChannel = 'organic' | 'social' | 'email' | 'blog' | 'website' | 'crm' | 'direct' | 'import' | 'manual' | 'other' | 'linkedin' | 'x' | 'facebook' | 'instagram' | 'wordpress';
 export const ANALYTICS_CHANNELS: AnalyticsChannel[] = ['organic', 'social', 'email', 'blog', 'website', 'crm', 'direct', 'import', 'manual', 'other', 'linkedin', 'x', 'facebook', 'instagram', 'wordpress'];
 
-export type AnalyticsSourceType = 'lead' | 'lead_source_event' | 'lead_qualification' | 'email_message' | 'email_event' | 'social_publication' | 'cms_publication' | 'crm_opportunity' | 'content_version' | 'creative_asset';
-export const ANALYTICS_SOURCE_TYPES: AnalyticsSourceType[] = ['lead', 'lead_source_event', 'lead_qualification', 'email_message', 'email_event', 'social_publication', 'cms_publication', 'crm_opportunity', 'content_version', 'creative_asset'];
+export type AnalyticsSourceType = 'lead' | 'lead_source_event' | 'lead_qualification' | 'email_message' | 'email_event' | 'social_publication' | 'cms_publication' | 'crm_opportunity' | 'content_version' | 'creative_asset' | 'web_analytics_event';
+export const ANALYTICS_SOURCE_TYPES: AnalyticsSourceType[] = ['lead', 'lead_source_event', 'lead_qualification', 'email_message', 'email_event', 'social_publication', 'cms_publication', 'crm_opportunity', 'content_version', 'creative_asset', 'web_analytics_event'];
 
 export type AnalyticsEntityType = AnalyticsSourceType;
 export const ANALYTICS_ENTITY_TYPES = ANALYTICS_SOURCE_TYPES;
@@ -62,7 +72,12 @@ export type AnalyticsMetric =
   | 'social_posts_published'
   | 'cms_posts_published'
   | 'content_generated'
-  | 'creative_generated';
+  | 'creative_generated'
+  | 'web_page_views'
+  | 'web_cta_clicks'
+  | 'web_form_views'
+  | 'web_form_submits'
+  | 'web_custom_conversions';
 
 export const ANALYTICS_METRIC_EVENT_MAP: Record<AnalyticsMetric, AnalyticsEventType> = {
   leads_created: 'lead_created',
@@ -81,7 +96,18 @@ export const ANALYTICS_METRIC_EVENT_MAP: Record<AnalyticsMetric, AnalyticsEventT
   cms_posts_published: 'cms_published',
   content_generated: 'content_generated',
   creative_generated: 'creative_generated',
+  web_page_views: 'web_page_view',
+  web_cta_clicks: 'web_cta_click',
+  web_form_views: 'web_form_view',
+  web_form_submits: 'web_form_submit',
+  web_custom_conversions: 'web_custom_conversion',
 };
+
+export type WebAnalyticsEventType = 'page_view' | 'cta_click' | 'form_view' | 'form_submit' | 'custom_conversion';
+export const WEB_ANALYTICS_EVENT_TYPES: WebAnalyticsEventType[] = ['page_view', 'cta_click', 'form_view', 'form_submit', 'custom_conversion'];
+
+export type AnalyticsReportType = 'dashboard' | 'funnel' | 'content' | 'campaign_comparison' | 'website';
+export const ANALYTICS_REPORT_TYPES: AnalyticsReportType[] = ['dashboard', 'funnel', 'content', 'campaign_comparison', 'website'];
 
 export type AnalyticsBucket = 'day' | 'week' | 'month';
 export const ANALYTICS_BUCKETS: AnalyticsBucket[] = ['day', 'week', 'month'];

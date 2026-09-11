@@ -27,6 +27,11 @@ const EVENT_SUMMARY_KEYS: Record<AnalyticsEventType, string> = {
   cms_published: 'cmsPostsPublished',
   content_generated: 'contentGenerated',
   creative_generated: 'creativeGenerated',
+  web_page_view: 'webPageViews',
+  web_cta_click: 'webCtaClicks',
+  web_form_view: 'webFormViews',
+  web_form_submit: 'webFormSubmits',
+  web_custom_conversion: 'webCustomConversions',
 };
 
 @Injectable()
@@ -92,6 +97,11 @@ export class AnalyticsQueryService {
       recordedEmailClickRate: null,
       contentGenerated: 0,
       creativeGenerated: 0,
+      webPageViews: 0,
+      webCtaClicks: 0,
+      webFormViews: 0,
+      webFormSubmits: 0,
+      webCustomConversions: 0,
       wonOpportunityValueByCurrency: currency.map((item) => ({ currency: item._id, amount: item.amount, count: item.count })),
     };
     for (const item of counts) {

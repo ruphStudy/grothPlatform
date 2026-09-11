@@ -3983,6 +3983,11 @@ export interface AnalyticsDashboard {
     recordedEmailClickRate: number | null;
     contentGenerated: number;
     creativeGenerated: number;
+    webPageViews: number;
+    webCtaClicks: number;
+    webFormViews: number;
+    webFormSubmits: number;
+    webCustomConversions: number;
     wonOpportunityValueByCurrency: { currency: string; amount: number; count: number }[];
   };
   trends: Array<Record<string, string | number>>;
@@ -4029,6 +4034,67 @@ export interface ContentAnalytics {
 export interface CampaignComparisonAnalytics {
   campaigns: Array<Record<string, string | number>>;
   attribution: null;
+}
+
+export interface WebAnalyticsSite {
+  _id: string;
+  id?: string;
+  organizationId: string;
+  productId: string;
+  name: string;
+  websiteUrl: string;
+  normalizedOrigin: string;
+  trackingKey: string;
+  status: 'active' | 'disabled';
+  allowedOrigins: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WebAnalyticsDashboard {
+  summary: {
+    activeSites: number;
+    pageViews: number;
+    ctaClicks: number;
+    formViews: number;
+    formSubmits: number;
+    customConversions: number;
+    uniqueVisitors: number;
+    uniqueSessions: number;
+  };
+  topPages: { key: string; count: number }[];
+  topReferrers: { key: string; count: number }[];
+  topSources: { key: string; count: number }[];
+  topCampaigns: { key: string; count: number }[];
+}
+
+export type AnalyticsReportType = 'dashboard' | 'funnel' | 'content' | 'campaign_comparison' | 'website';
+
+export interface AnalyticsReport {
+  _id: string;
+  id?: string;
+  organizationId: string;
+  productId: string;
+  name: string;
+  reportType: AnalyticsReportType;
+  filters: Record<string, string | number | boolean>;
+  columns?: string[];
+  status: 'active' | 'archived';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AnalyticsDataHealth {
+  status: 'healthy' | 'warning' | 'critical';
+  checks: { code: string; status: 'healthy' | 'warning' | 'critical'; message: string; action?: string }[];
+  generatedAt: string;
+}
+
+export interface AnalyticsCsvExport {
+  filename: string;
+  contentType: 'text/csv';
+  csv: string;
+  rowCount: number;
 }
 
 export interface LeadCaptureEndpointSummary {

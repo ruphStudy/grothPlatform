@@ -18,7 +18,7 @@ import { ANALYTICS_CHANNELS, ANALYTICS_ENTITY_TYPES, ANALYTICS_EVENT_TYPES, ANAL
 import type { AnalyticsChannel, AnalyticsEntityType, AnalyticsEventType, AnalyticsSourceType } from '../types/analytics.types';
 
 const BACKFILL_BATCH_SIZE = Number(process.env.ANALYTICS_BACKFILL_BATCH_SIZE || 500);
-const SAFE_METADATA_KEYS = new Set(['platform', 'templateId', 'sequenceId', 'emailCampaignId', 'stageId', 'sourceName', 'contentKind', 'creativeKind', 'status']);
+const SAFE_METADATA_KEYS = new Set(['platform', 'templateId', 'sequenceId', 'emailCampaignId', 'stageId', 'sourceName', 'contentKind', 'creativeKind', 'status', 'source', 'medium', 'campaignName', 'term', 'content', 'siteId', 'pagePath', 'eventType']);
 
 interface IngestInput {
   organizationId: Types.ObjectId | string;

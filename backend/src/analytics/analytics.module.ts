@@ -15,17 +15,25 @@ import { LeadSourceEvent, LeadSourceEventSchema } from '../leads/schemas/lead-so
 import { Lead, LeadSchema } from '../leads/schemas/lead.schema';
 import { ProductsModule } from '../products/products.module';
 import { SocialPublication, SocialPublicationSchema } from '../social-publishing/schemas/social-publication.schema';
-import { AnalyticsController } from './analytics.controller';
+import { AnalyticsController, PublicAnalyticsController } from './analytics.controller';
 import { AnalyticsEvent, AnalyticsEventSchema } from './schemas/analytics-event.schema';
+import { AnalyticsReport, AnalyticsReportSchema } from './schemas/analytics-report.schema';
+import { WebAnalyticsEvent, WebAnalyticsEventSchema } from './schemas/web-analytics-event.schema';
+import { WebAnalyticsSite, WebAnalyticsSiteSchema } from './schemas/web-analytics-site.schema';
 import { AnalyticsEventService } from './services/analytics-event.service';
 import { AnalyticsFunnelService } from './services/analytics-funnel.service';
 import { AnalyticsQueryService } from './services/analytics-query.service';
+import { AnalyticsReportingService } from './services/analytics-reporting.service';
 import { ContentAnalyticsService } from './services/content-analytics.service';
+import { WebAnalyticsService } from './services/web-analytics.service';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: AnalyticsEvent.name, schema: AnalyticsEventSchema },
+      { name: WebAnalyticsSite.name, schema: WebAnalyticsSiteSchema },
+      { name: WebAnalyticsEvent.name, schema: WebAnalyticsEventSchema },
+      { name: AnalyticsReport.name, schema: AnalyticsReportSchema },
       { name: Lead.name, schema: LeadSchema },
       { name: LeadSourceEvent.name, schema: LeadSourceEventSchema },
       { name: LeadQualification.name, schema: LeadQualificationSchema },
@@ -43,8 +51,8 @@ import { ContentAnalyticsService } from './services/content-analytics.service';
     ]),
     ProductsModule,
   ],
-  controllers: [AnalyticsController],
-  providers: [AnalyticsEventService, AnalyticsQueryService, AnalyticsFunnelService, ContentAnalyticsService],
-  exports: [AnalyticsEventService, AnalyticsQueryService, AnalyticsFunnelService, ContentAnalyticsService],
+  controllers: [AnalyticsController, PublicAnalyticsController],
+  providers: [AnalyticsEventService, AnalyticsQueryService, AnalyticsFunnelService, ContentAnalyticsService, WebAnalyticsService, AnalyticsReportingService],
+  exports: [AnalyticsEventService, AnalyticsQueryService, AnalyticsFunnelService, ContentAnalyticsService, WebAnalyticsService, AnalyticsReportingService],
 })
 export class AnalyticsModule {}

@@ -6,7 +6,7 @@ import { Card } from '../components/Card';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { Loading } from '../components/Loading';
 import { PageHeader } from '../components/PageHeader';
-import type { AnalyticsDashboard, AnalyticsFunnel, Campaign, CampaignComparisonAnalytics, ContentAnalytics } from '../types';
+import type { AnalyticsCsvExport, AnalyticsDashboard, AnalyticsDataHealth, AnalyticsFunnel, AnalyticsReport, AnalyticsReportType, Campaign, CampaignComparisonAnalytics, ContentAnalytics, WebAnalyticsDashboard, WebAnalyticsSite } from '../types';
 
 function labelize(value: string): string {
   return value.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -27,6 +27,10 @@ function Bar({ label, value, max }: { label: string; value: number; max: number 
   );
 }
 
+function docId(item: { _id?: string; id?: string }): string {
+  return item.id || item._id || '';
+}
+
 export default function AnalyticsPage() {
   const { organizationId, productId } = useParams<{ organizationId: string; productId: string }>();
   const basePath = `/organizations/${organizationId}/products/${productId}`;
@@ -34,6 +38,14 @@ export default function AnalyticsPage() {
   const [funnel, setFunnel] = useState<AnalyticsFunnel | null>(null);
   const [content, setContent] = useState<ContentAnalytics | null>(null);
   const [campaignComparison, setCampaignComparison] = useState<CampaignComparisonAnalytics | null>(null);
+  const [sites, setSites] = useState<WebAnalyticsSite[]>([]);
+  const [website, setWebsite] = useState<WebAnalyticsDashboard | null>(null);
+  const [reports, setReports] = useState<AnalyticsReport[]>([]);
+  const [health, setHealth] = useState<AnalyticsDataHealth | null>(null);
+  const [siteDraft, setSiteDraft] = useState({ name: '', websiteUrl: '', allowedOrigins: '' });
+  const [reportDraft, setReportDraft] = useState<{ name: string; reportType: AnalyticsReportType }>({ name: '', reportType: 'dashboard' });
+  const [snippet, setSnippet] = useState('');
+  const [exportResult, setExportResult] = useState<AnalyticsCsvExport | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [range, setRange] = useState('30d');
   const [campaignId, setCampaignId] = useState('');
@@ -50,9 +62,13 @@ export default function AnalyticsPage() {
       const params = new URLSearchParams({ range, timezone: 'UTC' });
       if (campaignId) params.set('campaignId', campaignId);
       if (channel) params.set('channel', channel);
-      const [dashboardData, campaignData] = await Promise.all([
+      const [dashboardData, campaignData, sitesData, websiteData, reportsData, healthData] = await Promise.all([
         apiRequest<AnalyticsDashboard>(`${basePath}/analytics/dashboard?${params.toString()}`),
         apiRequest<Campaign[]>(`${basePath}/campaigns`),
+        apiRequest<WebAnalyticsSite[]>(`${basePath}/analytics/sites`),
+        apiRequest<WebAnalyticsDashboard>(`${basePath}/analytics/website?${params.toString()}`),
+        apiRequest<AnalyticsReport[]>(`${basePath}/analytics/reports`),
+        apiRequest<AnalyticsDataHealth>(`${basePath}/analytics/data-health`),
       ]);
       const [funnelData, contentData, comparisonData] = await Promise.all([
         apiRequest<AnalyticsFunnel>(`${basePath}/analytics/funnel?${params.toString()}`),
@@ -64,6 +80,10 @@ export default function AnalyticsPage() {
       setContent(contentData);
       setCampaignComparison(comparisonData);
       setCampaigns(campaignData);
+      setSites(sitesData);
+      setWebsite(websiteData);
+      setReports(reportsData);
+      setHealth(healthData);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load analytics');
     } finally {
@@ -83,6 +103,97 @@ export default function AnalyticsPage() {
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Analytics backfill failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createSite() {
+    if (!siteDraft.name.trim() || !siteDraft.websiteUrl.trim()) return;
+    setBusy(true);
+    try {
+      const allowedOrigins = siteDraft.allowedOrigins.split('\n').map((item) => item.trim()).filter(Boolean);
+      const site = await apiRequest<WebAnalyticsSite>(`${basePath}/analytics/sites`, { method: 'POST', body: { name: siteDraft.name, websiteUrl: siteDraft.websiteUrl, allowedOrigins } });
+      const snippetData = await apiRequest<{ snippet: string }>(`${basePath}/analytics/sites/${docId(site)}/snippet`);
+      setSnippet(snippetData.snippet);
+      setSiteDraft({ name: '', websiteUrl: '', allowedOrigins: '' });
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Website analytics site creation failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function showSnippet(siteId: string) {
+    setBusy(true);
+    try {
+      const data = await apiRequest<{ snippet: string }>(`${basePath}/analytics/sites/${siteId}/snippet`);
+      setSnippet(data.snippet);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Snippet load failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function disableSite(siteId: string) {
+    setBusy(true);
+    try {
+      await apiRequest(`${basePath}/analytics/sites/${siteId}/disable`, { method: 'POST', body: {} });
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Website analytics site disable failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createReport() {
+    if (!reportDraft.name.trim()) return;
+    setBusy(true);
+    try {
+      await apiRequest(`${basePath}/analytics/reports`, { method: 'POST', body: { ...reportDraft, filters: { range, timezone: 'UTC', ...(campaignId ? { campaignId } : {}), ...(channel ? { channel } : {}) } } });
+      setReportDraft({ name: '', reportType: 'dashboard' });
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Report creation failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runReport(reportId: string) {
+    setBusy(true);
+    try {
+      await apiRequest(`${basePath}/analytics/reports/${reportId}/run`, { method: 'POST', body: {} });
+      setError(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Report run failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function archiveReport(reportId: string) {
+    setBusy(true);
+    try {
+      await apiRequest(`${basePath}/analytics/reports/${reportId}/archive`, { method: 'POST', body: {} });
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Report archive failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function exportAnalytics(reportType: AnalyticsReportType) {
+    setBusy(true);
+    try {
+      const data = await apiRequest<AnalyticsCsvExport>(`${basePath}/analytics/export`, { method: 'POST', body: { reportType, format: 'csv', includeHeaders: true, filters: { range, timezone: 'UTC', ...(campaignId ? { campaignId } : {}), ...(channel ? { channel } : {}) } } });
+      setExportResult(data);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Analytics export failed');
     } finally {
       setBusy(false);
     }
@@ -122,9 +233,87 @@ export default function AnalyticsPage() {
               <div><span className="summary-label">Won Opportunities</span><p>{dashboard.summary.opportunitiesWon}</p></div>
               <div><span className="summary-label">Email Delivered</span><p>{dashboard.summary.emailsDelivered}</p></div>
               <div><span className="summary-label">Published Content</span><p>{dashboard.summary.socialPostsPublished + dashboard.summary.cmsPostsPublished}</p></div>
+              <div><span className="summary-label">Website Page Views</span><p>{dashboard.summary.webPageViews || 0}</p></div>
+              <div><span className="summary-label">Website Conversions</span><p>{(dashboard.summary.webFormSubmits || 0) + (dashboard.summary.webCustomConversions || 0)}</p></div>
             </div>
             <p className="entity-card-meta">Won Opportunity Value: {dashboard.summary.wonOpportunityValueByCurrency.map((item) => `${item.currency} ${item.amount}`).join(' · ') || '-'}</p>
           </Card>
+
+          <Card>
+            <h2 className="card-title">Website Tracking</h2>
+            <div className="form form-grid-2">
+              <div className="field"><label>Site Name</label><input value={siteDraft.name} onChange={(e) => setSiteDraft((draft) => ({ ...draft, name: e.target.value }))} placeholder="Marketing website" /></div>
+              <div className="field"><label>Website URL</label><input value={siteDraft.websiteUrl} onChange={(e) => setSiteDraft((draft) => ({ ...draft, websiteUrl: e.target.value }))} placeholder="https://example.com" /></div>
+              <div className="field"><label>Allowed Origins</label><textarea value={siteDraft.allowedOrigins} onChange={(e) => setSiteDraft((draft) => ({ ...draft, allowedOrigins: e.target.value }))} placeholder="https://example.com" /></div>
+              <div className="field"><label>&nbsp;</label><button className="btn btn-primary" onClick={createSite} disabled={busy || !siteDraft.name || !siteDraft.websiteUrl}>Create Site</button></div>
+            </div>
+            {!!snippet && <pre className="code-block">{snippet}</pre>}
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>Site</th><th>Origin</th><th>Status</th><th>Tracking Key</th><th>Actions</th></tr></thead>
+                <tbody>{sites.map((site) => {
+                  const id = docId(site);
+                  return <tr key={id}><td>{site.name}</td><td>{site.normalizedOrigin}</td><td>{site.status}</td><td>{site.trackingKey}</td><td><button className="btn btn-secondary" onClick={() => showSnippet(id)} disabled={busy}>Snippet</button> {site.status === 'active' && <button className="btn btn-secondary" onClick={() => disableSite(id)} disabled={busy}>Disable</button>}</td></tr>;
+                })}</tbody>
+              </table>
+            </div>
+            {!sites.length && <p className="entity-card-meta">No tracked sites yet.</p>}
+          </Card>
+
+          {website && (
+            <Card>
+              <h2 className="card-title">Website Analytics</h2>
+              <div className="summary-grid">
+                <div><span className="summary-label">Active Sites</span><p>{website.summary.activeSites}</p></div>
+                <div><span className="summary-label">Page Views</span><p>{website.summary.pageViews}</p></div>
+                <div><span className="summary-label">CTA Clicks</span><p>{website.summary.ctaClicks}</p></div>
+                <div><span className="summary-label">Form Views</span><p>{website.summary.formViews}</p></div>
+                <div><span className="summary-label">Form Submits</span><p>{website.summary.formSubmits}</p></div>
+                <div><span className="summary-label">Custom Conversions</span><p>{website.summary.customConversions}</p></div>
+                <div><span className="summary-label">Visitors</span><p>{website.summary.uniqueVisitors}</p></div>
+                <div><span className="summary-label">Sessions</span><p>{website.summary.uniqueSessions}</p></div>
+              </div>
+              <h3 className="section-title">Top Pages</h3>
+              {website.topPages.map((item) => <Bar key={item.key} label={item.key} value={item.count} max={Math.max(1, website.topPages[0]?.count || 0)} />)}
+              <h3 className="section-title">Sources and Campaigns</h3>
+              <div className="tag-list">{[...website.topSources, ...website.topCampaigns].map((item) => <span key={`${item.key}-${item.count}`} className="quality-badge quality-unavailable">{item.key}: {item.count}</span>)}</div>
+              <h3 className="section-title">Referrers</h3>
+              {website.topReferrers.map((item) => <p key={item.key} className="entity-card-meta">{item.key} · {item.count}</p>)}
+            </Card>
+          )}
+
+          <Card>
+            <h2 className="card-title">Reports and Export</h2>
+            <div className="form form-grid-2">
+              <div className="field"><label>Report Name</label><input value={reportDraft.name} onChange={(e) => setReportDraft((draft) => ({ ...draft, name: e.target.value }))} placeholder="Monthly website summary" /></div>
+              <div className="field"><label>Report Type</label><select value={reportDraft.reportType} onChange={(e) => setReportDraft((draft) => ({ ...draft, reportType: e.target.value as AnalyticsReportType }))}><option value="dashboard">Dashboard</option><option value="funnel">Funnel</option><option value="content">Content</option><option value="campaign_comparison">Campaign Comparison</option><option value="website">Website</option></select></div>
+              <div><button className="btn btn-primary" onClick={createReport} disabled={busy || !reportDraft.name}>Save Report</button></div>
+              <div><button className="btn btn-secondary" onClick={() => exportAnalytics(reportDraft.reportType)} disabled={busy}>Export CSV</button></div>
+            </div>
+            {exportResult && <p className="entity-card-meta">Export ready: {exportResult.filename} · {exportResult.rowCount} rows</p>}
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>Name</th><th>Type</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead>
+                <tbody>{reports.map((report) => {
+                  const id = docId(report);
+                  return <tr key={id}><td>{report.name}</td><td>{labelize(report.reportType)}</td><td>{report.status}</td><td>{new Date(report.updatedAt).toLocaleDateString()}</td><td><button className="btn btn-secondary" onClick={() => runReport(id)} disabled={busy}>Run</button> <button className="btn btn-secondary" onClick={() => archiveReport(id)} disabled={busy}>Archive</button></td></tr>;
+                })}</tbody>
+              </table>
+            </div>
+            {!reports.length && <p className="entity-card-meta">No saved reports yet.</p>}
+          </Card>
+
+          {health && (
+            <Card>
+              <h2 className="card-title">Data Health</h2>
+              <div className="summary-grid">
+                <div><span className="summary-label">Status</span><p>{labelize(health.status)}</p></div>
+                <div><span className="summary-label">Generated</span><p>{new Date(health.generatedAt).toLocaleString()}</p></div>
+              </div>
+              {health.checks.map((check) => <p key={check.code} className="entity-card-meta">{labelize(check.code)} · {labelize(check.status)} · {check.message}{check.action ? ` · ${check.action}` : ''}</p>)}
+              <button className="btn btn-secondary" onClick={backfill} disabled={busy}>Run Backfill</button>
+            </Card>
+          )}
 
           <Card>
             <h2 className="card-title">Trend</h2>
