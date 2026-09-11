@@ -6,7 +6,7 @@ import { Card } from '../components/Card';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { Loading } from '../components/Loading';
 import { PageHeader } from '../components/PageHeader';
-import type { AnalyticsDashboard, Campaign } from '../types';
+import type { AnalyticsDashboard, AnalyticsFunnel, Campaign, CampaignComparisonAnalytics, ContentAnalytics } from '../types';
 
 function labelize(value: string): string {
   return value.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -31,6 +31,9 @@ export default function AnalyticsPage() {
   const { organizationId, productId } = useParams<{ organizationId: string; productId: string }>();
   const basePath = `/organizations/${organizationId}/products/${productId}`;
   const [dashboard, setDashboard] = useState<AnalyticsDashboard | null>(null);
+  const [funnel, setFunnel] = useState<AnalyticsFunnel | null>(null);
+  const [content, setContent] = useState<ContentAnalytics | null>(null);
+  const [campaignComparison, setCampaignComparison] = useState<CampaignComparisonAnalytics | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [range, setRange] = useState('30d');
   const [campaignId, setCampaignId] = useState('');
@@ -51,7 +54,15 @@ export default function AnalyticsPage() {
         apiRequest<AnalyticsDashboard>(`${basePath}/analytics/dashboard?${params.toString()}`),
         apiRequest<Campaign[]>(`${basePath}/campaigns`),
       ]);
+      const [funnelData, contentData, comparisonData] = await Promise.all([
+        apiRequest<AnalyticsFunnel>(`${basePath}/analytics/funnel?${params.toString()}`),
+        apiRequest<ContentAnalytics>(`${basePath}/analytics/content?${params.toString()}`),
+        apiRequest<CampaignComparisonAnalytics>(`${basePath}/analytics/campaign-comparison?${params.toString()}`),
+      ]);
       setDashboard(dashboardData);
+      setFunnel(funnelData);
+      setContent(contentData);
+      setCampaignComparison(comparisonData);
       setCampaigns(campaignData);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load analytics');
@@ -79,6 +90,7 @@ export default function AnalyticsPage() {
 
   const trendMax = useMemo(() => Math.max(0, ...(dashboard?.trends.map((item) => Number(item.leadsCreated || 0) + Number(item.qualifiedLeads || 0) + Number(item.opportunitiesWon || 0)) ?? [])), [dashboard]);
   const channelMax = useMemo(() => Math.max(0, ...(dashboard?.channels.map((item) => Number(item.activityCount || 0)) ?? [])), [dashboard]);
+  const mixMax = useMemo(() => Math.max(0, ...(content?.channelMix.map((item) => item.activityCount) ?? [])), [content]);
 
   return (
     <AppLayout>
@@ -120,11 +132,58 @@ export default function AnalyticsPage() {
             {dashboard.trends.map((item) => <Bar key={String(item.period)} label={`${item.period} · Leads ${item.leadsCreated || 0} · Qualified ${item.qualifiedLeads || 0} · Won ${item.opportunitiesWon || 0}`} value={Number(item.leadsCreated || 0) + Number(item.qualifiedLeads || 0) + Number(item.opportunitiesWon || 0)} max={trendMax} />)}
           </Card>
 
+          {funnel && (
+            <Card>
+              <h2 className="card-title">Funnel</h2>
+              <p className="entity-card-meta">{funnel.cohort.semantics} · {new Date(funnel.cohort.from).toLocaleDateString()} to {new Date(funnel.cohort.to).toLocaleDateString()} · Cohort {funnel.cohort.cohortSize}{funnel.cohort.channelRule ? ` · ${funnel.cohort.channelRule}` : ''}</p>
+              <div className="summary-grid">
+                {funnel.stages.filter((stage) => stage.key !== 'opportunity_lost').map((stage) => (
+                  <div key={stage.key}><span className="summary-label">{stage.label}</span><p>{stage.count}</p><small>{percent(stage.conversionFromPrevious)} from previous · Drop-off {stage.dropOffFromPrevious ?? '-'}</small></div>
+                ))}
+              </div>
+              <div className="summary-grid" style={{ marginTop: 12 }}>
+                {Object.entries(funnel.durations).map(([key, value]) => <div key={key}><span className="summary-label">{labelize(key)}</span><p>{value.medianHours === null ? '-' : `${Math.round(value.medianHours)}h`}</p><small>Average {value.averageHours === null ? '-' : `${Math.round(value.averageHours)}h`} · n={value.sampleSize}</small></div>)}
+              </div>
+              <h3 className="section-title">Funnel by Channel</h3>
+              {funnel.breakdowns.byChannel.map((item) => <Bar key={item.key} label={`${labelize(item.label)} · Qualified ${item.qualified} · Opp ${item.opportunities} · Won ${item.won}`} value={item.leads} max={funnel.cohort.cohortSize} />)}
+            </Card>
+          )}
+
           <Card>
             <h2 className="card-title">Channel Performance</h2>
             {!dashboard.channels.length && <p className="entity-card-meta">No analytics data yet.</p>}
             {dashboard.channels.map((item) => <Bar key={String(item.channel)} label={`${labelize(String(item.channel))} · Leads ${item.leadsCreated || 0} · Qualified ${item.qualifiedLeads || 0} · Opportunities ${item.opportunitiesCreated || 0} · Won ${item.opportunitiesWon || 0}`} value={Number(item.activityCount || 0)} max={channelMax} />)}
           </Card>
+
+          {content && (
+            <Card>
+              <h2 className="card-title">Content Analytics</h2>
+              <div className="summary-grid">
+                <div><span className="summary-label">Content Generated</span><p>{content.summary.versionsGenerated}</p></div>
+                <div><span className="summary-label">Creative Generated</span><p>{content.summary.creativeAssetsGenerated}</p></div>
+                <div><span className="summary-label">Social Published</span><p>{content.summary.socialPublications}</p></div>
+                <div><span className="summary-label">Blog Published</span><p>{content.summary.cmsPublications}</p></div>
+                <div><span className="summary-label">Email Accepted</span><p>{content.summary.emailAccepted}</p></div>
+                <div><span className="summary-label">Publication Rate</span><p>{percent(content.summary.publicationRate)}</p></div>
+              </div>
+              <p className="entity-card-meta">Publication rate denominator: {content.summary.publicationRateDenominator}</p>
+              <h3 className="section-title">Content Kinds</h3>
+              {content.contentKindBreakdown.map((item) => <Bar key={item.key} label={labelize(item.key)} value={item.count} max={content.summary.versionsGenerated} />)}
+              <h3 className="section-title">Quality and Review</h3>
+              <p className="entity-card-meta">Average Quality Score {content.quality.averageQualityScore === null ? '-' : Math.round(content.quality.averageQualityScore)} · Sample {content.quality.sampleSize}</p>
+              <div className="tag-list">{content.humanReviewDecisionBreakdown.map((item) => <span key={item.key} className="quality-badge quality-unavailable">{item.key}: {item.count}</span>)}</div>
+              <h3 className="section-title">Creative Selection Status</h3>
+              <div className="tag-list">{content.creative.reviewStatus.map((item) => <span key={item.key} className="quality-badge quality-unavailable">{labelize(item.key)}: {item.count}</span>)}</div>
+            </Card>
+          )}
+
+          {content && (
+            <Card>
+              <h2 className="card-title">Channel Mix</h2>
+              {content.channelMix.map((item) => <Bar key={item.channel} label={`${labelize(item.channel)} · ${percent(item.activityShare)} of activity events`} value={item.activityCount} max={mixMax} />)}
+              {!content.channelMix.length && <p className="entity-card-meta">No channel activity yet.</p>}
+            </Card>
+          )}
 
           <Card>
             <h2 className="card-title">Operational Channels</h2>
@@ -145,7 +204,7 @@ export default function AnalyticsPage() {
             <div className="table-wrap">
               <table>
                 <thead><tr><th>Campaign</th><th>Activity</th><th>Content</th><th>Social</th><th>Blog</th><th>Email Sent</th><th>Leads</th><th>Qualified</th><th>Opportunities</th><th>Won</th></tr></thead>
-                <tbody>{dashboard.campaigns.map((item) => <tr key={String(item.campaignId)}><td><Link to={`${basePath}/campaigns/${item.campaignId}`}>{String(item.campaignName)}</Link></td><td>{item.activityCount}</td><td>{item.contentGenerated}</td><td>{item.socialPublished}</td><td>{item.blogPublished}</td><td>{item.emailSent}</td><td>{item.leads}</td><td>{item.qualifiedLeads}</td><td>{item.opportunities}</td><td>{item.wonOpportunities}</td></tr>)}</tbody>
+                <tbody>{(campaignComparison?.campaigns.length ? campaignComparison.campaigns : dashboard.campaigns).map((item) => <tr key={String(item.campaignId)}><td><Link to={`${basePath}/campaigns/${item.campaignId}`}>{String(item.campaignName)}</Link></td><td>{item.activityCount ?? '-'}</td><td>{item.contentPieces ?? item.contentGenerated}</td><td>{item.publishedSocial ?? item.socialPublished}</td><td>{item.publishedBlog ?? item.blogPublished}</td><td>{item.emailsAccepted ?? item.emailSent}</td><td>{item.leads}</td><td>{item.qualified ?? item.qualifiedLeads}</td><td>{item.opportunities}</td><td>{item.won ?? item.wonOpportunities}</td></tr>)}</tbody>
               </table>
             </div>
             {!dashboard.campaigns.length && <p className="entity-card-meta">No campaign-linked analytics yet.</p>}

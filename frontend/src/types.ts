@@ -3994,6 +3994,43 @@ export interface AnalyticsDashboard {
   attribution: null;
 }
 
+export interface AnalyticsFunnel {
+  cohort: { from: string; to: string; semantics: string; cohortSize: number; channelRule?: string };
+  stages: { key: string; label: string; count: number; conversionFromPrevious: number | null; conversionFromStart: number | null; dropOffFromPrevious: number | null; dropOffRateFromPrevious: number | null }[];
+  durations: Record<string, { medianHours: number | null; averageHours: number | null; sampleSize: number }>;
+  breakdowns: {
+    byCampaign: { key: string; label: string; leads: number; qualified: number; opportunities: number; won: number; leadToWonRate: number | null }[];
+    byChannel: { key: string; label: string; leads: number; qualified: number; opportunities: number; won: number; leadToWonRate: number | null }[];
+  };
+  attribution: null;
+}
+
+export interface ContentAnalytics {
+  summary: {
+    versionsGenerated: number;
+    autoImprovedVersions: number;
+    creativeAssetsGenerated: number;
+    socialPublications: number;
+    cmsPublications: number;
+    emailAccepted: number;
+    publicationRate: number | null;
+    publicationRateDenominator: string;
+  };
+  contentKindBreakdown: { key: string; count: number }[];
+  quality: { averageQualityScore: number | null; sampleSize: number; qualityBandCounts: { key: string; count: number; averageScore: number }[] };
+  humanReviewDecisionBreakdown: { key: string; count: number }[];
+  creative: { byKind: { key: string; count: number }[]; reviewStatus: { key: string; count: number }[] };
+  publishing: { social: { key: string; count: number }[]; cms: { key: string; count: number }[]; email: Record<string, number> };
+  templatePerformance: Array<Record<string, string | number>>;
+  channelMix: { channel: string; activityCount: number; activityShare: number | null; denominator: string }[];
+  attribution: null;
+}
+
+export interface CampaignComparisonAnalytics {
+  campaigns: Array<Record<string, string | number>>;
+  attribution: null;
+}
+
 export interface LeadCaptureEndpointSummary {
   id: string;
   organizationId: string;

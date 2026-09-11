@@ -11,4 +11,5 @@ export class AnalyticsDashboardQueryDto {
   @IsOptional() @IsMongoId() campaignId?: string;
   @IsOptional() @IsEnum(ANALYTICS_CHANNELS) channel?: AnalyticsChannel;
   @IsOptional() @IsString() @MaxLength(40) platform?: string;
+  @IsOptional() @IsString() @MaxLength(40) contentKind?: string;
 }
