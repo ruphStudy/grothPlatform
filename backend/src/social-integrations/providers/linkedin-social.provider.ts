@@ -60,7 +60,7 @@ export class LinkedInSocialProvider implements SocialProvider {
     // reliably requires API access this app's current OIDC+w_member_social
     // scope was never verified against; never claim a status-check
     // capability that isn't genuinely implemented.
-    return { connectAccount: true, refreshToken: false, publishText: true, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: false, accountDiscovery: false };
+    return { connectAccount: true, refreshToken: false, publishText: true, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: false, fetchPostMetrics: false, accountDiscovery: false };
   }
 
   buildAuthorizationUrl(input: BuildAuthorizationUrlInput): BuildAuthorizationUrlResult {

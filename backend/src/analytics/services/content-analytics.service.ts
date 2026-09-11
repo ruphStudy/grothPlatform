@@ -14,6 +14,7 @@ import { ProductsService } from '../../products/products.service';
 import { SocialPublication, SocialPublicationDocument } from '../../social-publishing/schemas/social-publication.schema';
 import { AnalyticsDashboardQueryDto } from '../dto/analytics.dto';
 import { AnalyticsEvent, AnalyticsEventDocument } from '../schemas/analytics-event.schema';
+import { SocialPostMetricsSnapshot, SocialPostMetricsSnapshotDocument } from '../schemas/social-post-metrics-snapshot.schema';
 
 @Injectable()
 export class ContentAnalyticsService {
@@ -24,6 +25,7 @@ export class ContentAnalyticsService {
     @InjectModel(ContentHumanReviewResult.name) private readonly humanReviewModel: Model<ContentHumanReviewResultDocument>,
     @InjectModel(CreativeAsset.name) private readonly creativeAssetModel: Model<CreativeAssetDocument>,
     @InjectModel(SocialPublication.name) private readonly socialPublicationModel: Model<SocialPublicationDocument>,
+    @InjectModel(SocialPostMetricsSnapshot.name) private readonly socialMetricsModel: Model<SocialPostMetricsSnapshotDocument>,
     @InjectModel(CmsPublication.name) private readonly cmsPublicationModel: Model<CmsPublicationDocument>,
     @InjectModel(EmailMessage.name) private readonly emailMessageModel: Model<EmailMessageDocument>,
     @InjectModel(EmailEvent.name) private readonly emailEventModel: Model<EmailEventDocument>,
@@ -38,13 +40,14 @@ export class ContentAnalyticsService {
     const range = this.range(query);
     const base = this.base(organizationId, productId, range, query.campaignId);
     const contentMatch = { ...base, ...(query.contentKind ? { kind: query.contentKind } : {}) };
-    const [contentKinds, creativeKinds, creativeReview, quality, humanReview, social, cms, email, templatePerformance, channelMix] = await Promise.all([
+    const [contentKinds, creativeKinds, creativeReview, quality, humanReview, social, socialMetrics, cms, email, templatePerformance, channelMix] = await Promise.all([
       this.group(this.contentVersionModel, contentMatch, '$kind'),
       this.group(this.creativeAssetModel, base, '$kind'),
       this.group(this.creativeAssetModel, base, '$reviewStatus'),
       this.quality(organizationId, productId, range, query.campaignId),
       this.humanReview(organizationId, productId, range, query.campaignId),
       this.social(base),
+      this.socialMetrics(base),
       this.cms(base),
       this.email(base),
       this.templatePerformance(organizationId, productId, base),
@@ -59,6 +62,8 @@ export class ContentAnalyticsService {
         autoImprovedVersions: await this.contentVersionModel.countDocuments({ ...contentMatch, 'generationMetadata.generationReason': 'auto_improved' } as any).exec(),
         creativeAssetsGenerated: creativeKinds.reduce((sum, item) => sum + item.count, 0),
         socialPublications: socialPublished,
+        socialPostsWithMetrics: socialMetrics.postsWithMetrics,
+        socialMetricTotals: socialMetrics.metrics,
         cmsPublications: cmsPublished,
         emailAccepted: email.accepted,
         publicationRate: versionsGenerated ? (socialPublished + cmsPublished) / versionsGenerated : null,
@@ -80,11 +85,12 @@ export class ContentAnalyticsService {
     await this.assertCampaign(organizationId, productId, campaignId);
     const range = this.range(query);
     const base = this.base(organizationId, productId, range, campaignId);
-    const [events, contentKinds, creativeKinds, social, cms, email, currency, recent] = await Promise.all([
+    const [events, contentKinds, creativeKinds, social, socialMetrics, cms, email, currency, recent] = await Promise.all([
       this.analyticsEventModel.aggregate([{ $match: base }, { $group: { _id: '$eventType', count: { $sum: 1 } } }]).exec(),
       this.group(this.contentVersionModel, base, '$kind'),
       this.group(this.creativeAssetModel, base, '$kind'),
       this.social(base),
+      this.socialMetrics(base),
       this.cms(base),
       this.email(base),
       this.analyticsEventModel.aggregate([{ $match: { ...base, eventType: 'opportunity_won', numericValue: { $type: 'number' }, currency: { $type: 'string' } } }, { $group: { _id: '$currency', amount: { $sum: '$numericValue' }, count: { $sum: 1 } } }]).exec(),
@@ -96,7 +102,7 @@ export class ContentAnalyticsService {
       activity: { total: events.reduce((sum, item) => sum + item.count, 0), recent: recent.map((event) => ({ id: event._id.toString(), eventType: event.eventType, channel: event.channel, occurredAt: event.occurredAt })) },
       content: { generated: map.get('content_generated') ?? 0, byKind: contentKinds },
       creative: { generated: map.get('creative_generated') ?? 0, byKind: creativeKinds },
-      publishing: { social, cms },
+      publishing: { social, socialMetrics, cms },
       email,
       leads: map.get('lead_created') ?? 0,
       qualifiedLeads: map.get('lead_qualified') ?? 0,
@@ -149,6 +155,24 @@ export class ContentAnalyticsService {
     const statuses = await this.group(this.socialPublicationModel, base, '$status');
     const platforms = await this.group(this.socialPublicationModel, base, '$platform');
     return statuses.map((item) => ({ ...item, platforms }));
+  }
+
+  private async socialMetrics(base: Record<string, unknown>) {
+    const publications = await this.socialPublicationModel.find({ ...base, status: 'published' }, { _id: 1 }).exec();
+    const ids = publications.map((publication) => publication._id);
+    if (!ids.length) return { postsWithMetrics: 0, metrics: {} };
+    const rows = await this.socialMetricsModel.aggregate([
+      { $match: { socialPublicationId: { $in: ids } } },
+      { $sort: { fetchedAt: -1 } },
+      { $group: { _id: '$socialPublicationId', metrics: { $first: '$metrics' } } },
+    ]).exec();
+    const totals: Record<string, number> = {};
+    for (const row of rows) {
+      for (const [key, value] of Object.entries(row.metrics || {})) {
+        if (typeof value === 'number') totals[key] = (totals[key] || 0) + value;
+      }
+    }
+    return { postsWithMetrics: rows.length, metrics: totals };
   }
 
   private async cms(base: Record<string, unknown>) {

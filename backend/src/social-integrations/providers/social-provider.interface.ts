@@ -4,12 +4,14 @@ import type {
   DiscoverAccountCandidatesInput,
   ExchangeAuthorizationCodeInput,
   GetPostStatusInput,
+  GetPostMetricsInput,
   GetProfileInput,
   RefreshAccessTokenInput,
   SocialAccountCandidate,
   SocialAuthResult,
   SocialPlatform,
   SocialPostStatusResult,
+  SocialPostMetricsResult,
   SocialProfile,
   SocialProviderCapabilities,
   SocialPublishRequest,
@@ -46,4 +48,6 @@ export interface SocialProvider {
   publish?(input: SocialPublishRequest): Promise<SocialPublishResult>;
 
   getPostStatus?(input: GetPostStatusInput): Promise<SocialPostStatusResult>;
+
+  getPostMetrics?(input: GetPostMetricsInput): Promise<SocialPostMetricsResult>;
 }

@@ -8,12 +8,14 @@ import type {
   DiscoverAccountCandidatesInput,
   ExchangeAuthorizationCodeInput,
   GetPostStatusInput,
+  GetPostMetricsInput,
   GetProfileInput,
   RefreshAccessTokenInput,
   SocialAccountCandidate,
   SocialAuthResult,
   SocialPlatform,
   SocialPostStatusResult,
+  SocialPostMetricsResult,
   SocialProfile,
   SocialProviderCapabilities,
   SocialPublishRequest,
@@ -110,6 +112,14 @@ export class SocialEngineService {
       throw new SocialPostStatusUnsupportedError(`The ${platform} provider does not support remote status checks.`);
     }
     return this.callOnce(platform, () => provider.getPostStatus!(input), 'social_provider_request_failed');
+  }
+
+  async getPostMetrics(platform: SocialPlatform, input: GetPostMetricsInput): Promise<SocialPostMetricsResult> {
+    const provider = this.resolveProvider(platform);
+    if (!provider.getCapabilities().fetchPostMetrics || !provider.getPostMetrics) {
+      throw new SocialCapabilityUnsupportedError(`The ${platform} provider does not support post metrics.`);
+    }
+    return this.callOnce(platform, () => provider.getPostMetrics!(input), 'social_provider_request_failed');
   }
 
   private assertCapability(provider: SocialProvider, capability: keyof SocialProviderCapabilities): void {

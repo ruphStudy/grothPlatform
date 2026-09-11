@@ -5,6 +5,7 @@ import { ProductsService } from '../../products/products.service';
 import { AnalyticsDashboardQueryDto, AnalyticsExportDto, CreateAnalyticsReportDto, UpdateAnalyticsReportDto } from '../dto/analytics.dto';
 import { AnalyticsEvent, AnalyticsEventDocument } from '../schemas/analytics-event.schema';
 import { AnalyticsReport, AnalyticsReportDocument } from '../schemas/analytics-report.schema';
+import { SocialPostMetricsSnapshot, SocialPostMetricsSnapshotDocument } from '../schemas/social-post-metrics-snapshot.schema';
 import { WebAnalyticsEvent, WebAnalyticsEventDocument } from '../schemas/web-analytics-event.schema';
 import { WebAnalyticsSite, WebAnalyticsSiteDocument } from '../schemas/web-analytics-site.schema';
 import type { AnalyticsReportType } from '../types/analytics.types';
@@ -21,6 +22,7 @@ export class AnalyticsReportingService {
     @InjectModel(AnalyticsEvent.name) private readonly analyticsEventModel: Model<AnalyticsEventDocument>,
     @InjectModel(WebAnalyticsEvent.name) private readonly webEventModel: Model<WebAnalyticsEventDocument>,
     @InjectModel(WebAnalyticsSite.name) private readonly siteModel: Model<WebAnalyticsSiteDocument>,
+    @InjectModel(SocialPostMetricsSnapshot.name) private readonly socialMetricsModel: Model<SocialPostMetricsSnapshotDocument>,
     private readonly productsService: ProductsService,
     private readonly queryService: AnalyticsQueryService,
     private readonly funnelService: AnalyticsFunnelService,
@@ -91,7 +93,7 @@ export class AnalyticsReportingService {
     const org = new Types.ObjectId(organizationId);
     const product = new Types.ObjectId(productId);
     const since = new Date(Date.now() - 30 * 86400000);
-    const [events, recent, duplicates, activeSites, recentWeb, totalWeb, normalizedWeb] = await Promise.all([
+    const [events, recent, duplicates, activeSites, recentWeb, totalWeb, normalizedWeb, socialMetricSnapshots] = await Promise.all([
       this.analyticsEventModel.countDocuments({ organizationId: org, productId: product }).exec(),
       this.analyticsEventModel.countDocuments({ organizationId: org, productId: product, occurredAt: { $gte: since } }).exec(),
       this.analyticsEventModel.aggregate([{ $match: { organizationId: org, productId: product } }, { $group: { _id: '$deduplicationKey', count: { $sum: 1 } } }, { $match: { count: { $gt: 1 } } }, { $limit: 1 }]).exec(),
@@ -99,6 +101,7 @@ export class AnalyticsReportingService {
       this.webEventModel.countDocuments({ organizationId: org, productId: product, occurredAt: { $gte: since } }).exec(),
       this.webEventModel.countDocuments({ organizationId: org, productId: product }).exec(),
       this.analyticsEventModel.countDocuments({ organizationId: org, productId: product, sourceType: 'web_analytics_event' }).exec(),
+      this.socialMetricsModel.countDocuments({ organizationId: org, productId: product, fetchedAt: { $gte: since } }).exec(),
     ]);
     const checks = [
       { code: 'event_coverage', status: events ? 'healthy' : 'warning', message: events ? `${events} normalized analytics events recorded` : 'No normalized analytics events found', action: events ? undefined : 'Run analytics backfill or connect event sources' },
@@ -106,6 +109,7 @@ export class AnalyticsReportingService {
       { code: 'duplicate_dedupe_keys', status: duplicates.length ? 'critical' : 'healthy', message: duplicates.length ? 'Duplicate deduplication keys detected' : 'No duplicate deduplication keys detected' },
       { code: 'website_collector_health', status: activeSites && !recentWeb ? 'warning' : 'healthy', message: activeSites ? `${activeSites} active sites, ${recentWeb} website events in the last 30 days` : 'No active website analytics sites', action: activeSites && !recentWeb ? 'Install or verify the website tracking snippet' : undefined },
       { code: 'orphaned_web_events', status: totalWeb > normalizedWeb ? 'warning' : 'healthy', message: totalWeb > normalizedWeb ? 'Some website events are missing normalized analytics events' : 'Website events are normalized' },
+      { code: 'social_metrics_snapshots', status: socialMetricSnapshots ? 'healthy' : 'warning', message: socialMetricSnapshots ? `${socialMetricSnapshots} social metrics snapshots in the last 30 days` : 'No social metrics snapshots in the last 30 days', action: socialMetricSnapshots ? undefined : 'Use Sync Metrics on published social posts whose provider supports metrics' },
       { code: 'currency_grouping_risk', status: 'healthy', message: 'Revenue aggregates remain grouped by currency' },
       { code: 'backfill_status', status: 'healthy', message: 'Backfill endpoint available for this product' },
     ];

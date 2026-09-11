@@ -6,6 +6,7 @@ import { AnalyticsFunnelService } from './services/analytics-funnel.service';
 import { AnalyticsQueryService } from './services/analytics-query.service';
 import { AnalyticsReportingService } from './services/analytics-reporting.service';
 import { ContentAnalyticsService } from './services/content-analytics.service';
+import { SocialAnalyticsService } from './services/social-analytics.service';
 import { WebAnalyticsService } from './services/web-analytics.service';
 
 @UseGuards(JwtAuthGuard)
@@ -18,6 +19,7 @@ export class AnalyticsController {
     private readonly contentService: ContentAnalyticsService,
     private readonly webAnalyticsService: WebAnalyticsService,
     private readonly reportingService: AnalyticsReportingService,
+    private readonly socialAnalyticsService: SocialAnalyticsService,
   ) {}
 
   @Post('backfill')
@@ -98,6 +100,26 @@ export class AnalyticsController {
   @Get('website')
   website(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Query() query: AnalyticsDashboardQueryDto) {
     return this.webAnalyticsService.website(organizationId, productId, req.user.userId, query);
+  }
+
+  @Get('social')
+  social(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Query() query: AnalyticsDashboardQueryDto) {
+    return this.socialAnalyticsService.overview(organizationId, productId, req.user.userId, query);
+  }
+
+  @Get('social/posts')
+  socialPosts(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Query() query: AnalyticsDashboardQueryDto) {
+    return this.socialAnalyticsService.posts(organizationId, productId, req.user.userId, query);
+  }
+
+  @Get('social/posts/:publicationId')
+  socialPost(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Param('publicationId') publicationId: string) {
+    return this.socialAnalyticsService.post(organizationId, productId, req.user.userId, publicationId);
+  }
+
+  @Post('social/posts/:publicationId/sync')
+  syncSocialPost(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string, @Param('productId') productId: string, @Param('publicationId') publicationId: string) {
+    return this.socialAnalyticsService.syncPost(organizationId, productId, req.user.userId, publicationId);
   }
 
   @Get('reports')

@@ -4016,6 +4016,8 @@ export interface ContentAnalytics {
     autoImprovedVersions: number;
     creativeAssetsGenerated: number;
     socialPublications: number;
+    socialPostsWithMetrics?: number;
+    socialMetricTotals?: Record<string, number>;
     cmsPublications: number;
     emailAccepted: number;
     publicationRate: number | null;
@@ -4066,6 +4068,48 @@ export interface WebAnalyticsDashboard {
   topReferrers: { key: string; count: number }[];
   topSources: { key: string; count: number }[];
   topCampaigns: { key: string; count: number }[];
+}
+
+export interface SocialMetrics {
+  impressions?: number;
+  reach?: number;
+  likes?: number;
+  reactions?: number;
+  comments?: number;
+  shares?: number;
+  reposts?: number;
+  clicks?: number;
+  videoViews?: number;
+}
+
+export interface SocialAnalyticsPost {
+  publicationId: string;
+  campaignId: string;
+  platform: 'linkedin' | 'x' | 'facebook' | 'instagram';
+  status: string;
+  externalPostId?: string;
+  providerPostUrl?: string;
+  publishedAt?: string;
+  metrics: SocialMetrics;
+  availableMetrics: (keyof SocialMetrics)[];
+  lastSyncedAt: string | null;
+}
+
+export interface SocialAnalyticsDashboard {
+  summary: {
+    postsPublished: number;
+    postsWithMetrics: number;
+    metrics: SocialMetrics;
+    availableMetrics: (keyof SocialMetrics)[];
+  };
+  platforms: {
+    platform: 'linkedin' | 'x' | 'facebook' | 'instagram';
+    postsPublished: number;
+    postsWithMetrics: number;
+    metrics: SocialMetrics;
+    availableMetrics: (keyof SocialMetrics)[];
+  }[];
+  posts: SocialAnalyticsPost[];
 }
 
 export type AnalyticsReportType = 'dashboard' | 'funnel' | 'content' | 'campaign_comparison' | 'website';

@@ -12,6 +12,7 @@ export interface SocialProviderCapabilities {
   publishVideo: boolean;
   fetchProfile: boolean;
   fetchPostStatus: boolean;
+  fetchPostMetrics: boolean;
   // 18E/18F: true only for providers whose OAuth flow yields multiple
   // possible marketing accounts (Facebook Pages, linked Instagram
   // professional accounts) that a user must discover/select among.
@@ -48,6 +49,11 @@ export interface GetProfileInput {
 }
 
 export interface GetPostStatusInput {
+  accessToken: string;
+  externalPostId: string;
+}
+
+export interface GetPostMetricsInput {
   accessToken: string;
   externalPostId: string;
 }
@@ -155,4 +161,26 @@ export interface SocialPostStatusResult {
   providerPostUrl?: string;
   checkedAt: Date;
   metadata?: Record<string, string | number | boolean>;
+}
+
+export interface SocialPostMetrics {
+  impressions?: number;
+  reach?: number;
+  likes?: number;
+  reactions?: number;
+  comments?: number;
+  shares?: number;
+  reposts?: number;
+  clicks?: number;
+  videoViews?: number;
+}
+
+export type SocialPostMetricKey = keyof SocialPostMetrics;
+
+export interface SocialPostMetricsResult {
+  externalPostId: string;
+  platform: SocialPlatform;
+  metrics: SocialPostMetrics;
+  availableMetrics: SocialPostMetricKey[];
+  fetchedAt: Date;
 }

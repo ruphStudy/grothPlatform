@@ -7,11 +7,13 @@ import type {
   DiscoverAccountCandidatesInput,
   ExchangeAuthorizationCodeInput,
   GetPostStatusInput,
+  GetPostMetricsInput,
   GetProfileInput,
   SocialAccountCandidate,
   SocialAuthResult,
   SocialPlatform,
   SocialPostStatusResult,
+  SocialPostMetricsResult,
   SocialProfile,
   SocialProviderCapabilities,
   SocialPublishRequest,
@@ -46,6 +48,10 @@ interface InstagramMediaContainerResponse {
   id?: string;
 }
 
+interface InstagramInsightsResponse {
+  data?: { name?: string; values?: { value?: number }[] }[];
+}
+
 /**
  * 18F: Instagram connection reuses the same Meta OAuth/Graph plumbing as
  * Facebook (item 19/20) — no separate app credentials, no duplicated
@@ -71,7 +77,7 @@ export class InstagramSocialProvider implements SocialProvider {
     // text-only publishing is never advertised/implemented for this
     // platform (item 24/26). 19F: a media-object status check via a
     // single Graph GET is genuinely implemented below.
-    return { connectAccount: true, refreshToken: false, publishText: false, publishImage: true, publishVideo: false, fetchProfile: true, fetchPostStatus: true, accountDiscovery: true };
+    return { connectAccount: true, refreshToken: false, publishText: false, publishImage: true, publishVideo: false, fetchProfile: true, fetchPostStatus: true, fetchPostMetrics: true, accountDiscovery: true };
   }
 
   buildAuthorizationUrl(input: BuildAuthorizationUrlInput): BuildAuthorizationUrlResult {
@@ -171,6 +177,29 @@ export class InstagramSocialProvider implements SocialProvider {
       return { providerPostId: input.externalPostId, status: 'published', providerPostUrl: url, checkedAt };
     }
     return { providerPostId: input.externalPostId, status: 'unavailable', checkedAt };
+  }
+
+  async getPostMetrics(input: GetPostMetricsInput): Promise<SocialPostMetricsResult> {
+    const fetchedAt = new Date();
+    const data = (await metaGraphGet(this.configService, `/${input.externalPostId}/insights`, input.accessToken, { metric: 'impressions,reach,likes,comments,shares,saved,video_views' })) as InstagramInsightsResponse;
+    const byName = new Map((data.data || []).map((item) => [item.name, item.values?.[0]?.value]));
+    const metrics = {
+      impressions: this.number(byName.get('impressions')),
+      reach: this.number(byName.get('reach')),
+      likes: this.number(byName.get('likes')),
+      comments: this.number(byName.get('comments')),
+      shares: this.number(byName.get('shares')),
+      videoViews: this.number(byName.get('video_views')),
+    };
+    return { externalPostId: input.externalPostId, platform: 'instagram', metrics, availableMetrics: this.available(metrics), fetchedAt };
+  }
+
+  private number(value: unknown): number | undefined {
+    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  }
+
+  private available(metrics: Record<string, number | undefined>) {
+    return Object.entries(metrics).filter(([, value]) => value !== undefined).map(([key]) => key as keyof import('../types/social.types').SocialPostMetrics);
   }
 
   private getConfiguredScopes(): string[] {

@@ -7,11 +7,13 @@ import type {
   DiscoverAccountCandidatesInput,
   ExchangeAuthorizationCodeInput,
   GetPostStatusInput,
+  GetPostMetricsInput,
   GetProfileInput,
   SocialAccountCandidate,
   SocialAuthResult,
   SocialPlatform,
   SocialPostStatusResult,
+  SocialPostMetricsResult,
   SocialProfile,
   SocialProviderCapabilities,
   SocialPublishRequest,
@@ -26,6 +28,14 @@ const DEFAULT_SCOPES = ['public_profile', 'pages_show_list', 'pages_read_engagem
 
 interface FacebookFeedPostResponse {
   id?: string;
+}
+
+interface FacebookPostMetricsResponse {
+  impressions?: number;
+  post_impressions_unique?: number;
+  likes?: { summary?: { total_count?: number } };
+  comments?: { summary?: { total_count?: number } };
+  shares?: { count?: number };
 }
 
 interface FacebookMeResponse {
@@ -64,7 +74,7 @@ export class FacebookSocialProvider implements SocialProvider {
     // is not (item 23/26) — never advertise a capability this adapter
     // doesn't actually implement. 19F: a Page-post status check via a
     // single Graph GET is genuinely implemented below.
-    return { connectAccount: true, refreshToken: false, publishText: true, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: true, accountDiscovery: true };
+    return { connectAccount: true, refreshToken: false, publishText: true, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: true, fetchPostMetrics: true, accountDiscovery: true };
   }
 
   buildAuthorizationUrl(input: BuildAuthorizationUrlInput): BuildAuthorizationUrlResult {
@@ -147,6 +157,27 @@ export class FacebookSocialProvider implements SocialProvider {
       return { providerPostId: input.externalPostId, status: 'published', providerPostUrl: url, checkedAt };
     }
     return { providerPostId: input.externalPostId, status: 'unavailable', checkedAt };
+  }
+
+  async getPostMetrics(input: GetPostMetricsInput): Promise<SocialPostMetricsResult> {
+    const fetchedAt = new Date();
+    const data = (await metaGraphGet(this.configService, `/${input.externalPostId}`, input.accessToken, { fields: 'likes.summary(true),comments.summary(true),shares,post_impressions,post_impressions_unique' })) as FacebookPostMetricsResponse;
+    const metrics = {
+      impressions: this.number(data.impressions ?? (data as Record<string, unknown>).post_impressions),
+      reach: this.number(data.post_impressions_unique),
+      reactions: this.number(data.likes?.summary?.total_count),
+      comments: this.number(data.comments?.summary?.total_count),
+      shares: this.number(data.shares?.count),
+    };
+    return { externalPostId: input.externalPostId, platform: 'facebook', metrics, availableMetrics: this.available(metrics), fetchedAt };
+  }
+
+  private number(value: unknown): number | undefined {
+    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  }
+
+  private available(metrics: Record<string, number | undefined>) {
+    return Object.entries(metrics).filter(([, value]) => value !== undefined).map(([key]) => key as keyof import('../types/social.types').SocialPostMetrics);
   }
 
   private getConfiguredScopes(): string[] {

@@ -6,7 +6,7 @@ import { Card } from '../components/Card';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { Loading } from '../components/Loading';
 import { PageHeader } from '../components/PageHeader';
-import type { AnalyticsCsvExport, AnalyticsDashboard, AnalyticsDataHealth, AnalyticsFunnel, AnalyticsReport, AnalyticsReportType, Campaign, CampaignComparisonAnalytics, ContentAnalytics, WebAnalyticsDashboard, WebAnalyticsSite } from '../types';
+import type { AnalyticsCsvExport, AnalyticsDashboard, AnalyticsDataHealth, AnalyticsFunnel, AnalyticsReport, AnalyticsReportType, Campaign, CampaignComparisonAnalytics, ContentAnalytics, SocialAnalyticsDashboard, SocialMetrics, WebAnalyticsDashboard, WebAnalyticsSite } from '../types';
 
 function labelize(value: string): string {
   return value.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -31,6 +31,11 @@ function docId(item: { _id?: string; id?: string }): string {
   return item.id || item._id || '';
 }
 
+function metricValue(metrics: SocialMetrics, key: keyof SocialMetrics): string {
+  const value = metrics[key];
+  return typeof value === 'number' ? String(value) : 'Not available';
+}
+
 export default function AnalyticsPage() {
   const { organizationId, productId } = useParams<{ organizationId: string; productId: string }>();
   const basePath = `/organizations/${organizationId}/products/${productId}`;
@@ -40,6 +45,7 @@ export default function AnalyticsPage() {
   const [campaignComparison, setCampaignComparison] = useState<CampaignComparisonAnalytics | null>(null);
   const [sites, setSites] = useState<WebAnalyticsSite[]>([]);
   const [website, setWebsite] = useState<WebAnalyticsDashboard | null>(null);
+  const [social, setSocial] = useState<SocialAnalyticsDashboard | null>(null);
   const [reports, setReports] = useState<AnalyticsReport[]>([]);
   const [health, setHealth] = useState<AnalyticsDataHealth | null>(null);
   const [siteDraft, setSiteDraft] = useState({ name: '', websiteUrl: '', allowedOrigins: '' });
@@ -62,11 +68,12 @@ export default function AnalyticsPage() {
       const params = new URLSearchParams({ range, timezone: 'UTC' });
       if (campaignId) params.set('campaignId', campaignId);
       if (channel) params.set('channel', channel);
-      const [dashboardData, campaignData, sitesData, websiteData, reportsData, healthData] = await Promise.all([
+      const [dashboardData, campaignData, sitesData, websiteData, socialData, reportsData, healthData] = await Promise.all([
         apiRequest<AnalyticsDashboard>(`${basePath}/analytics/dashboard?${params.toString()}`),
         apiRequest<Campaign[]>(`${basePath}/campaigns`),
         apiRequest<WebAnalyticsSite[]>(`${basePath}/analytics/sites`),
         apiRequest<WebAnalyticsDashboard>(`${basePath}/analytics/website?${params.toString()}`),
+        apiRequest<SocialAnalyticsDashboard>(`${basePath}/analytics/social?${params.toString()}`),
         apiRequest<AnalyticsReport[]>(`${basePath}/analytics/reports`),
         apiRequest<AnalyticsDataHealth>(`${basePath}/analytics/data-health`),
       ]);
@@ -82,6 +89,7 @@ export default function AnalyticsPage() {
       setCampaigns(campaignData);
       setSites(sitesData);
       setWebsite(websiteData);
+      setSocial(socialData);
       setReports(reportsData);
       setHealth(healthData);
     } catch (err) {
@@ -199,6 +207,18 @@ export default function AnalyticsPage() {
     }
   }
 
+  async function syncSocialMetrics(publicationId: string) {
+    setBusy(true);
+    try {
+      await apiRequest(`${basePath}/analytics/social/posts/${publicationId}/sync`, { method: 'POST', body: {} });
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Social metrics sync failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const trendMax = useMemo(() => Math.max(0, ...(dashboard?.trends.map((item) => Number(item.leadsCreated || 0) + Number(item.qualifiedLeads || 0) + Number(item.opportunitiesWon || 0)) ?? [])), [dashboard]);
   const channelMax = useMemo(() => Math.max(0, ...(dashboard?.channels.map((item) => Number(item.activityCount || 0)) ?? [])), [dashboard]);
   const mixMax = useMemo(() => Math.max(0, ...(content?.channelMix.map((item) => item.activityCount) ?? [])), [content]);
@@ -279,6 +299,37 @@ export default function AnalyticsPage() {
               <div className="tag-list">{[...website.topSources, ...website.topCampaigns].map((item) => <span key={`${item.key}-${item.count}`} className="quality-badge quality-unavailable">{item.key}: {item.count}</span>)}</div>
               <h3 className="section-title">Referrers</h3>
               {website.topReferrers.map((item) => <p key={item.key} className="entity-card-meta">{item.key} · {item.count}</p>)}
+            </Card>
+          )}
+
+          {social && (
+            <Card>
+              <h2 className="card-title">Social Analytics</h2>
+              <div className="summary-grid">
+                <div><span className="summary-label">Published Posts</span><p>{social.summary.postsPublished}</p></div>
+                <div><span className="summary-label">Posts With Metrics</span><p>{social.summary.postsWithMetrics}</p></div>
+                <div><span className="summary-label">Impressions</span><p>{metricValue(social.summary.metrics, 'impressions')}</p></div>
+                <div><span className="summary-label">Reach</span><p>{metricValue(social.summary.metrics, 'reach')}</p></div>
+                <div><span className="summary-label">Reactions</span><p>{metricValue(social.summary.metrics, 'reactions')}</p></div>
+                <div><span className="summary-label">Comments</span><p>{metricValue(social.summary.metrics, 'comments')}</p></div>
+                <div><span className="summary-label">Shares/Reposts</span><p>{metricValue(social.summary.metrics, 'shares') !== 'Not available' ? metricValue(social.summary.metrics, 'shares') : metricValue(social.summary.metrics, 'reposts')}</p></div>
+                <div><span className="summary-label">Clicks</span><p>{metricValue(social.summary.metrics, 'clicks')}</p></div>
+              </div>
+              <h3 className="section-title">Platform Metrics</h3>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>Platform</th><th>Posts</th><th>With Metrics</th><th>Impressions</th><th>Reach</th><th>Reactions</th><th>Comments</th><th>Shares/Reposts</th></tr></thead>
+                  <tbody>{social.platforms.map((item) => <tr key={item.platform}><td>{labelize(item.platform)}</td><td>{item.postsPublished}</td><td>{item.postsWithMetrics}</td><td>{metricValue(item.metrics, 'impressions')}</td><td>{metricValue(item.metrics, 'reach')}</td><td>{metricValue(item.metrics, 'reactions') !== 'Not available' ? metricValue(item.metrics, 'reactions') : metricValue(item.metrics, 'likes')}</td><td>{metricValue(item.metrics, 'comments')}</td><td>{metricValue(item.metrics, 'shares') !== 'Not available' ? metricValue(item.metrics, 'shares') : metricValue(item.metrics, 'reposts')}</td></tr>)}</tbody>
+                </table>
+              </div>
+              <h3 className="section-title">Post Metrics</h3>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>Platform</th><th>Post</th><th>Impressions</th><th>Reach</th><th>Comments</th><th>Last Synced</th><th>Actions</th></tr></thead>
+                  <tbody>{social.posts.map((post) => <tr key={post.publicationId}><td>{labelize(post.platform)}</td><td>{post.externalPostId || '-'}</td><td>{metricValue(post.metrics, 'impressions')}</td><td>{metricValue(post.metrics, 'reach')}</td><td>{metricValue(post.metrics, 'comments')}</td><td>{post.lastSyncedAt ? new Date(post.lastSyncedAt).toLocaleString() : 'Not available'}</td><td><button className="btn btn-secondary" onClick={() => syncSocialMetrics(post.publicationId)} disabled={busy}>Sync Metrics</button></td></tr>)}</tbody>
+                </table>
+              </div>
+              {!social.posts.length && <p className="entity-card-meta">No published social posts in this range.</p>}
             </Card>
           )}
 

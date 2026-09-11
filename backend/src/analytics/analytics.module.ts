@@ -14,10 +14,12 @@ import { LeadQualification, LeadQualificationSchema } from '../leads/schemas/lea
 import { LeadSourceEvent, LeadSourceEventSchema } from '../leads/schemas/lead-source-event.schema';
 import { Lead, LeadSchema } from '../leads/schemas/lead.schema';
 import { ProductsModule } from '../products/products.module';
+import { SocialIntegrationsModule } from '../social-integrations/social-integrations.module';
 import { SocialPublication, SocialPublicationSchema } from '../social-publishing/schemas/social-publication.schema';
 import { AnalyticsController, PublicAnalyticsController } from './analytics.controller';
 import { AnalyticsEvent, AnalyticsEventSchema } from './schemas/analytics-event.schema';
 import { AnalyticsReport, AnalyticsReportSchema } from './schemas/analytics-report.schema';
+import { SocialPostMetricsSnapshot, SocialPostMetricsSnapshotSchema } from './schemas/social-post-metrics-snapshot.schema';
 import { WebAnalyticsEvent, WebAnalyticsEventSchema } from './schemas/web-analytics-event.schema';
 import { WebAnalyticsSite, WebAnalyticsSiteSchema } from './schemas/web-analytics-site.schema';
 import { AnalyticsEventService } from './services/analytics-event.service';
@@ -25,6 +27,7 @@ import { AnalyticsFunnelService } from './services/analytics-funnel.service';
 import { AnalyticsQueryService } from './services/analytics-query.service';
 import { AnalyticsReportingService } from './services/analytics-reporting.service';
 import { ContentAnalyticsService } from './services/content-analytics.service';
+import { SocialAnalyticsService } from './services/social-analytics.service';
 import { WebAnalyticsService } from './services/web-analytics.service';
 
 @Module({
@@ -34,6 +37,7 @@ import { WebAnalyticsService } from './services/web-analytics.service';
       { name: WebAnalyticsSite.name, schema: WebAnalyticsSiteSchema },
       { name: WebAnalyticsEvent.name, schema: WebAnalyticsEventSchema },
       { name: AnalyticsReport.name, schema: AnalyticsReportSchema },
+      { name: SocialPostMetricsSnapshot.name, schema: SocialPostMetricsSnapshotSchema },
       { name: Lead.name, schema: LeadSchema },
       { name: LeadSourceEvent.name, schema: LeadSourceEventSchema },
       { name: LeadQualification.name, schema: LeadQualificationSchema },
@@ -50,9 +54,10 @@ import { WebAnalyticsService } from './services/web-analytics.service';
       { name: Campaign.name, schema: CampaignSchema },
     ]),
     ProductsModule,
+    SocialIntegrationsModule,
   ],
   controllers: [AnalyticsController, PublicAnalyticsController],
-  providers: [AnalyticsEventService, AnalyticsQueryService, AnalyticsFunnelService, ContentAnalyticsService, WebAnalyticsService, AnalyticsReportingService],
-  exports: [AnalyticsEventService, AnalyticsQueryService, AnalyticsFunnelService, ContentAnalyticsService, WebAnalyticsService, AnalyticsReportingService],
+  providers: [AnalyticsEventService, AnalyticsQueryService, AnalyticsFunnelService, ContentAnalyticsService, WebAnalyticsService, AnalyticsReportingService, SocialAnalyticsService],
+  exports: [AnalyticsEventService, AnalyticsQueryService, AnalyticsFunnelService, ContentAnalyticsService, WebAnalyticsService, AnalyticsReportingService, SocialAnalyticsService],
 })
 export class AnalyticsModule {}

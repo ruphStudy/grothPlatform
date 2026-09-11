@@ -7,11 +7,13 @@ import type {
   BuildAuthorizationUrlResult,
   ExchangeAuthorizationCodeInput,
   GetPostStatusInput,
+  GetPostMetricsInput,
   GetProfileInput,
   RefreshAccessTokenInput,
   SocialAuthResult,
   SocialPlatform,
   SocialPostStatusResult,
+  SocialPostMetricsResult,
   SocialProfile,
   SocialProviderCapabilities,
   SocialPublishRequest,
@@ -46,7 +48,7 @@ interface XUsersMeResponse {
 }
 
 interface XTweetResponse {
-  data?: { id?: string };
+  data?: { id?: string; public_metrics?: { retweet_count?: number; reply_count?: number; like_count?: number; quote_count?: number; impression_count?: number } };
 }
 
 // X's OAuth 2.0 authorization-code flow requires PKCE (S256). The
@@ -70,7 +72,7 @@ export class XSocialProvider implements SocialProvider {
     // publishing (which needs a separate media-upload endpoint) is not
     // implemented and must not be advertised. 19F: GET /2/tweets/:id is
     // genuinely implemented below.
-    return { connectAccount: true, refreshToken: true, publishText: true, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: true, accountDiscovery: false };
+    return { connectAccount: true, refreshToken: true, publishText: true, publishImage: false, publishVideo: false, fetchProfile: true, fetchPostStatus: true, fetchPostMetrics: true, accountDiscovery: false };
   }
 
   buildAuthorizationUrl(input: BuildAuthorizationUrlInput): BuildAuthorizationUrlResult {
@@ -191,6 +193,31 @@ export class XSocialProvider implements SocialProvider {
       return { providerPostId: input.externalPostId, status: 'unavailable', checkedAt };
     }
     return { providerPostId: input.externalPostId, status: 'unknown', checkedAt };
+  }
+
+  async getPostMetrics(input: GetPostMetricsInput): Promise<SocialPostMetricsResult> {
+    const fetchedAt = new Date();
+    const data = (await getJson(`${TWEETS_URL}/${input.externalPostId}?tweet.fields=public_metrics`, input.accessToken)) as XTweetResponse;
+    const metrics = data.data?.public_metrics;
+    if (!data.data?.id || !metrics) {
+      throw new SocialProviderError('social_provider_request_failed', 'X did not return post metrics.');
+    }
+    const result = {
+      impressions: this.number(metrics.impression_count),
+      likes: this.number(metrics.like_count),
+      comments: this.number(metrics.reply_count),
+      reposts: this.number(metrics.retweet_count),
+      shares: this.number(metrics.quote_count),
+    };
+    return { externalPostId: input.externalPostId, platform: 'x', metrics: result, availableMetrics: this.available(result), fetchedAt };
+  }
+
+  private number(value: unknown): number | undefined {
+    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  }
+
+  private available(metrics: Record<string, number | undefined>) {
+    return Object.entries(metrics).filter(([, value]) => value !== undefined).map(([key]) => key as keyof import('../types/social.types').SocialPostMetrics);
   }
 
   private getConfiguredScopes(): string[] {
