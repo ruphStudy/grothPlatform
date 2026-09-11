@@ -13,6 +13,9 @@ export const EMAIL_SENDER_STATUSES: EmailSenderStatus[] = ['pending', 'verified'
 export type EmailMessageStatus = 'pending' | 'sending' | 'accepted' | 'failed';
 export const EMAIL_MESSAGE_STATUSES: EmailMessageStatus[] = ['pending', 'sending', 'accepted', 'failed'];
 
+export type EmailDeliveryStatus = 'unknown' | 'accepted' | 'delivered' | 'delayed' | 'bounced' | 'complained' | 'failed';
+export const EMAIL_DELIVERY_STATUSES: EmailDeliveryStatus[] = ['unknown', 'accepted', 'delivered', 'delayed', 'bounced', 'complained', 'failed'];
+
 export type EmailBodyType = 'html' | 'text' | 'both';
 export const EMAIL_BODY_TYPES: EmailBodyType[] = ['html', 'text', 'both'];
 
@@ -39,6 +42,27 @@ export const EMAIL_SKIP_REASONS: EmailSkipReason[] = ['no_email', 'communication
 
 export type EmailSuppressionReason = 'manual' | 'unsubscribed' | 'bounced' | 'complained' | 'invalid';
 export const EMAIL_SUPPRESSION_REASONS: EmailSuppressionReason[] = ['manual', 'unsubscribed', 'bounced', 'complained', 'invalid'];
+
+export type EmailSequenceStatus = 'draft' | 'active' | 'paused' | 'archived';
+export const EMAIL_SEQUENCE_STATUSES: EmailSequenceStatus[] = ['draft', 'active', 'paused', 'archived'];
+
+export type EmailSequenceDelayUnit = 'hours' | 'days';
+export const EMAIL_SEQUENCE_DELAY_UNITS: EmailSequenceDelayUnit[] = ['hours', 'days'];
+
+export type EmailSequenceEnrollmentStatus = 'active' | 'completed' | 'paused' | 'stopped' | 'failed';
+export const EMAIL_SEQUENCE_ENROLLMENT_STATUSES: EmailSequenceEnrollmentStatus[] = ['active', 'completed', 'paused', 'stopped', 'failed'];
+
+export type EmailSequenceStopReason = 'manual' | 'unsubscribed' | 'suppressed' | 'communication_restricted' | 'opportunity_won' | 'sequence_paused' | 'missing_email' | 'identity_conflict' | 'failed';
+export const EMAIL_SEQUENCE_STOP_REASONS: EmailSequenceStopReason[] = ['manual', 'unsubscribed', 'suppressed', 'communication_restricted', 'opportunity_won', 'sequence_paused', 'missing_email', 'identity_conflict', 'failed'];
+
+export type EmailSequenceExecutionStatus = 'pending' | 'processing' | 'accepted' | 'failed' | 'skipped';
+export const EMAIL_SEQUENCE_EXECUTION_STATUSES: EmailSequenceExecutionStatus[] = ['pending', 'processing', 'accepted', 'failed', 'skipped'];
+
+export type EmailScheduleStatus = 'scheduled' | 'processing' | 'accepted' | 'failed' | 'cancelled';
+export const EMAIL_SCHEDULE_STATUSES: EmailScheduleStatus[] = ['scheduled', 'processing', 'accepted', 'failed', 'cancelled'];
+
+export type EmailEventType = 'accepted' | 'delivered' | 'delivery_delayed' | 'bounced' | 'complained' | 'opened' | 'clicked' | 'unsubscribed' | 'failed';
+export const EMAIL_EVENT_TYPES: EmailEventType[] = ['accepted', 'delivered', 'delivery_delayed', 'bounced', 'complained', 'opened', 'clicked', 'unsubscribed', 'failed'];
 
 export interface EmailAudienceDefinition {
   statuses?: string[];

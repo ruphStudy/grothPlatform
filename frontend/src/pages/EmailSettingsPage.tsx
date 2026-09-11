@@ -6,7 +6,7 @@ import { Card } from '../components/Card';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { Loading } from '../components/Loading';
 import { PageHeader } from '../components/PageHeader';
-import type { EmailAudiencePreview, EmailCampaign, EmailConnection, EmailMessage, EmailSender, EmailTemplate } from '../types';
+import type { EmailAudiencePreview, EmailCampaign, EmailConnection, EmailDashboard, EmailMessage, EmailSchedule, EmailSender, EmailSequence, EmailSequenceStep, EmailSuppression, EmailTemplate } from '../types';
 
 function labelize(value: string): string {
   return value.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -20,6 +20,10 @@ export default function EmailSettingsPage() {
   const [messages, setMessages] = useState<EmailMessage[]>([]);
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [campaigns, setCampaigns] = useState<EmailCampaign[]>([]);
+  const [dashboard, setDashboard] = useState<EmailDashboard | null>(null);
+  const [sequences, setSequences] = useState<EmailSequence[]>([]);
+  const [schedules, setSchedules] = useState<EmailSchedule[]>([]);
+  const [suppressions, setSuppressions] = useState<EmailSuppression[]>([]);
   const [audiencePreview, setAudiencePreview] = useState<EmailAudiencePreview | null>(null);
   const [templatePreview, setTemplatePreview] = useState<{ subject: string; html?: string; text?: string; missingVariables: string[] } | null>(null);
   const [connectionDraft, setConnectionDraft] = useState({ platform: 'resend', name: '', apiKey: '' });
@@ -27,6 +31,10 @@ export default function EmailSettingsPage() {
   const [testDraft, setTestDraft] = useState({ connectionId: '', senderId: '', recipientEmail: '', subject: '', text: '', idempotencyKey: '' });
   const [templateDraft, setTemplateDraft] = useState({ id: '', name: '', type: 'marketing', status: 'draft', subjectTemplate: '', previewText: '', htmlTemplate: '', textTemplate: '' });
   const [campaignDraft, setCampaignDraft] = useState({ name: '', templateId: '', senderId: '', statuses: 'new,qualified', communicationEligibility: 'allowed' });
+  const [sequenceDraft, setSequenceDraft] = useState<{ id: string; name: string; senderId: string; stopOnOpportunityWon: boolean; steps: EmailSequenceStep[] }>({ id: '', name: '', senderId: '', stopOnOpportunityWon: true, steps: [{ order: 1, delayValue: 0, delayUnit: 'hours', templateId: '', templateVersion: 1 }] });
+  const [enrollmentDraft, setEnrollmentDraft] = useState({ sequenceId: '', leadId: '', opportunityId: '' });
+  const [scheduleDraft, setScheduleDraft] = useState({ leadId: '', opportunityId: '', senderId: '', templateId: '', templateVersion: '', scheduledAt: '', idempotencyKey: '' });
+  const [suppressionDraft, setSuppressionDraft] = useState({ email: '', reason: 'manual', source: 'manual' });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,18 +44,26 @@ export default function EmailSettingsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [connectionData, senderData, messageData, templateData, campaignData] = await Promise.all([
+      const [connectionData, senderData, messageData, templateData, campaignData, dashboardData, sequenceData, scheduleData, suppressionData] = await Promise.all([
         apiRequest<EmailConnection[]>(`${basePath}/email/connections`),
         apiRequest<EmailSender[]>(`${basePath}/email/senders`),
         apiRequest<EmailMessage[]>(`${basePath}/email/messages`),
         apiRequest<EmailTemplate[]>(`${basePath}/email/templates`),
         apiRequest<EmailCampaign[]>(`${basePath}/email/campaigns`),
+        apiRequest<EmailDashboard>(`${basePath}/email/dashboard`),
+        apiRequest<EmailSequence[]>(`${basePath}/email/sequences`),
+        apiRequest<EmailSchedule[]>(`${basePath}/email/schedules`),
+        apiRequest<EmailSuppression[]>(`${basePath}/email/suppressions`),
       ]);
       setConnections(connectionData);
       setSenders(senderData);
       setMessages(messageData);
       setTemplates(templateData);
       setCampaigns(campaignData);
+      setDashboard(dashboardData);
+      setSequences(sequenceData);
+      setSchedules(scheduleData);
+      setSuppressions(suppressionData);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load email settings');
     } finally {
@@ -170,6 +186,71 @@ export default function EmailSettingsPage() {
     }
   }
 
+  function updateSequenceStep(index: number, patch: Partial<EmailSequenceStep>) {
+    setSequenceDraft((draft) => ({ ...draft, steps: draft.steps.map((step, i) => (i === index ? { ...step, ...patch, templateVersion: patch.templateId ? templates.find((template) => template.id === patch.templateId)?.latestVersion || step.templateVersion : patch.templateVersion ?? step.templateVersion } : step)).map((step, i) => ({ ...step, order: i + 1 })) }));
+  }
+
+  async function saveSequence(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      const body = { name: sequenceDraft.name, senderId: sequenceDraft.senderId, stopOnOpportunityWon: sequenceDraft.stopOnOpportunityWon, steps: sequenceDraft.steps.map((step, i) => ({ ...step, order: i + 1, templateVersion: step.templateVersion || templates.find((template) => template.id === step.templateId)?.latestVersion || 1 })) };
+      await apiRequest(`${basePath}/email/sequences${sequenceDraft.id ? `/${sequenceDraft.id}` : ''}`, { method: sequenceDraft.id ? 'PATCH' : 'POST', body });
+      setSequenceDraft({ id: '', name: '', senderId: '', stopOnOpportunityWon: true, steps: [{ order: 1, delayValue: 0, delayUnit: 'hours', templateId: '', templateVersion: 1 }] });
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to save sequence');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function enrollLead(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      await apiRequest(`${basePath}/email/sequences/${enrollmentDraft.sequenceId}/enroll`, { method: 'POST', body: { leadId: enrollmentDraft.leadId, opportunityId: enrollmentDraft.opportunityId || undefined } });
+      setEnrollmentDraft({ sequenceId: '', leadId: '', opportunityId: '' });
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to enroll lead');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createSchedule(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      await apiRequest(`${basePath}/email/schedules`, { method: 'POST', body: { ...scheduleDraft, templateVersion: scheduleDraft.templateVersion ? Number(scheduleDraft.templateVersion) : undefined, opportunityId: scheduleDraft.opportunityId || undefined, idempotencyKey: scheduleDraft.idempotencyKey || `email-schedule-${Date.now()}` } });
+      setScheduleDraft({ leadId: '', opportunityId: '', senderId: '', templateId: '', templateVersion: '', scheduledAt: '', idempotencyKey: '' });
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to schedule email');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createSuppression(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      await apiRequest(`${basePath}/email/suppressions`, { method: 'POST', body: suppressionDraft });
+      setSuppressionDraft({ email: '', reason: 'manual', source: 'manual' });
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to suppress email');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function percent(value: number | null) {
+    return value === null ? '-' : `${Math.round(value * 1000) / 10}%`;
+  }
+
   const verifiedSenders = senders.filter((sender) => sender.status === 'verified' && connections.some((connection) => connection.id === sender.emailConnectionId && connection.status === 'active'));
 
   return (
@@ -177,6 +258,98 @@ export default function EmailSettingsPage() {
       <PageHeader title="Email Settings" backTo={{ to: basePath, label: 'Product' }} />
       <ErrorMessage message={error} />
       {loading && <Loading />}
+
+      <Card>
+        <h2 className="card-title">Email Dashboard</h2>
+        {dashboard && (
+          <>
+            <div className="summary-grid">
+              <div><span className="summary-label">Accepted</span><p>{dashboard.summary.accepted}</p></div>
+              <div><span className="summary-label">Delivered</span><p>{dashboard.summary.delivered}</p></div>
+              <div><span className="summary-label">Bounced</span><p>{dashboard.summary.bounced}</p></div>
+              <div><span className="summary-label">Complained</span><p>{dashboard.summary.complained}</p></div>
+              <div><span className="summary-label">Recorded Opens</span><p>{dashboard.summary.recordedOpens}</p></div>
+              <div><span className="summary-label">Recorded Clicks</span><p>{dashboard.summary.recordedClicks}</p></div>
+              <div><span className="summary-label">Unsubscribes</span><p>{dashboard.summary.unsubscribes}</p></div>
+              <div><span className="summary-label">Delivery Rate</span><p>{percent(dashboard.summary.deliveryRate)}</p></div>
+            </div>
+            <p className="entity-card-meta">Recorded open and click rates use delivered messages as the denominator when available.</p>
+          </>
+        )}
+      </Card>
+
+      <Card>
+        <h2 className="card-title">Sequences</h2>
+        <form className="form form-grid-2" onSubmit={saveSequence}>
+          <div className="field"><label>Name</label><input value={sequenceDraft.name} onChange={(e) => setSequenceDraft({ ...sequenceDraft, name: e.target.value })} /></div>
+          <div className="field"><label>Sender</label><select value={sequenceDraft.senderId} onChange={(e) => setSequenceDraft({ ...sequenceDraft, senderId: e.target.value })}><option value="">Select sender</option>{verifiedSenders.map((sender) => <option key={sender.id} value={sender.id}>{sender.name || sender.email}</option>)}</select></div>
+          <div className="field"><label>Stop On Won Opportunity</label><select value={String(sequenceDraft.stopOnOpportunityWon)} onChange={(e) => setSequenceDraft({ ...sequenceDraft, stopOnOpportunityWon: e.target.value === 'true' })}><option value="true">Yes</option><option value="false">No</option></select></div>
+          <div className="field field-full">
+            <label>Steps</label>
+            {sequenceDraft.steps.map((step, index) => (
+              <div key={index} className="form form-grid-2" style={{ marginBottom: 10 }}>
+                <input type="number" min={0} max={365} value={step.delayValue} onChange={(e) => updateSequenceStep(index, { delayValue: Number(e.target.value) })} />
+                <select value={step.delayUnit} onChange={(e) => updateSequenceStep(index, { delayUnit: e.target.value as 'hours' | 'days' })}><option value="hours">Hours</option><option value="days">Days</option></select>
+                <select value={step.templateId} onChange={(e) => updateSequenceStep(index, { templateId: e.target.value })}><option value="">Select template</option>{templates.filter((template) => template.status !== 'archived').map((template) => <option key={template.id} value={template.id}>{template.name} v{template.latestVersion}</option>)}</select>
+                <input type="number" min={1} value={step.templateVersion} onChange={(e) => updateSequenceStep(index, { templateVersion: Number(e.target.value) })} />
+                <div className="tag-list">
+                  <button type="button" className="btn btn-secondary" onClick={() => setSequenceDraft((draft) => ({ ...draft, steps: draft.steps.filter((_, i) => i !== index).map((item, i) => ({ ...item, order: i + 1 })) }))} disabled={sequenceDraft.steps.length === 1}>Remove</button>
+                </div>
+              </div>
+            ))}
+            <button type="button" className="btn btn-secondary" onClick={() => setSequenceDraft((draft) => ({ ...draft, steps: [...draft.steps, { order: draft.steps.length + 1, delayValue: 1, delayUnit: 'days', templateId: '', templateVersion: 1 }] }))}>Add Step</button>
+          </div>
+          <button className="btn btn-primary" disabled={busy || !sequenceDraft.name || !sequenceDraft.senderId || sequenceDraft.steps.some((step) => !step.templateId)}>{sequenceDraft.id ? 'Save Sequence' : 'Create Sequence'}</button>
+        </form>
+        <form className="form form-grid-2" onSubmit={enrollLead} style={{ marginTop: 14 }}>
+          <div className="field"><label>Sequence</label><select value={enrollmentDraft.sequenceId} onChange={(e) => setEnrollmentDraft({ ...enrollmentDraft, sequenceId: e.target.value })}><option value="">Select active sequence</option>{sequences.filter((sequence) => sequence.status === 'active').map((sequence) => <option key={sequence.id} value={sequence.id}>{sequence.name}</option>)}</select></div>
+          <div className="field"><label>Lead ID</label><input value={enrollmentDraft.leadId} onChange={(e) => setEnrollmentDraft({ ...enrollmentDraft, leadId: e.target.value })} /></div>
+          <div className="field"><label>Opportunity ID</label><input value={enrollmentDraft.opportunityId} onChange={(e) => setEnrollmentDraft({ ...enrollmentDraft, opportunityId: e.target.value })} /></div>
+          <button className="btn btn-secondary" disabled={busy || !enrollmentDraft.sequenceId || !enrollmentDraft.leadId}>Enroll Lead</button>
+        </form>
+        {sequences.map((sequence) => (
+          <div key={sequence.id} className="entity-card" style={{ borderTop: '1px solid var(--border-color, #ddd)', paddingTop: 10, marginTop: 10 }}>
+            <div className="entity-card-header"><h3>{sequence.name}</h3><span className="quality-badge quality-unavailable">{labelize(sequence.status)}</span></div>
+            <p className="entity-card-meta">Steps {sequence.stepCount} · Active {sequence.activeEnrollments} · Completed {sequence.completedEnrollments} · Stopped {sequence.stoppedEnrollments} · Failed {sequence.failedEnrollments}</p>
+            <div className="tag-list">
+              <button className="btn btn-secondary" onClick={() => apiRequest<EmailSequence>(`${basePath}/email/sequences/${sequence.id}`).then((detail) => setSequenceDraft({ id: detail.id, name: detail.name, senderId: detail.senderId, stopOnOpportunityWon: detail.stopOnOpportunityWon, steps: detail.steps?.length ? detail.steps : [{ order: 1, delayValue: 0, delayUnit: 'hours', templateId: '', templateVersion: 1 }] })).catch((err) => setError(err instanceof ApiError ? err.message : 'Failed to load sequence'))}>Edit</button>
+              {sequence.status !== 'active' && <button className="btn btn-secondary" onClick={() => apiRequest(`${basePath}/email/sequences/${sequence.id}`, { method: 'PATCH', body: { status: 'active' } }).then(load).catch((err) => setError(err instanceof ApiError ? err.message : 'Failed to activate sequence'))}>Activate</button>}
+              {sequence.status === 'active' && <button className="btn btn-secondary" onClick={() => apiRequest(`${basePath}/email/sequences/${sequence.id}`, { method: 'PATCH', body: { status: 'paused' } }).then(load).catch((err) => setError(err instanceof ApiError ? err.message : 'Failed to pause sequence'))}>Pause</button>}
+              {sequence.status !== 'archived' && <button className="btn btn-secondary" onClick={() => apiRequest(`${basePath}/email/sequences/${sequence.id}`, { method: 'PATCH', body: { status: 'archived' } }).then(load).catch((err) => setError(err instanceof ApiError ? err.message : 'Failed to archive sequence'))}>Archive</button>}
+            </div>
+          </div>
+        ))}
+      </Card>
+
+      <Card>
+        <h2 className="card-title">Scheduled Email</h2>
+        <form className="form form-grid-2" onSubmit={createSchedule}>
+          <div className="field"><label>Lead ID</label><input value={scheduleDraft.leadId} onChange={(e) => setScheduleDraft({ ...scheduleDraft, leadId: e.target.value })} /></div>
+          <div className="field"><label>Opportunity ID</label><input value={scheduleDraft.opportunityId} onChange={(e) => setScheduleDraft({ ...scheduleDraft, opportunityId: e.target.value })} /></div>
+          <div className="field"><label>Sender</label><select value={scheduleDraft.senderId} onChange={(e) => setScheduleDraft({ ...scheduleDraft, senderId: e.target.value })}><option value="">Select sender</option>{verifiedSenders.map((sender) => <option key={sender.id} value={sender.id}>{sender.name || sender.email}</option>)}</select></div>
+          <div className="field"><label>Template</label><select value={scheduleDraft.templateId} onChange={(e) => { const template = templates.find((item) => item.id === e.target.value); setScheduleDraft({ ...scheduleDraft, templateId: e.target.value, templateVersion: template ? String(template.latestVersion) : '' }); }}><option value="">Select template</option>{templates.filter((template) => template.status !== 'archived').map((template) => <option key={template.id} value={template.id}>{template.name} v{template.latestVersion}</option>)}</select></div>
+          <div className="field"><label>Version</label><input value={scheduleDraft.templateVersion} onChange={(e) => setScheduleDraft({ ...scheduleDraft, templateVersion: e.target.value })} /></div>
+          <div className="field"><label>Scheduled At</label><input type="datetime-local" value={scheduleDraft.scheduledAt} onChange={(e) => setScheduleDraft({ ...scheduleDraft, scheduledAt: e.target.value })} /></div>
+          <button className="btn btn-primary" disabled={busy || !scheduleDraft.leadId || !scheduleDraft.senderId || !scheduleDraft.templateId || !scheduleDraft.scheduledAt}>Schedule Email</button>
+        </form>
+        {schedules.map((schedule) => <p key={schedule.id} className="entity-card-meta">{new Date(schedule.scheduledAt).toLocaleString()} · Lead {schedule.leadId} · {labelize(schedule.status)} {schedule.status === 'scheduled' && <button className="btn btn-secondary" onClick={() => action(`/email/schedules/${schedule.id}/cancel`)}>Cancel</button>}</p>)}
+      </Card>
+
+      <Card>
+        <h2 className="card-title">Suppressions</h2>
+        <form className="form form-grid-2" onSubmit={createSuppression}>
+          <div className="field"><label>Email</label><input value={suppressionDraft.email} onChange={(e) => setSuppressionDraft({ ...suppressionDraft, email: e.target.value })} /></div>
+          <div className="field"><label>Reason</label><select value={suppressionDraft.reason} onChange={(e) => setSuppressionDraft({ ...suppressionDraft, reason: e.target.value })}><option value="manual">Manual</option><option value="invalid">Invalid</option><option value="bounced">Bounced</option><option value="complained">Complained</option><option value="unsubscribed">Unsubscribed</option></select></div>
+          <div className="field"><label>Source</label><input value={suppressionDraft.source} onChange={(e) => setSuppressionDraft({ ...suppressionDraft, source: e.target.value })} /></div>
+          <button className="btn btn-primary" disabled={busy || !suppressionDraft.email}>Suppress</button>
+        </form>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Email</th><th>Reason</th><th>Status</th><th>Source</th><th>Created</th></tr></thead>
+            <tbody>{suppressions.map((item) => <tr key={item.id}><td>{item.normalizedEmail}</td><td>{labelize(item.reason)}</td><td>{item.active ? 'Active' : 'Inactive'}</td><td>{item.source || '-'}</td><td>{new Date(item.createdAt).toLocaleString()}</td></tr>)}</tbody>
+          </table>
+        </div>
+      </Card>
 
       <Card>
         <h2 className="card-title">Templates</h2>
@@ -294,7 +467,13 @@ export default function EmailSettingsPage() {
 
       <Card>
         <h2 className="card-title">Recent Email Messages</h2>
-        {messages.map((message) => <p key={message.id} className="entity-card-meta">{new Date(message.createdAt).toLocaleString()} · {message.toEmail} · {message.subject} · {labelize(message.status)}</p>)}
+        {messages.map((message) => (
+          <div key={message.id} className="entity-card" style={{ borderTop: '1px solid var(--border-color, #ddd)', paddingTop: 10, marginTop: 10 }}>
+            <div className="entity-card-header"><h3>{message.subject}</h3><span className="quality-badge quality-unavailable">{labelize(message.status)} · {labelize(message.deliveryStatus || 'unknown')}</span></div>
+            <p className="entity-card-meta">{new Date(message.createdAt).toLocaleString()} · To {message.toEmail} · {labelize(message.sendReason)}</p>
+            <p className="entity-card-meta">Accepted {message.acceptedAt ? new Date(message.acceptedAt).toLocaleString() : '-'} · Delivered {message.deliveredAt ? new Date(message.deliveredAt).toLocaleString() : '-'} · Recorded Opens {message.openCount ?? 0} · Recorded Clicks {message.clickCount ?? 0}</p>
+          </div>
+        ))}
         {!messages.length && <p className="entity-card-meta">No email messages yet.</p>}
       </Card>
     </AppLayout>

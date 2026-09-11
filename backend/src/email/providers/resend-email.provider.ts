@@ -23,7 +23,7 @@ export class ResendEmailProvider implements EmailProvider {
       customReplyTo: true,
       domainVerification: true,
       fetchDeliveryStatus: false,
-      webhookEvents: false,
+      webhookEvents: true,
       attachments: false,
       batchSend: false,
     };

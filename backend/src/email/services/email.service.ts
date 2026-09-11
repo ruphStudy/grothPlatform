@@ -193,7 +193,7 @@ export class EmailService {
     });
   }
 
-  async send(input: { organizationId: string; productId: string; connectionId: string; senderId: string; recipient: { email: string; name?: string }; purpose: 'manual_crm' | 'marketing'; subject: string; html?: string; text?: string; replyTo?: string; idempotencyKey: string; createdByUserId?: string; leadId?: string; opportunityId?: string; campaignId?: string; emailCampaignId?: string; templateId?: string; templateVersion?: number; sendReason: 'manual' | 'crm_follow_up' | 'future_campaign' | 'future_sequence' }) {
+  async send(input: { organizationId: string; productId: string; connectionId: string; senderId: string; recipient: { email: string; name?: string }; purpose: 'manual_crm' | 'marketing'; subject: string; html?: string; text?: string; replyTo?: string; idempotencyKey: string; createdByUserId?: string; leadId?: string; opportunityId?: string; campaignId?: string; emailCampaignId?: string; emailSequenceId?: string; emailSequenceEnrollmentId?: string; emailScheduleId?: string; templateId?: string; templateVersion?: number; sendReason: 'manual' | 'crm_follow_up' | 'future_campaign' | 'future_sequence' }) {
     this.validateSendInput(input);
     await this.policy.assertAllowedForLead({ organizationId: input.organizationId, productId: input.productId, leadId: input.leadId, purpose: input.purpose });
     const payloadHash = this.hashPayload(input);
@@ -216,6 +216,9 @@ export class EmailService {
       opportunityId: input.opportunityId ? new Types.ObjectId(input.opportunityId) : undefined,
       campaignId: input.campaignId ? new Types.ObjectId(input.campaignId) : undefined,
       emailCampaignId: input.emailCampaignId ? new Types.ObjectId(input.emailCampaignId) : undefined,
+      emailSequenceId: input.emailSequenceId ? new Types.ObjectId(input.emailSequenceId) : undefined,
+      emailSequenceEnrollmentId: input.emailSequenceEnrollmentId ? new Types.ObjectId(input.emailSequenceEnrollmentId) : undefined,
+      emailScheduleId: input.emailScheduleId ? new Types.ObjectId(input.emailScheduleId) : undefined,
       templateId: input.templateId ? new Types.ObjectId(input.templateId) : undefined,
       templateVersion: input.templateVersion,
       emailConnectionId: connection._id,
@@ -250,6 +253,7 @@ export class EmailService {
       });
       message.providerMessageId = result.providerMessageId;
       message.status = 'accepted';
+      message.deliveryStatus = 'accepted';
       message.acceptedAt = result.acceptedAt;
     } catch (err) {
       message.status = 'failed';
@@ -328,6 +332,6 @@ export class EmailService {
   }
 
   private toMessageResponse(message: EmailMessageDocument) {
-    return { id: message._id.toString(), organizationId: message.organizationId.toString(), productId: message.productId.toString(), leadId: message.leadId?.toString(), opportunityId: message.opportunityId?.toString(), campaignId: message.campaignId?.toString(), emailCampaignId: message.emailCampaignId?.toString(), templateId: message.templateId?.toString(), templateVersion: message.templateVersion, emailConnectionId: message.emailConnectionId.toString(), emailSenderId: message.emailSenderId.toString(), provider: message.provider, providerMessageId: message.providerMessageId, fromEmail: message.fromEmail, fromName: message.fromName, toEmail: message.toEmail, toName: message.toName, replyTo: message.replyTo, subject: message.subject, bodyType: message.bodyType, status: message.status, sendReason: message.sendReason, errorCode: message.errorCode, acceptedAt: message.acceptedAt, failedAt: message.failedAt, createdAt: message.createdAt, updatedAt: message.updatedAt };
+    return { id: message._id.toString(), organizationId: message.organizationId.toString(), productId: message.productId.toString(), leadId: message.leadId?.toString(), opportunityId: message.opportunityId?.toString(), campaignId: message.campaignId?.toString(), emailCampaignId: message.emailCampaignId?.toString(), emailSequenceId: message.emailSequenceId?.toString(), emailSequenceEnrollmentId: message.emailSequenceEnrollmentId?.toString(), emailScheduleId: message.emailScheduleId?.toString(), templateId: message.templateId?.toString(), templateVersion: message.templateVersion, emailConnectionId: message.emailConnectionId.toString(), emailSenderId: message.emailSenderId.toString(), provider: message.provider, providerMessageId: message.providerMessageId, fromEmail: message.fromEmail, fromName: message.fromName, toEmail: message.toEmail, toName: message.toName, replyTo: message.replyTo, subject: message.subject, bodyType: message.bodyType, status: message.status, deliveryStatus: message.deliveryStatus, sendReason: message.sendReason, errorCode: message.errorCode, acceptedAt: message.acceptedAt, failedAt: message.failedAt, deliveredAt: message.deliveredAt, firstOpenedAt: message.firstOpenedAt, lastOpenedAt: message.lastOpenedAt, openCount: message.openCount ?? 0, firstClickedAt: message.firstClickedAt, lastClickedAt: message.lastClickedAt, clickCount: message.clickCount ?? 0, bouncedAt: message.bouncedAt, complainedAt: message.complainedAt, createdAt: message.createdAt, updatedAt: message.updatedAt };
   }
 }

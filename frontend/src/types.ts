@@ -3719,6 +3719,7 @@ export type EmailPlatform = 'resend';
 export type EmailConnectionStatus = 'active' | 'invalid' | 'disabled' | 'error';
 export type EmailSenderStatus = 'pending' | 'verified' | 'failed' | 'disabled';
 export type EmailMessageStatus = 'pending' | 'sending' | 'accepted' | 'failed';
+export type EmailDeliveryStatus = 'unknown' | 'accepted' | 'delivered' | 'delayed' | 'bounced' | 'complained' | 'failed';
 
 export interface EmailProviderCapabilities {
   sendEmail: boolean;
@@ -3782,10 +3783,108 @@ export interface EmailMessage {
   subject: string;
   bodyType: 'html' | 'text' | 'both';
   status: EmailMessageStatus;
+  deliveryStatus: EmailDeliveryStatus;
   sendReason: string;
   errorCode?: string;
   acceptedAt?: string;
   failedAt?: string;
+  deliveredAt?: string;
+  firstOpenedAt?: string;
+  lastOpenedAt?: string;
+  openCount?: number;
+  firstClickedAt?: string;
+  lastClickedAt?: string;
+  clickCount?: number;
+  bouncedAt?: string;
+  complainedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmailDashboard {
+  range: { from: string; to: string };
+  summary: {
+    accepted: number;
+    delivered: number;
+    bounced: number;
+    complained: number;
+    recordedOpens: number;
+    uniqueOpenedMessages: number;
+    recordedClicks: number;
+    uniqueClickedMessages: number;
+    unsubscribes: number;
+    deliveryRate: number | null;
+    bounceRate: number | null;
+    recordedOpenRate: number | null;
+    recordedClickRate: number | null;
+  };
+  sequencePerformance?: { enrolled: number; active: number; completed: number; stopped: number; failed: number };
+}
+
+export interface EmailSequenceStep {
+  id?: string;
+  order: number;
+  delayValue: number;
+  delayUnit: 'hours' | 'days';
+  templateId: string;
+  templateVersion: number;
+}
+
+export interface EmailSequenceEnrollment {
+  id: string;
+  sequenceId: string;
+  leadId: string;
+  opportunityId?: string;
+  status: 'active' | 'completed' | 'paused' | 'stopped' | 'failed';
+  currentStepOrder?: number;
+  nextStepAt?: string;
+  stopReason?: string;
+  startedAt: string;
+  completedAt?: string;
+  stoppedAt?: string;
+}
+
+export interface EmailSequence {
+  id: string;
+  name: string;
+  campaignId?: string;
+  senderId: string;
+  status: 'draft' | 'active' | 'paused' | 'archived';
+  stopOnReply: boolean;
+  stopOnOpportunityWon: boolean;
+  stepCount: number;
+  activeEnrollments: number;
+  completedEnrollments: number;
+  stoppedEnrollments: number;
+  failedEnrollments: number;
+  steps?: EmailSequenceStep[];
+  enrollments?: EmailSequenceEnrollment[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmailSchedule {
+  id: string;
+  leadId: string;
+  opportunityId?: string;
+  campaignId?: string;
+  senderId: string;
+  templateId: string;
+  templateVersion: number;
+  scheduledAt: string;
+  timezone?: string;
+  status: 'scheduled' | 'processing' | 'accepted' | 'failed' | 'cancelled';
+  emailMessageId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmailSuppression {
+  id: string;
+  normalizedEmail: string;
+  reason: 'manual' | 'unsubscribed' | 'bounced' | 'complained' | 'invalid';
+  active: boolean;
+  source?: string;
   createdAt: string;
   updatedAt: string;
 }
