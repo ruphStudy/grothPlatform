@@ -1376,6 +1376,91 @@ export interface GrowthStrategyReviewResponse {
   updatedAt?: string;
 }
 
+export type LearningConfidence = 'insufficient' | 'low' | 'medium' | 'high';
+export type LearningStatus = 'active' | 'accepted' | 'rejected' | 'stale' | 'superseded';
+
+export interface LearningSourceReference {
+  sourceType: string;
+  sourceId?: string;
+  details?: Record<string, unknown>;
+}
+
+export interface LearningObservation {
+  domain: string;
+  subjectType: string;
+  subjectId?: string;
+  subjectKey: string;
+  metric: string;
+  value: number | null;
+  numerator?: number | null;
+  denominator?: number | null;
+  sampleSize: number;
+  currency?: string;
+  attributionModel?: string;
+  sourceReferences: LearningSourceReference[];
+}
+
+export interface LearningWinner extends LearningObservation {
+  baselineValue: number | null;
+  lift: number | null;
+  confidence: LearningConfidence;
+  confidenceScore: number;
+  winner: boolean;
+  observation: string;
+}
+
+export interface LearningRecommendation {
+  _id?: string;
+  id?: string;
+  recommendationType: string;
+  safeDimension: string;
+  currentValue: string;
+  suggestedValue: string;
+  metric: string;
+  currentValueMetric?: number | null;
+  suggestedValueMetric?: number | null;
+  sampleSize: number;
+  confidence: LearningConfidence;
+  evidence: LearningSourceReference[];
+  status: LearningStatus;
+  algorithmVersion: string;
+  note?: string;
+}
+
+export interface StrategyAdjustmentProposal {
+  _id?: string;
+  id?: string;
+  strategyId: string;
+  strategyVersion: string;
+  targetSection: string;
+  adjustmentType: string;
+  currentState: string;
+  proposedChange: string;
+  reason: string;
+  sampleSize: number;
+  confidence: LearningConfidence;
+  evidence: LearningSourceReference[];
+  status: LearningStatus;
+  algorithmVersion: string;
+}
+
+export interface LearningDashboard {
+  modelVersion: string;
+  promptOptimizationVersion: string;
+  strategyAdjustmentVersion: string;
+  disclaimer: string;
+  range: { from: string; to: string };
+  metricRegistry: Array<{ metric: string; label: string; domain: string; valueType: string; supported: boolean }>;
+  observations: LearningObservation[];
+  overview: { observationCount: number; domains: string[]; unsupportedMetrics: string[]; confidenceCaps: Record<string, string> };
+  winningContent: LearningWinner[];
+  winningChannels: LearningWinner[];
+  ctas: LearningWinner[];
+  topics: LearningWinner[];
+  promptSuggestions: LearningRecommendation[];
+  strategyAdjustments: StrategyAdjustmentProposal[];
+}
+
 export interface ProductIntelligenceProfile {
   id: string;
   organizationId: string;

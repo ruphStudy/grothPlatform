@@ -19,6 +19,7 @@ import { MarketIntelligenceModule } from './market-intelligence/market-intellige
 import { OrganizationsModule } from './organizations/organizations.module';
 import { ProductIntelligenceModule } from './product-intelligence/product-intelligence.module';
 import { KeywordIntelligenceModule } from './keyword-intelligence/keyword-intelligence.module';
+import { LearningModule } from './learning/learning.module';
 import { LeadsModule } from './leads/leads.module';
 import { ProductsModule } from './products/products.module';
 import { ResearchModule } from './research/research.module';
@@ -49,6 +50,7 @@ import { WebsiteIntelligenceModule } from './website-intelligence/website-intell
     AnalyticsModule,
     AttributionModule,
     KeywordIntelligenceModule,
+    LearningModule,
     GrowthStrategyModule,
     CampaignsModule,
     ContentPlanningModule,

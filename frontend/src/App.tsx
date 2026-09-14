@@ -12,6 +12,7 @@ import DashboardPage from './pages/DashboardPage';
 import EmailSettingsPage from './pages/EmailSettingsPage';
 import LeadDashboardPage from './pages/LeadDashboardPage';
 import LeadsPage from './pages/LeadsPage';
+import LearningPage from './pages/LearningPage';
 import LoginPage from './pages/LoginPage';
 import OrganizationPage from './pages/OrganizationPage';
 import ProductPage from './pages/ProductPage';
@@ -122,6 +123,14 @@ function App() {
           element={
             <ProtectedRoute>
               <AttributionPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/organizations/:organizationId/products/:productId/learning"
+          element={
+            <ProtectedRoute>
+              <LearningPage />
             </ProtectedRoute>
           }
         />
