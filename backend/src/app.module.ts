@@ -15,6 +15,7 @@ import { CreativeModule } from './creative/creative.module';
 import { CrmModule } from './crm/crm.module';
 import { EmailModule } from './email/email.module';
 import { GrowthStrategyModule } from './growth-strategy/growth-strategy.module';
+import { GrowthBrainModule } from './growth-brain/growth-brain.module';
 import { MarketIntelligenceModule } from './market-intelligence/market-intelligence.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { ProductIntelligenceModule } from './product-intelligence/product-intelligence.module';
@@ -52,6 +53,7 @@ import { WebsiteIntelligenceModule } from './website-intelligence/website-intell
     KeywordIntelligenceModule,
     LearningModule,
     GrowthStrategyModule,
+    GrowthBrainModule,
     CampaignsModule,
     ContentPlanningModule,
     ContentGenerationModule,

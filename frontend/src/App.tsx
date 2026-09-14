@@ -10,6 +10,7 @@ import CrmPage from './pages/CrmPage';
 import CreativeReviewPage from './pages/CreativeReviewPage';
 import DashboardPage from './pages/DashboardPage';
 import EmailSettingsPage from './pages/EmailSettingsPage';
+import GrowthBrainPage from './pages/GrowthBrainPage';
 import LeadDashboardPage from './pages/LeadDashboardPage';
 import LeadsPage from './pages/LeadsPage';
 import LearningPage from './pages/LearningPage';
@@ -131,6 +132,14 @@ function App() {
           element={
             <ProtectedRoute>
               <LearningPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/organizations/:organizationId/products/:productId/growth-brain"
+          element={
+            <ProtectedRoute>
+              <GrowthBrainPage />
             </ProtectedRoute>
           }
         />

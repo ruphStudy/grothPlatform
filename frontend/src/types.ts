@@ -1461,6 +1461,114 @@ export interface LearningDashboard {
   strategyAdjustments: StrategyAdjustmentProposal[];
 }
 
+export interface GrowthDecisionRun {
+  _id: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  strategyId?: string;
+  strategyVersion?: string;
+  periodFrom: string;
+  periodTo: string;
+  algorithmVersion: string;
+  aiProvider?: string;
+  aiModel?: string;
+  errorCode?: string;
+  createdAt: string;
+}
+
+export interface GrowthOpportunity {
+  _id: string;
+  type: string;
+  title: string;
+  subjectKey?: string;
+  metric: string;
+  currentValue?: number;
+  baselineValue?: number;
+  sampleSize: number;
+  confidence: 'low' | 'medium' | 'high';
+  effort: 'low' | 'medium' | 'high';
+  urgency: 'low' | 'medium' | 'high';
+  evidenceIds: string[];
+  score: number;
+  rank: number;
+  scoreComponents: Record<string, number>;
+  status: string;
+}
+
+export interface GrowthAllocationPlan {
+  _id: string;
+  resourceType: 'effort' | 'money';
+  currency?: string;
+  totalAvailable: number;
+  allocations: Array<{ opportunityId: string; allocatedAmount: number; percentage: number; rationaleCode: string }>;
+  unallocatedAmount: number;
+}
+
+export interface ChannelPriority {
+  _id: string;
+  channel: string;
+  priority: string;
+  score: number;
+  rank: number;
+  reasons: string[];
+  evidenceIds: string[];
+  confidence: 'low' | 'medium' | 'high';
+  recommendedEffortPercentage?: number;
+}
+
+export interface ContentPriority {
+  _id: string;
+  channel: string;
+  contentKind: string;
+  topicKey?: string;
+  objective?: string;
+  priorityScore: number;
+  rank: number;
+  recommendedQuantity?: number;
+  ctaRecommendation?: string;
+  promptSuggestionIds: string[];
+  evidenceIds: string[];
+  confidence: 'low' | 'medium' | 'high';
+}
+
+export interface WeeklyGrowthPlan {
+  _id: string;
+  weekStart: string;
+  weekEnd: string;
+  objective: string;
+  status: string;
+  channelPriorities: unknown[];
+  contentPlan: unknown[];
+  experiments: unknown[];
+  crmActions: unknown[];
+  optimizationActions: unknown[];
+  allocationSummary: Record<string, unknown>;
+  risks: string[];
+  assumptions: string[];
+  evidenceIds: string[];
+}
+
+export interface GrowthDecisionExplanation {
+  _id: string;
+  decisionType: string;
+  decisionEntityId: string;
+  summary: string;
+  reasons: Array<Record<string, unknown>>;
+  assumptions: string[];
+  limitations: string[];
+  aiGeneratedSummary?: string;
+}
+
+export interface GrowthBrainDashboard {
+  latestRun?: GrowthDecisionRun | null;
+  topOpportunities: GrowthOpportunity[];
+  highPriorityChannels: ChannelPriority[];
+  topContentPriorities: ContentPriority[];
+  weeklyAllocation?: GrowthAllocationPlan | null;
+  currentWeeklyPlan?: WeeklyGrowthPlan | null;
+  algorithmVersion: string;
+  externalExecutionAllowed: boolean;
+}
+
 export interface ProductIntelligenceProfile {
   id: string;
   organizationId: string;

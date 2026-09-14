@@ -426,6 +426,9 @@ export default function ProductPage() {
             <Link to={`/organizations/${organizationId}/products/${productId}/learning`} className="btn btn-secondary">
               Learning
             </Link>
+            <Link to={`/organizations/${organizationId}/products/${productId}/growth-brain`} className="btn btn-secondary">
+              Growth Brain
+            </Link>
             {product && <Badge status={product.status} />}
           </>
         }
