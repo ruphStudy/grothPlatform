@@ -420,6 +420,9 @@ export default function ProductPage() {
             <Link to={`/organizations/${organizationId}/products/${productId}/analytics`} className="btn btn-secondary">
               Analytics
             </Link>
+            <Link to={`/organizations/${organizationId}/products/${productId}/attribution`} className="btn btn-secondary">
+              Attribution
+            </Link>
             {product && <Badge status={product.status} />}
           </>
         }

@@ -4141,6 +4141,69 @@ export interface AnalyticsCsvExport {
   rowCount: number;
 }
 
+export type AttributionModel = 'first_touch' | 'last_touch';
+
+export interface AttributionValue {
+  currency: string;
+  amount: number;
+}
+
+export interface AttributionAggregateRow {
+  key: string;
+  attributedLeads: number;
+  attributedOpportunities: number;
+  attributedWins: number;
+  attributedValueByCurrency: AttributionValue[];
+}
+
+export interface AttributionJourneyTouchpoint {
+  id: string;
+  occurredAt: string;
+  channel: string;
+  platform?: string;
+  touchpointType: string;
+  campaignId?: string;
+  contentArtifactId?: string;
+  contentVersionId?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  credited: boolean;
+}
+
+export interface AttributionOpportunityJourney {
+  opportunityId: string;
+  leadId: string;
+  wonAt?: string;
+  amount?: number;
+  currency?: string;
+  status: string;
+  attributionStatus: 'attributed' | 'unattributed';
+  credits: { touchpointId?: string; credit: number; attributedValue?: number; currency?: string; channel: string; campaignId?: string; contentArtifactId?: string; contentVersionId?: string }[];
+  touchpoints: AttributionJourneyTouchpoint[];
+}
+
+export interface AttributionDashboard {
+  model: AttributionModel;
+  modelVersion: string;
+  disclaimer: string;
+  summary: {
+    wonOpportunities: number;
+    wonOpportunitiesWithAttribution: number;
+    unattributedWonOpportunities: number;
+    attributedLeads: number;
+    attributionCoverage: number | null;
+    totalWonValueByCurrency: AttributionValue[];
+    attributedWonValueByCurrency: AttributionValue[];
+  };
+  channels: AttributionAggregateRow[];
+  utm: AttributionAggregateRow[];
+  content: AttributionAggregateRow[];
+  campaigns: AttributionAggregateRow[];
+  opportunities: AttributionOpportunityJourney[];
+  dataHealth: Record<string, number>;
+}
+
 export interface LeadCaptureEndpointSummary {
   id: string;
   organizationId: string;
