@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import AnalyticsPage from './pages/AnalyticsPage';
+import ApprovalsPage from './pages/ApprovalsPage';
 import AttributionPage from './pages/AttributionPage';
 import CampaignDetailPage from './pages/CampaignDetailPage';
 import CampaignsPage from './pages/CampaignsPage';
@@ -15,6 +16,7 @@ import LeadDashboardPage from './pages/LeadDashboardPage';
 import LeadsPage from './pages/LeadsPage';
 import LearningPage from './pages/LearningPage';
 import LoginPage from './pages/LoginPage';
+import NotificationsPage from './pages/NotificationsPage';
 import OrganizationPage from './pages/OrganizationPage';
 import ProductPage from './pages/ProductPage';
 import PublicLeadFormPage from './pages/PublicLeadFormPage';
@@ -140,6 +142,22 @@ function App() {
           element={
             <ProtectedRoute>
               <GrowthBrainPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/organizations/:organizationId/products/:productId/approvals"
+          element={
+            <ProtectedRoute>
+              <ApprovalsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute>
+              <NotificationsPage />
             </ProtectedRoute>
           }
         />

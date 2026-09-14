@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { AudienceIntelligenceModule } from './audience-intelligence/audience-intelligence.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { ApprovalsModule } from './approvals/approvals.module';
 import { AttributionModule } from './attribution/attribution.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
 import { CmsIntegrationsModule } from './cms-integrations/cms-integrations.module';
@@ -17,6 +18,7 @@ import { EmailModule } from './email/email.module';
 import { GrowthStrategyModule } from './growth-strategy/growth-strategy.module';
 import { GrowthBrainModule } from './growth-brain/growth-brain.module';
 import { MarketIntelligenceModule } from './market-intelligence/market-intelligence.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { ProductIntelligenceModule } from './product-intelligence/product-intelligence.module';
 import { KeywordIntelligenceModule } from './keyword-intelligence/keyword-intelligence.module';
@@ -49,6 +51,8 @@ import { WebsiteIntelligenceModule } from './website-intelligence/website-intell
     MarketIntelligenceModule,
     AudienceIntelligenceModule,
     AnalyticsModule,
+    NotificationsModule,
+    ApprovalsModule,
     AttributionModule,
     KeywordIntelligenceModule,
     LearningModule,

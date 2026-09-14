@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, Logger, NotFoundExc
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { ApprovalWorkflowService } from '../../approvals/services/approval-workflow.service';
 import { CampaignReviewService } from '../../campaigns/campaign-review.service';
 import { CreativeAssetsService } from '../../creative/services/creative-assets.service';
 import { ContentVersioningService } from '../../content-generation/services/content-versioning.service';
@@ -55,6 +56,7 @@ export class CmsPublicationsService {
     private readonly cmsConnectionsService: CmsConnectionsService,
     private readonly cmsEngine: CmsEngineService,
     private readonly urlSecurity: WebsiteUrlSecurityService,
+    private readonly approvalWorkflowService: ApprovalWorkflowService,
   ) {}
 
   async publishBlog(
@@ -185,6 +187,7 @@ export class CmsPublicationsService {
       throw new BadRequestException('Only blog content versions can be sent to WordPress.');
     }
     await this.assertExternalActionApproved(organizationId, productId, campaignId, userId);
+    await this.approvalWorkflowService.assertApprovedForExternalAction(organizationId, productId, 'content_version', sourceVersion.id, String(sourceVersion.version));
     this.assertHumanReviewAllowsPublish(sourceVersion);
 
     const connection = await this.cmsConnectionsService.findOwnedDocument(organizationId, productId, input.connectionId);

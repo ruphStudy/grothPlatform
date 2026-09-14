@@ -1569,6 +1569,80 @@ export interface GrowthBrainDashboard {
   externalExecutionAllowed: boolean;
 }
 
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'changes_requested' | 'cancelled' | 'expired';
+export type ApprovalPolicy = 'required' | 'recommended' | 'optional';
+
+export interface ApprovalTargetSnapshot {
+  title: string;
+  summary?: string;
+  targetType: string;
+  targetId: string;
+  targetVersionId?: string;
+  statusAtRequest?: string;
+  relevantMetadata: Record<string, unknown>;
+}
+
+export interface ApprovalDecision {
+  _id: string;
+  decision: string;
+  decidedByUserId: string;
+  comment?: string;
+  decidedAt: string;
+  previousStatus: ApprovalStatus;
+  resultingStatus: ApprovalStatus;
+}
+
+export interface ApprovalRequest {
+  _id: string;
+  targetType: string;
+  targetId: string;
+  targetVersionId?: string;
+  requestedByUserId?: string;
+  reasonCode?: string;
+  reasonText?: string;
+  status: ApprovalStatus;
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  approvalPolicy: ApprovalPolicy;
+  reviewerUserIds: string[];
+  targetSnapshot: ApprovalTargetSnapshot;
+  requestedAt: string;
+  dueAt?: string;
+  resolvedAt?: string;
+  overdue?: boolean;
+  history?: ApprovalDecision[];
+}
+
+export interface ApprovalQueueResponse {
+  items: ApprovalRequest[];
+  page: number;
+  limit: number;
+  total: number;
+  counts: { pending: number; highPriority: number; overdue: number; changesRequested: number };
+}
+
+export interface InAppNotification {
+  _id: string;
+  organizationId: string;
+  productId?: string;
+  userId: string;
+  type: string;
+  title: string;
+  message: string;
+  targetType?: string;
+  targetId?: string;
+  approvalRequestId?: string;
+  severity: 'info' | 'success' | 'warning' | 'error';
+  readAt?: string;
+  createdAt: string;
+}
+
+export interface NotificationListResponse {
+  items: InAppNotification[];
+  page: number;
+  limit: number;
+  total: number;
+}
+
 export interface ProductIntelligenceProfile {
   id: string;
   organizationId: string;

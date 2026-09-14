@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { ApprovalWorkflowService } from '../../approvals/services/approval-workflow.service';
 import { CampaignReviewService } from '../../campaigns/campaign-review.service';
 import { CampaignsService } from '../../campaigns/campaigns.service';
 import { CreativeAssetsService } from '../../creative/services/creative-assets.service';
@@ -54,6 +55,7 @@ export class SocialPublishingService {
     private readonly creativeAssetsService: CreativeAssetsService,
     private readonly socialEngine: SocialEngineService,
     private readonly socialConnectionsService: SocialConnectionsService,
+    private readonly approvalWorkflowService: ApprovalWorkflowService,
   ) {}
 
   // Tenant-safe load + platform derivation only — no gates, no provider
@@ -81,6 +83,7 @@ export class SocialPublishingService {
     platform: SocialPlatform,
   ): Promise<{ connectionDoc: SocialConnectionDocument; plan: PublishPlan }> {
     await this.assertExternalActionApproved(input);
+    await this.approvalWorkflowService.assertApprovedForExternalAction(input.organizationId, input.productId, 'content_version', sourceVersion.id, String(sourceVersion.version));
 
     // Human Review gate (item 28/29) — never publish with no review
     // result, never publish when review_required.

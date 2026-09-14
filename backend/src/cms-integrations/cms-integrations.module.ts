@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ApprovalsModule } from '../approvals/approvals.module';
 import { CampaignsModule } from '../campaigns/campaigns.module';
 import { ContentGenerationModule } from '../content-generation/content-generation.module';
 import { CreativeModule } from '../creative/creative.module';
@@ -39,6 +40,7 @@ import type { CmsPlatform } from './types/cms.types';
       { name: CmsSchedule.name, schema: CmsScheduleSchema },
     ]),
     ProductsModule,
+    ApprovalsModule,
     CampaignsModule,
     GrowthStrategyModule,
     ContentGenerationModule,

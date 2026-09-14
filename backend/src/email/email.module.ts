@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ApprovalsModule } from '../approvals/approvals.module';
 import { CrmModule } from '../crm/crm.module';
 import { CrmAccount, CrmAccountSchema } from '../crm/schemas/crm-account.schema';
 import { CrmActivity, CrmActivitySchema } from '../crm/schemas/crm-activity.schema';
@@ -72,6 +73,7 @@ import type { EmailPlatform } from './types/email.types';
       { name: Product.name, schema: ProductSchema },
     ]),
     ProductsModule,
+    ApprovalsModule,
     CrmModule,
     CampaignsModule,
   ],

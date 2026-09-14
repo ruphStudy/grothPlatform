@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ApprovalsModule } from '../approvals/approvals.module';
 import { CampaignsModule } from '../campaigns/campaigns.module';
 import { ContentGenerationModule } from '../content-generation/content-generation.module';
 import { CreativeModule } from '../creative/creative.module';
@@ -36,6 +37,7 @@ import { PublishingCalendarController } from './publishing-calendar.controller';
     CampaignsModule,
     GrowthStrategyModule,
     ProductsModule,
+    ApprovalsModule,
     ContentGenerationModule,
     CreativeModule,
     SocialIntegrationsModule,

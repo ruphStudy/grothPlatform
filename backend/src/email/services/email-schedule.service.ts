@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { ApprovalWorkflowService } from '../../approvals/services/approval-workflow.service';
 import { CrmActivity, CrmActivityDocument } from '../../crm/schemas/crm-activity.schema';
 import { CrmFollowUp, CrmFollowUpDocument } from '../../crm/schemas/crm-follow-up.schema';
 import { LeadIdentityConflict, LeadIdentityConflictDocument } from '../../leads/schemas/lead-identity-conflict.schema';
@@ -36,6 +37,7 @@ export class EmailScheduleService {
     private readonly productsService: ProductsService,
     private readonly templateService: EmailTemplateService,
     private readonly emailService: EmailService,
+    private readonly approvalWorkflowService: ApprovalWorkflowService,
   ) {}
 
   async create(organizationId: string, productId: string, userId: string, dto: CreateEmailScheduleDto) {
@@ -133,6 +135,7 @@ export class EmailScheduleService {
 
   private async executeSchedule(schedule: EmailScheduleDocument) {
     try {
+      await this.approvalWorkflowService.assertApprovedForExternalAction(schedule.organizationId.toString(), schedule.productId.toString(), 'email_schedule', schedule._id.toString(), String(schedule.templateVersion));
       const sender = await this.assertSender(schedule.organizationId.toString(), schedule.productId.toString(), schedule.senderId.toString());
       const lead = await this.assertLeadEligible(schedule.organizationId.toString(), schedule.productId.toString(), schedule.leadId.toString());
       const rendered = await this.templateService.renderForSend(schedule.organizationId.toString(), schedule.productId.toString(), schedule.createdByUserId?.toString() || '', schedule.templateId.toString(), schedule.templateVersion, { leadId: lead._id.toString(), opportunityId: schedule.opportunityId?.toString(), campaignId: schedule.campaignId?.toString(), senderId: sender._id.toString() });

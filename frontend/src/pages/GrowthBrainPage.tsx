@@ -125,6 +125,20 @@ export default function GrowthBrainPage() {
     }
   }
 
+  async function requestWeeklyPlanApproval(plan: WeeklyGrowthPlan) {
+    if (!window.confirm(`Request approval for weekly plan ${new Date(plan.weekStart).toLocaleDateString()}?`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await apiRequest(`${basePath}/approvals`, { method: 'POST', body: { targetType: 'weekly_growth_plan', targetId: plan._id, targetVersionId: plan.weekStart, reasonText: 'Weekly Growth Plan requires formal approval before downstream execution.' } });
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Weekly plan approval request failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function explain(entityId: string) {
     setSelectedExplanation(explanations.find((item) => item.decisionEntityId === entityId) || null);
     setTab('decisions');
@@ -187,7 +201,7 @@ export default function GrowthBrainPage() {
         <>
           <Card>
             <div className="entity-card-header"><h2 className="card-title">Weekly Plan</h2><button className="btn btn-secondary" onClick={generateWeeklyPlan} disabled={busy}>Regenerate From Latest Run</button></div>
-            {dashboard.currentWeeklyPlan ? <WeeklyPlanView plan={dashboard.currentWeeklyPlan} onWhy={explain} /> : <p className="entity-card-meta">No current proposed weekly plan yet.</p>}
+            {dashboard.currentWeeklyPlan ? <WeeklyPlanView plan={dashboard.currentWeeklyPlan} onWhy={explain} onRequestApproval={requestWeeklyPlanApproval} /> : <p className="entity-card-meta">No current proposed weekly plan yet.</p>}
           </Card>
           <Card><h2 className="card-title">Plan History</h2>{weeklyPlans.map((plan) => <p key={plan._id} className="entity-card-meta">{new Date(plan.weekStart).toLocaleDateString()} - {new Date(plan.weekEnd).toLocaleDateString()} · {labelize(plan.status)} · {plan.objective}</p>)}</Card>
         </>
@@ -221,12 +235,12 @@ function OpportunityTable({ rows, onWhy }: { rows: GrowthOpportunity[]; onWhy: (
   );
 }
 
-function WeeklyPlanView({ plan, onWhy }: { plan: WeeklyGrowthPlan; onWhy: (id: string) => void }) {
+function WeeklyPlanView({ plan, onWhy, onRequestApproval }: { plan: WeeklyGrowthPlan; onWhy: (id: string) => void; onRequestApproval: (plan: WeeklyGrowthPlan) => void }) {
   return (
     <div>
       <p className="entity-card-meta">{new Date(plan.weekStart).toLocaleDateString()} - {new Date(plan.weekEnd).toLocaleDateString()} · {labelize(plan.status)}</p>
       <p>{plan.objective}</p>
-      <button className="btn btn-secondary" onClick={() => onWhy(plan._id)}>Why?</button>
+      <div className="profile-meta"><button className="btn btn-secondary" onClick={() => onWhy(plan._id)}>Why?</button><button className="btn btn-secondary" onClick={() => onRequestApproval(plan)}>Request Approval</button></div>
       <div className="summary-grid">
         <div><span className="summary-label">Channels</span><p>{plan.channelPriorities.length}</p></div>
         <div><span className="summary-label">Content Items</span><p>{plan.contentPlan.length}</p></div>

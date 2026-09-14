@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectModel } from '@nestjs/mongoose';
 import { createHash, randomBytes } from 'crypto';
 import { Model, Types } from 'mongoose';
+import { ApprovalWorkflowService } from '../../approvals/services/approval-workflow.service';
 import { LeadIdentityConflict, LeadIdentityConflictDocument } from '../../leads/schemas/lead-identity-conflict.schema';
 import { LeadQualification, LeadQualificationDocument } from '../../leads/schemas/lead-qualification.schema';
 import { Lead, LeadDocument } from '../../leads/schemas/lead.schema';
@@ -38,6 +39,7 @@ export class EmailCampaignService {
     private readonly templateService: EmailTemplateService,
     private readonly renderer: EmailTemplateRendererService,
     private readonly emailService: EmailService,
+    private readonly approvalWorkflowService: ApprovalWorkflowService,
   ) {}
 
   async create(organizationId: string, productId: string, userId: string, dto: CreateEmailCampaignDto) {
@@ -72,6 +74,7 @@ export class EmailCampaignService {
   async send(organizationId: string, productId: string, userId: string, emailCampaignId: string) {
     await this.productsService.findOne(organizationId, productId, userId);
     const campaign = await this.findCampaign(organizationId, productId, emailCampaignId);
+    await this.approvalWorkflowService.assertApprovedForExternalAction(organizationId, productId, 'email_campaign', emailCampaignId, String(campaign.emailTemplateVersion));
     if (!['ready', 'draft'].includes(campaign.status)) throw new BadRequestException('email_campaign_invalid_state');
     const sender = await this.assertVerifiedSender(organizationId, productId, campaign.senderId.toString());
     campaign.status = 'sending';
