@@ -24,6 +24,8 @@ import PublishingCalendarPage from './pages/PublishingCalendarPage';
 import RegisterPage from './pages/RegisterPage';
 import SocialConnectionsCallbackPage from './pages/SocialConnectionsCallbackPage';
 import SocialConnectionsPage from './pages/SocialConnectionsPage';
+import TeamPage from './pages/TeamPage';
+import InviteAcceptPage from './pages/InviteAcceptPage';
 
 function App() {
   return (
@@ -31,6 +33,7 @@ function App() {
       <Routes>
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/invite/accept" element={<InviteAcceptPage />} />
         <Route path="/forms/:publicKey" element={<PublicLeadFormPage />} />
         <Route
           path="/dashboard"
@@ -45,6 +48,14 @@ function App() {
           element={
             <ProtectedRoute>
               <OrganizationPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/organizations/:organizationId/team"
+          element={
+            <ProtectedRoute>
+              <TeamPage />
             </ProtectedRoute>
           }
         />

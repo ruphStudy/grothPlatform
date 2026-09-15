@@ -10,6 +10,7 @@ import { GrowthDecisionRun, GrowthDecisionRunSchema, WeeklyGrowthPlan, WeeklyGro
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ProductsModule } from '../products/products.module';
 import { SocialPublication, SocialPublicationSchema } from '../social-publishing/schemas/social-publication.schema';
+import { TeamModule } from '../team/team.module';
 import { User, UserSchema } from '../users/schemas/user.schema';
 import { ApprovalsController } from './approvals.controller';
 import { ApprovalDecision, ApprovalDecisionSchema, ApprovalEmailNotificationLog, ApprovalEmailNotificationLogSchema, ApprovalRequest, ApprovalRequestSchema } from './schemas/approval.schema';
@@ -20,6 +21,7 @@ import { ApprovalWorkflowService } from './services/approval-workflow.service';
   imports: [
     ProductsModule,
     NotificationsModule,
+    TeamModule,
     MongooseModule.forFeature([
       { name: ApprovalRequest.name, schema: ApprovalRequestSchema },
       { name: ApprovalDecision.name, schema: ApprovalDecisionSchema },

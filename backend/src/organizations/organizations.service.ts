@@ -1,9 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { Organization, OrganizationDocument } from './schemas/organization.schema';
+import { AuthorizationService } from '../team/services/team.service';
+import { PERMISSIONS } from '../team/schemas/team.schema';
 
 function slugify(name: string): string {
   return name
@@ -17,6 +19,7 @@ function slugify(name: string): string {
 export class OrganizationsService {
   constructor(
     @InjectModel(Organization.name) private orgModel: Model<OrganizationDocument>,
+    private readonly authorizationService: AuthorizationService,
   ) {}
 
   private async ensureUniqueSlug(base: string, excludeId?: string): Promise<string> {
@@ -55,11 +58,19 @@ export class OrganizationsService {
       ownerUserId: new Types.ObjectId(ownerUserId),
       status: 'active',
     }).save();
+    await this.authorizationService.ensureOwnerMembership(org._id, ownerUserId);
     return this.toSafeOrganization(org);
   }
 
   async findAllByOwner(ownerUserId: string) {
-    const orgs = await this.orgModel.find({ ownerUserId: new Types.ObjectId(ownerUserId) }).exec();
+    const ownerOrgs = await this.orgModel.find({ ownerUserId: new Types.ObjectId(ownerUserId) }).exec();
+    for (const org of ownerOrgs) await this.authorizationService.ensureOwnerMembership(org._id, ownerUserId);
+    const orgs = await this.orgModel.find({
+      $or: [
+        { ownerUserId: new Types.ObjectId(ownerUserId) },
+        { _id: { $in: await this.memberOrganizationIds(ownerUserId) } },
+      ],
+    }).exec();
     return orgs.map((org) => this.toSafeOrganization(org));
   }
 
@@ -67,10 +78,14 @@ export class OrganizationsService {
     if (!Types.ObjectId.isValid(id)) {
       throw new NotFoundException('Organization not found');
     }
-    const org = await this.orgModel.findOne({ _id: id, ownerUserId: new Types.ObjectId(ownerUserId) }).exec();
+    const org = await this.orgModel.findOne({ _id: id }).exec();
     if (!org) {
       throw new NotFoundException('Organization not found');
     }
+    if (org.ownerUserId.toString() === ownerUserId) await this.authorizationService.ensureOwnerMembership(org._id, ownerUserId);
+    await this.authorizationService.assertPermission(id, ownerUserId, PERMISSIONS.ORGANIZATION_VIEW).catch(() => {
+      throw new ForbiddenException('organization_access_denied');
+    });
     return org;
   }
 
@@ -94,5 +109,15 @@ export class OrganizationsService {
 
     await org.save();
     return this.toSafeOrganization(org);
+  }
+
+  private async memberOrganizationIds(userId: string) {
+    try {
+      const mongoose = this.orgModel.db;
+      const members = await mongoose.model('OrganizationMember').find({ userId: new Types.ObjectId(userId), status: 'active' }).select('organizationId').lean().exec();
+      return members.map((member: any) => member.organizationId);
+    } catch {
+      return [];
+    }
   }
 }

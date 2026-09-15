@@ -216,6 +216,82 @@ p {
   padding: 32px 20px;
 }
 
+.success-message {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--success);
+  border-radius: var(--radius);
+  background: var(--success-bg);
+  color: var(--success);
+  overflow-wrap: anywhere;
+}
+
+.team-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.team-tab {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 9px 14px;
+  text-transform: capitalize;
+}
+
+.team-tab-active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.data-table th,
+.data-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 12px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.data-table th {
+  color: var(--text-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.table-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.table-actions .btn {
+  padding: 7px 10px;
+}
+
+.empty-table {
+  color: var(--text-muted);
+  text-align: center;
+}
+
 /* Buttons */
 
 .btn {
@@ -312,6 +388,42 @@ p {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
+}
+
+.check-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.check-row input {
+  width: auto;
+}
+
+.checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.permission-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.permission-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.permission-group h3 {
+  font-size: 14px;
+  margin-bottom: 10px;
+  text-transform: capitalize;
 }
 
 input,

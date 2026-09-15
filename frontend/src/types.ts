@@ -1643,6 +1643,75 @@ export interface NotificationListResponse {
   total: number;
 }
 
+export type ProductAccessMode = 'all_products' | 'selected_products';
+export type RoleType = 'system' | 'custom';
+
+export interface OrganizationRole {
+  _id: string;
+  id?: string;
+  name: string;
+  key: string;
+  description?: string;
+  type: RoleType;
+  isDefault?: boolean;
+  permissions: string[];
+  membersCount?: number;
+}
+
+export interface OrganizationMember {
+  memberId: string;
+  userId: string;
+  displayName: string;
+  email: string;
+  role?: OrganizationRole;
+  status: 'active' | 'suspended' | 'removed';
+  joinedAt: string;
+  productAccessMode: ProductAccessMode;
+  productAccessSummary: string;
+  productIds: string[];
+}
+
+export interface ProductAccessGrant {
+  _id: string;
+  id?: string;
+  organizationId: string;
+  memberId: string;
+  productId: string;
+  product?: Product;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface OrganizationInvitation {
+  _id: string;
+  emailNormalized: string;
+  roleId: string;
+  productAccessMode: ProductAccessMode;
+  productIds: string[];
+  status: 'pending' | 'accepted' | 'declined' | 'expired' | 'revoked';
+  invitedByUserId: string;
+  expiresAt: string;
+  inviteUrl?: string;
+  notification?: { email: 'mocked' | 'sent' };
+}
+
+export interface CurrentUserAccess {
+  member: { memberId: string; status: string; productAccessMode: ProductAccessMode };
+  role: { id: string; key: string; name: string; type: string };
+  permissions: string[];
+  productAccess: { mode: ProductAccessMode; productIds: string[] };
+}
+
+export interface InvitationPreview {
+  organization: Pick<Organization, 'id' | 'name' | 'slug'>;
+  email: string;
+  role?: OrganizationRole;
+  status: 'pending' | 'accepted' | 'declined' | 'expired' | 'revoked';
+  productAccessMode: ProductAccessMode;
+  productIds: string[];
+  expiresAt: string;
+}
+
 export interface ProductIntelligenceProfile {
   id: string;
   organizationId: string;

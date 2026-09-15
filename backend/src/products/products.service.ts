@@ -2,6 +2,8 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { OrganizationsService } from '../organizations/organizations.service';
+import { AuthorizationService } from '../team/services/team.service';
+import { PERMISSIONS } from '../team/schemas/team.schema';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { Product, ProductDocument } from './schemas/product.schema';
@@ -19,6 +21,7 @@ export class ProductsService {
   constructor(
     @InjectModel(Product.name) private productModel: Model<ProductDocument>,
     private readonly organizationsService: OrganizationsService,
+    private readonly authorizationService: AuthorizationService,
   ) {}
 
   private toSafeProduct(product: ProductDocument) {
@@ -68,7 +71,7 @@ export class ProductsService {
   }
 
   async create(organizationId: string, ownerUserId: string, dto: CreateProductDto) {
-    await this.organizationsService.findOneOwned(organizationId, ownerUserId);
+    await this.authorizationService.assertPermission(organizationId, ownerUserId, PERMISSIONS.PRODUCT_CREATE);
 
     const baseSlug = slugify(dto.name);
     const slug = await this.ensureUniqueSlug(organizationId, baseSlug);
@@ -87,19 +90,20 @@ export class ProductsService {
   }
 
   async findAll(organizationId: string, ownerUserId: string) {
-    await this.organizationsService.findOneOwned(organizationId, ownerUserId);
-    const products = await this.productModel.find({ organizationId: new Types.ObjectId(organizationId) }).exec();
+    await this.authorizationService.assertPermission(organizationId, ownerUserId, PERMISSIONS.PRODUCT_VIEW);
+    const accessible = await this.authorizationService.accessibleProductIds(organizationId, ownerUserId);
+    const products = await this.productModel.find({ organizationId: new Types.ObjectId(organizationId), ...(accessible ? { _id: { $in: accessible } } : {}) }).exec();
     return products.map((product) => this.toSafeProduct(product));
   }
 
   async findOne(organizationId: string, productId: string, ownerUserId: string) {
-    await this.organizationsService.findOneOwned(organizationId, ownerUserId);
+    await this.authorizationService.assertPermission(organizationId, ownerUserId, PERMISSIONS.PRODUCT_VIEW, productId);
     const product = await this.findProductDoc(organizationId, productId);
     return this.toSafeProduct(product);
   }
 
   async update(organizationId: string, productId: string, ownerUserId: string, dto: UpdateProductDto) {
-    await this.organizationsService.findOneOwned(organizationId, ownerUserId);
+    await this.authorizationService.assertPermission(organizationId, ownerUserId, PERMISSIONS.PRODUCT_MANAGE, productId);
     const product = await this.findProductDoc(organizationId, productId);
 
     if (dto.name && dto.name !== product.name) {

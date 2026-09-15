@@ -28,6 +28,7 @@ import { ProductsModule } from './products/products.module';
 import { ResearchModule } from './research/research.module';
 import { SocialIntegrationsModule } from './social-integrations/social-integrations.module';
 import { SocialPublishingModule } from './social-publishing/social-publishing.module';
+import { TeamModule } from './team/team.module';
 import { UsersModule } from './users/users.module';
 import { WebsiteIntelligenceModule } from './website-intelligence/website-intelligence.module';
 
@@ -64,6 +65,7 @@ import { WebsiteIntelligenceModule } from './website-intelligence/website-intell
     CreativeModule,
     SocialIntegrationsModule,
     SocialPublishingModule,
+    TeamModule,
     CmsIntegrationsModule,
     LeadsModule,
     CrmModule,

@@ -7,6 +7,7 @@ import { Card } from '../components/Card';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { Loading } from '../components/Loading';
 import { PageHeader } from '../components/PageHeader';
+import { usePermissions } from '../hooks/usePermissions';
 import type {
   AudienceIntelligencePreview,
   Campaign,
@@ -127,6 +128,32 @@ export default function ProductPage() {
   );
   const [overallNoteDraft, setOverallNoteDraft] = useState('');
   const [campaignCount, setCampaignCount] = useState<number | null>(null);
+  const permissions = usePermissions(organizationId);
+
+  const productActionLinks = [
+    {
+      label: 'Social Connections',
+      to: `/organizations/${organizationId}/products/${productId}/social-connections`,
+      allowed: permissions.hasPermission('social.view') || permissions.hasPermission('social.manage_connections'),
+    },
+    {
+      label: 'CMS / Blog Connections',
+      to: `/organizations/${organizationId}/products/${productId}/cms-connections`,
+      allowed: permissions.hasPermission('cms.view') || permissions.hasPermission('cms.manage_connections'),
+    },
+    { label: 'Leads', to: `/organizations/${organizationId}/products/${productId}/leads`, allowed: permissions.hasPermission('leads.view') },
+    { label: 'CRM', to: `/organizations/${organizationId}/products/${productId}/crm`, allowed: permissions.hasPermission('crm.view') },
+    { label: 'Email', to: `/organizations/${organizationId}/products/${productId}/email`, allowed: permissions.hasPermission('email.view') },
+    { label: 'Analytics', to: `/organizations/${organizationId}/products/${productId}/analytics`, allowed: permissions.hasPermission('analytics.view') },
+    { label: 'Attribution', to: `/organizations/${organizationId}/products/${productId}/attribution`, allowed: permissions.hasPermission('attribution.view') },
+    { label: 'Learning', to: `/organizations/${organizationId}/products/${productId}/learning`, allowed: permissions.hasPermission('learning.view') },
+    {
+      label: 'Growth Brain',
+      to: `/organizations/${organizationId}/products/${productId}/growth-brain`,
+      allowed: permissions.hasPermission('growth_brain.view'),
+    },
+    { label: 'Approvals', to: `/organizations/${organizationId}/products/${productId}/approvals`, allowed: permissions.hasPermission('approval.view') },
+  ];
 
   async function loadData() {
     if (!organizationId || !productId) return;
@@ -402,36 +429,14 @@ export default function ProductPage() {
         title={product?.name}
         actions={
           <>
-            <Link to={`/organizations/${organizationId}/products/${productId}/social-connections`} className="btn btn-secondary">
-              Social Connections
-            </Link>
-            <Link to={`/organizations/${organizationId}/products/${productId}/cms-connections`} className="btn btn-secondary">
-              CMS / Blog Connections
-            </Link>
-            <Link to={`/organizations/${organizationId}/products/${productId}/leads`} className="btn btn-secondary">
-              Leads
-            </Link>
-            <Link to={`/organizations/${organizationId}/products/${productId}/crm`} className="btn btn-secondary">
-              CRM
-            </Link>
-            <Link to={`/organizations/${organizationId}/products/${productId}/email`} className="btn btn-secondary">
-              Email
-            </Link>
-            <Link to={`/organizations/${organizationId}/products/${productId}/analytics`} className="btn btn-secondary">
-              Analytics
-            </Link>
-            <Link to={`/organizations/${organizationId}/products/${productId}/attribution`} className="btn btn-secondary">
-              Attribution
-            </Link>
-            <Link to={`/organizations/${organizationId}/products/${productId}/learning`} className="btn btn-secondary">
-              Learning
-            </Link>
-            <Link to={`/organizations/${organizationId}/products/${productId}/growth-brain`} className="btn btn-secondary">
-              Growth Brain
-            </Link>
-            <Link to={`/organizations/${organizationId}/products/${productId}/approvals`} className="btn btn-secondary">
-              Approvals
-            </Link>
+            {!permissions.loading &&
+              productActionLinks
+                .filter((link) => link.allowed)
+                .map((link) => (
+                  <Link key={link.to} to={link.to} className="btn btn-secondary">
+                    {link.label}
+                  </Link>
+                ))}
             {product && <Badge status={product.status} />}
           </>
         }

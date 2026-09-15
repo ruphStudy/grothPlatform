@@ -9,6 +9,8 @@ import { EmailCampaign, EmailCampaignDocument } from '../../email/schemas/email-
 import { EmailSchedule, EmailScheduleDocument } from '../../email/schemas/email-schedule.schema';
 import { GrowthDecisionRun, GrowthDecisionRunDocument, WeeklyGrowthPlan, WeeklyGrowthPlanDocument } from '../../growth-brain/schemas/growth-brain.schema';
 import { ProductsService } from '../../products/products.service';
+import { AuthorizationService } from '../../team/services/team.service';
+import { OrganizationMember, OrganizationMemberDocument, PERMISSIONS } from '../../team/schemas/team.schema';
 import { SocialPublication, SocialPublicationDocument } from '../../social-publishing/schemas/social-publication.schema';
 import { User, UserDocument } from '../../users/schemas/user.schema';
 import { CreateApprovalRequestDto, ApprovalDecisionDto, ApprovalQueueQueryDto } from '../dto/approval.dto';
@@ -41,12 +43,15 @@ export class ApprovalWorkflowService {
     @InjectModel(WeeklyGrowthPlan.name) private readonly weeklyPlanModel: Model<WeeklyGrowthPlanDocument>,
     @InjectModel(GrowthDecisionRun.name) private readonly growthDecisionModel: Model<GrowthDecisionRunDocument>,
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
+    @InjectModel(OrganizationMember.name) private readonly memberModel: Model<OrganizationMemberDocument>,
     private readonly productsService: ProductsService,
     private readonly notifications: ApprovalNotificationService,
+    private readonly authorizationService: AuthorizationService,
   ) {}
 
   async create(organizationId: string, productId: string, userId: string, dto: CreateApprovalRequestDto) {
     await this.productsService.findOne(organizationId, productId, userId);
+    await this.authorizationService.assertPermission(organizationId, userId, PERMISSIONS.APPROVAL_REQUEST, productId);
     const target = await this.resolveTarget(organizationId, productId, dto.targetType as ApprovalTargetType, dto.targetId, dto.targetVersionId);
     const existing = await this.requestModel.findOne({
       organizationId: new Types.ObjectId(organizationId),
@@ -58,7 +63,7 @@ export class ApprovalWorkflowService {
     } as any).exec();
     if (existing) return this.withHistory(existing);
     const policy = (dto.approvalPolicy as ApprovalPolicy | undefined) || target.policy;
-    const reviewerIds = await this.resolveReviewers(userId);
+    const reviewerIds = await this.resolveReviewers(organizationId, productId, userId);
     const request = await new this.requestModel({
       organizationId: new Types.ObjectId(organizationId),
       productId: new Types.ObjectId(productId),
@@ -83,6 +88,7 @@ export class ApprovalWorkflowService {
 
   async detail(organizationId: string, productId: string, userId: string, approvalId: string) {
     await this.productsService.findOne(organizationId, productId, userId);
+    await this.authorizationService.assertPermission(organizationId, userId, PERMISSIONS.APPROVAL_VIEW, productId);
     const request = await this.findRequest(organizationId, productId, approvalId);
     return this.withHistory(request);
   }
@@ -112,6 +118,7 @@ export class ApprovalWorkflowService {
 
   async status(organizationId: string, productId: string, userId: string, targetType: string, targetId: string, targetVersionId?: string) {
     await this.productsService.findOne(organizationId, productId, userId);
+    await this.authorizationService.assertPermission(organizationId, userId, PERMISSIONS.APPROVAL_VIEW, productId);
     const target = await this.resolveTarget(organizationId, productId, targetType as ApprovalTargetType, targetId, targetVersionId);
     const request = await this.requestModel.findOne({ organizationId: new Types.ObjectId(organizationId), productId: new Types.ObjectId(productId), targetType, targetId, targetVersionId: target.snapshot.targetVersionId } as any).sort({ requestedAt: -1 }).lean().exec();
     return {
@@ -139,6 +146,7 @@ export class ApprovalWorkflowService {
 
   async queue(organizationId: string, productId: string, userId: string, query: ApprovalQueueQueryDto) {
     await this.productsService.findOne(organizationId, productId, userId);
+    await this.authorizationService.assertPermission(organizationId, userId, PERMISSIONS.APPROVAL_VIEW, productId);
     const page = Math.max(1, Number(query.page || 1));
     const limit = Math.min(50, Math.max(1, Number(query.limit || 20)));
     const filter = this.queueFilter(organizationId, productId, query);
@@ -153,12 +161,14 @@ export class ApprovalWorkflowService {
 
   async history(organizationId: string, productId: string, userId: string, approvalId: string) {
     await this.productsService.findOne(organizationId, productId, userId);
+    await this.authorizationService.assertPermission(organizationId, userId, PERMISSIONS.APPROVAL_VIEW, productId);
     await this.findRequest(organizationId, productId, approvalId);
     return this.decisionModel.find({ organizationId: new Types.ObjectId(organizationId), productId: new Types.ObjectId(productId), approvalRequestId: new Types.ObjectId(approvalId) }).sort({ decidedAt: 1 }).lean().exec();
   }
 
   async productHistory(organizationId: string, productId: string, userId: string, query: ApprovalQueueQueryDto) {
     await this.productsService.findOne(organizationId, productId, userId);
+    await this.authorizationService.assertPermission(organizationId, userId, PERMISSIONS.APPROVAL_VIEW, productId);
     const filter: Record<string, unknown> = { organizationId: new Types.ObjectId(organizationId), productId: new Types.ObjectId(productId) };
     if (query.targetType) filter['metadata.targetType'] = query.targetType;
     if (query.status) filter.resultingStatus = query.status;
@@ -168,6 +178,7 @@ export class ApprovalWorkflowService {
 
   private async transition(organizationId: string, productId: string, userId: string, approvalId: string, resultingStatus: ApprovalRequestStatus, comment?: string) {
     await this.productsService.findOne(organizationId, productId, userId);
+    await this.authorizationService.assertPermission(organizationId, userId, PERMISSIONS.APPROVAL_DECIDE, productId);
     const request = await this.findRequest(organizationId, productId, approvalId);
     if (['approved', 'rejected', 'cancelled', 'expired'].includes(request.status) && resultingStatus !== 'cancelled') throw new ConflictException('approval_request_already_resolved');
     const previousStatus = request.status;
@@ -233,10 +244,21 @@ export class ApprovalWorkflowService {
     return { title: this.safe(title).slice(0, 300), summary: this.safe(summary).slice(0, 1000), targetType, targetId, targetVersionId, statusAtRequest, relevantMetadata };
   }
 
-  private async resolveReviewers(userId: string) {
+  private async resolveReviewers(organizationId: string, productId: string, userId: string) {
     const user = await this.userModel.findOne({ _id: new Types.ObjectId(userId), status: 'active' }).select('_id').lean().exec();
     if (!user) throw new ForbiddenException('approval_actor_not_found');
-    return [user._id.toString()];
+    const members = await this.memberModel
+      .find({ organizationId: new Types.ObjectId(organizationId), status: 'active' })
+      .select('userId')
+      .lean()
+      .exec();
+    const reviewerIds: string[] = [];
+    for (const member of members) {
+      const memberUserId = member.userId.toString();
+      const access = await this.authorizationService.access(organizationId, memberUserId, productId);
+      if (access.permissions.includes(PERMISSIONS.APPROVAL_DECIDE)) reviewerIds.push(memberUserId);
+    }
+    return Array.from(new Set(reviewerIds));
   }
 
   private async findRequest(organizationId: string, productId: string, approvalId: string) {

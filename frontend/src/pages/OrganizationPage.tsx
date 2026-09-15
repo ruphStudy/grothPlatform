@@ -7,6 +7,7 @@ import { Card } from '../components/Card';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { Loading } from '../components/Loading';
 import { PageHeader } from '../components/PageHeader';
+import { usePermissions } from '../hooks/usePermissions';
 import { PRIMARY_GOALS, PRODUCT_TYPES, type Organization, type Product } from '../types';
 
 const emptyForm = {
@@ -27,6 +28,9 @@ export default function OrganizationPage() {
   const [form, setForm] = useState(emptyForm);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const permissions = usePermissions(organizationId);
+  const canCreateProduct = permissions.hasPermission('product.create');
+  const canViewTeam = permissions.hasPermission('team.view');
 
   async function loadData() {
     if (!organizationId) return;
@@ -99,84 +103,97 @@ export default function OrganizationPage() {
       <PageHeader
         backTo={{ to: '/dashboard', label: 'Dashboard' }}
         title={organization?.name}
-        actions={organization && <Badge status={organization.status} />}
+        actions={
+          organization && (
+            <>
+              {canViewTeam && (
+                <Link to={`/organizations/${organizationId}/team`} className="btn btn-secondary">
+                  Team
+                </Link>
+              )}
+              <Badge status={organization.status} />
+            </>
+          )
+        }
       />
 
-      <Card>
-        <h2 className="card-title">Create Product</h2>
-        <form onSubmit={handleCreateProduct} className="form form-grid-2" style={{ marginTop: 14 }}>
-          <div className="field">
-            <label htmlFor="product-name">Name</label>
-            <input
-              id="product-name"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              required
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="product-website">Website URL</label>
-            <input
-              id="product-website"
-              value={form.websiteUrl}
-              onChange={(e) => setForm({ ...form, websiteUrl: e.target.value })}
-            />
-          </div>
-          <div className="field field-full">
-            <label htmlFor="product-description">Short description</label>
-            <input
-              id="product-description"
-              value={form.shortDescription}
-              onChange={(e) => setForm({ ...form, shortDescription: e.target.value })}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="product-type">Product type</label>
-            <select
-              id="product-type"
-              value={form.productType}
-              onChange={(e) => setForm({ ...form, productType: e.target.value })}
-            >
-              <option value="">Select product type</option>
-              {PRODUCT_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="primary-goal">Primary goal</label>
-            <select
-              id="primary-goal"
-              value={form.primaryGoal}
-              onChange={(e) => setForm({ ...form, primaryGoal: e.target.value })}
-            >
-              <option value="">Select primary goal</option>
-              {PRIMARY_GOALS.map((goal) => (
-                <option key={goal} value={goal}>
-                  {goal}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field field-full">
-            <label htmlFor="target-markets">Target markets</label>
-            <input
-              id="target-markets"
-              placeholder="Comma-separated, e.g. India, Global"
-              value={form.targetMarkets}
-              onChange={(e) => setForm({ ...form, targetMarkets: e.target.value })}
-            />
-          </div>
-          <div className="field-full">
-            <ErrorMessage message={createError} />
-            <button type="submit" className="btn btn-primary" disabled={creating} style={{ marginTop: 6 }}>
-              {creating ? 'Creating...' : 'Create Product'}
-            </button>
-          </div>
-        </form>
-      </Card>
+      {!permissions.loading && canCreateProduct && (
+        <Card>
+          <h2 className="card-title">Create Product</h2>
+          <form onSubmit={handleCreateProduct} className="form form-grid-2" style={{ marginTop: 14 }}>
+            <div className="field">
+              <label htmlFor="product-name">Name</label>
+              <input
+                id="product-name"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                required
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="product-website">Website URL</label>
+              <input
+                id="product-website"
+                value={form.websiteUrl}
+                onChange={(e) => setForm({ ...form, websiteUrl: e.target.value })}
+              />
+            </div>
+            <div className="field field-full">
+              <label htmlFor="product-description">Short description</label>
+              <input
+                id="product-description"
+                value={form.shortDescription}
+                onChange={(e) => setForm({ ...form, shortDescription: e.target.value })}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="product-type">Product type</label>
+              <select
+                id="product-type"
+                value={form.productType}
+                onChange={(e) => setForm({ ...form, productType: e.target.value })}
+              >
+                <option value="">Select product type</option>
+                {PRODUCT_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="primary-goal">Primary goal</label>
+              <select
+                id="primary-goal"
+                value={form.primaryGoal}
+                onChange={(e) => setForm({ ...form, primaryGoal: e.target.value })}
+              >
+                <option value="">Select primary goal</option>
+                {PRIMARY_GOALS.map((goal) => (
+                  <option key={goal} value={goal}>
+                    {goal}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field field-full">
+              <label htmlFor="target-markets">Target markets</label>
+              <input
+                id="target-markets"
+                placeholder="Comma-separated, e.g. India, Global"
+                value={form.targetMarkets}
+                onChange={(e) => setForm({ ...form, targetMarkets: e.target.value })}
+              />
+            </div>
+            <div className="field-full">
+              <ErrorMessage message={createError} />
+              <button type="submit" className="btn btn-primary" disabled={creating} style={{ marginTop: 6 }}>
+                {creating ? 'Creating...' : 'Create Product'}
+              </button>
+            </div>
+          </form>
+        </Card>
+      )}
 
       <div className="section">
         <h2 className="section-title">Products</h2>
