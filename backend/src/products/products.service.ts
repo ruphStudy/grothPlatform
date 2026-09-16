@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { QuotaService, UsageMeterService } from '../billing/services/billing.service';
+import { AuditLogService } from '../audit/services/audit-log.service';
 import { AuthorizationService } from '../team/services/team.service';
 import { PERMISSIONS } from '../team/schemas/team.schema';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -25,6 +26,7 @@ export class ProductsService {
     private readonly authorizationService: AuthorizationService,
     private readonly quotaService: QuotaService,
     private readonly usageMeter: UsageMeterService,
+    private readonly auditLogs: AuditLogService,
   ) {}
 
   private toSafeProduct(product: ProductDocument) {
@@ -91,6 +93,7 @@ export class ProductsService {
       status: 'active',
     }).save();
     await this.usageMeter.record({ organizationId, productId: product._id.toString(), category: 'product', metric: 'product.created', quantity: 1, unit: 'count', sourceType: 'product', sourceEntityId: product._id.toString(), idempotencyKey: `product.created:${product._id}` });
+    await this.auditLogs.record({ organizationId, productId: product._id.toString(), actorType: 'user', actorUserId: ownerUserId, action: 'product.created', resourceType: 'product', resourceId: product._id.toString(), result: 'success', afterSummary: { name: product.name, status: product.status } });
     return this.toSafeProduct(product);
   }
 

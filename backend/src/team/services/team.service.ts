@@ -6,6 +6,7 @@ import { Organization, OrganizationDocument } from '../../organizations/schemas/
 import { Product, ProductDocument } from '../../products/schemas/product.schema';
 import { User, UserDocument } from '../../users/schemas/user.schema';
 import { SubscriptionService } from '../../billing/services/billing.service';
+import { AuditLogService } from '../../audit/services/audit-log.service';
 import { AcceptInvitationDto, CreateRoleDto, InviteMemberDto, sanitizePermissions, UpdateMemberDto, UpdateProductAccessDto, UpdateRoleDto } from '../dto/team.dto';
 import {
   ALL_PERMISSIONS,
@@ -136,6 +137,7 @@ export class OrganizationMemberService {
     @InjectModel(TeamAuditEvent.name) private readonly auditModel: Model<TeamAuditEventDocument>,
     private readonly authz: AuthorizationService,
     private readonly subscriptions: SubscriptionService,
+    private readonly auditLogs: AuditLogService,
   ) {}
 
   async currentAccess(organizationId: string, userId: string) {
@@ -184,6 +186,7 @@ export class OrganizationMemberService {
     if (dto.status) member.status = dto.status;
     await member.save();
     await this.audit(organizationId, userId, 'member_changed', 'member', member._id.toString(), { previous, next: { roleId: member.roleId.toString(), status: member.status } });
+    await this.auditLogs.record({ organizationId, actorType: 'user', actorUserId: userId, action: 'team.member_changed', resourceType: 'member', resourceId: member._id.toString(), result: 'success', beforeSummary: previous, afterSummary: { roleId: member.roleId.toString(), status: member.status } });
     return this.get(organizationId, userId, memberId);
   }
 
@@ -221,6 +224,7 @@ export class OrganizationMemberService {
       if (productIds.length) await this.grantModel.insertMany(productIds.map((productId) => ({ organizationId: member.organizationId, productId: new Types.ObjectId(productId), memberId: member._id, accessLevel: 'explicit', createdByUserId: new Types.ObjectId(userId) })));
     }
     await this.audit(organizationId, userId, 'product_access_changed', 'member', memberId, { mode: dto.mode, productIds: dto.productIds || [] });
+    await this.auditLogs.record({ organizationId, actorType: 'user', actorUserId: userId, action: 'team.product_access_changed', resourceType: 'member', resourceId: memberId, result: 'success', afterSummary: { mode: dto.mode, productIds: dto.productIds || [] } });
     return this.productAccess(organizationId, userId, memberId);
   }
 
@@ -290,6 +294,7 @@ export class RoleService {
     @InjectModel(OrganizationMember.name) private readonly memberModel: Model<OrganizationMemberDocument>,
     @InjectModel(TeamAuditEvent.name) private readonly auditModel: Model<TeamAuditEventDocument>,
     private readonly authz: AuthorizationService,
+    private readonly auditLogs: AuditLogService,
   ) {}
 
   async list(organizationId: string, userId: string) {
@@ -310,6 +315,7 @@ export class RoleService {
     if (dto.isDefault) await this.roleModel.updateMany({ organizationId: new Types.ObjectId(organizationId) }, { $set: { isDefault: false } }).exec();
     const role = await this.roleModel.create({ organizationId: new Types.ObjectId(organizationId), name: dto.name.trim(), key, description: dto.description?.trim(), type: 'custom', isDefault: !!dto.isDefault, permissions: sanitizePermissions(dto.permissions) });
     await this.audit(organizationId, userId, 'custom_role_created', role._id.toString(), { key });
+    await this.auditLogs.record({ organizationId, actorType: 'user', actorUserId: userId, action: 'team.role_created', resourceType: 'role', resourceId: role._id.toString(), result: 'success', afterSummary: { key, permissions: role.permissions } });
     return role;
   }
 
@@ -328,6 +334,7 @@ export class RoleService {
     }
     await role.save();
     await this.audit(organizationId, userId, 'custom_role_changed', roleId, {});
+    await this.auditLogs.record({ organizationId, actorType: 'user', actorUserId: userId, action: 'team.role_changed', resourceType: 'role', resourceId: roleId, result: 'success', afterSummary: { permissions: role.permissions, isDefault: role.isDefault } });
     return role;
   }
 
@@ -365,6 +372,7 @@ export class InvitationService {
     @InjectModel(TeamAuditEvent.name) private readonly auditModel: Model<TeamAuditEventDocument>,
     private readonly authz: AuthorizationService,
     private readonly subscriptions: SubscriptionService,
+    private readonly auditLogs: AuditLogService,
   ) {}
 
   async list(organizationId: string, userId: string) {
@@ -386,6 +394,7 @@ export class InvitationService {
     const token = this.token();
     const invite = await this.invitationModel.create({ organizationId: new Types.ObjectId(organizationId), emailNormalized: email, roleId: role._id, productAccessMode: dto.productAccessMode, productIds: dto.productAccessMode === 'selected_products' ? dto.productIds || [] : [], status: 'pending', tokenHash: this.hash(token), invitedByUserId: new Types.ObjectId(userId), expiresAt: new Date(Date.now() + TEAM_INVITE_EXPIRY_DAYS * 86400000) });
     await this.audit(organizationId, userId, 'invite_created', invite._id.toString(), { email, emailStatus: 'mocked' });
+    await this.auditLogs.record({ organizationId, actorType: 'user', actorUserId: userId, action: 'team.invite_created', resourceType: 'invitation', resourceId: invite._id.toString(), result: 'success', afterSummary: { email, productAccessMode: invite.productAccessMode } });
     return { ...invite.toObject(), inviteUrl: this.inviteUrl(token), notification: { email: 'mocked' } };
   }
 

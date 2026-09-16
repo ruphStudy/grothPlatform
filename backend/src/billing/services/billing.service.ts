@@ -5,6 +5,7 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { Model, Types } from 'mongoose';
 import { Organization, OrganizationDocument } from '../../organizations/schemas/organization.schema';
 import { Product, ProductDocument } from '../../products/schemas/product.schema';
+import { AuditLogService } from '../../audit/services/audit-log.service';
 import {
   AiUsageEvent,
   AiUsageEventDocument,
@@ -231,6 +232,7 @@ export class SubscriptionService {
     @InjectModel(Organization.name) private readonly orgModel: Model<OrganizationDocument>,
     private readonly plans: BillingPlanService,
     private readonly config: ConfigService,
+    private readonly auditLogs: AuditLogService,
   ) {}
 
   async ensureFreeSubscription(organizationId: string, actorUserId?: string) {
@@ -294,6 +296,7 @@ export class SubscriptionService {
       isCurrent: true,
     }).save();
     await this.audit(organizationId, 'plan_changed', actorUserId, 'user', { planKey, interval });
+    await this.auditLogs.record({ organizationId, actorType: 'user', actorUserId, action: 'billing.plan_changed', resourceType: 'subscription', resourceId: sub._id.toString(), result: 'success', afterSummary: { planKey, interval, status: sub.status } });
     return sub;
   }
 
@@ -303,6 +306,7 @@ export class SubscriptionService {
     sub.cancelledAt = new Date();
     await sub.save();
     await this.audit(organizationId, 'cancel_requested', actorUserId, 'user', { periodEnd: sub.periodEnd });
+    await this.auditLogs.record({ organizationId, actorType: 'user', actorUserId, action: 'billing.cancel_requested', resourceType: 'subscription', resourceId: sub._id.toString(), result: 'success', afterSummary: { cancelAtPeriodEnd: true, periodEnd: sub.periodEnd } });
     return sub;
   }
 
@@ -312,6 +316,7 @@ export class SubscriptionService {
     sub.cancelledAt = undefined;
     await sub.save();
     await this.audit(organizationId, 'reactivated', actorUserId, 'user', {});
+    await this.auditLogs.record({ organizationId, actorType: 'user', actorUserId, action: 'billing.reactivated', resourceType: 'subscription', resourceId: sub._id.toString(), result: 'success', afterSummary: { cancelAtPeriodEnd: false } });
     return sub;
   }
 
@@ -327,6 +332,7 @@ export class SubscriptionService {
     if (input.priceAmountMinor !== undefined) sub.priceAmountMinor = input.priceAmountMinor;
     await sub.save();
     await this.audit(input.organizationId, 'subscription_synced', undefined, 'provider', { status: input.status });
+    await this.auditLogs.record({ organizationId: input.organizationId, actorType: 'provider', action: 'billing.subscription_synced', resourceType: 'subscription', resourceId: sub._id.toString(), result: 'success', afterSummary: { status: input.status, planKey: input.planKey } });
     return sub;
   }
 
@@ -517,6 +523,7 @@ export class PaymentProviderService {
     private readonly subscriptions: SubscriptionService,
     private readonly config: ConfigService,
     @InjectModel(BillingWebhookEvent.name) private readonly webhookModel: Model<BillingWebhookEventDocument>,
+    private readonly auditLogs: AuditLogService,
   ) {}
 
   async createCheckoutSession(organizationId: string, userId: string, planKey: string, interval: 'monthly' | 'yearly', currency?: string) {
@@ -524,6 +531,7 @@ export class PaymentProviderService {
     const price = this.plans.priceFor(plan as BillingPlan, interval, currency);
     if (!price.providerPriceId && price.amountMinor > 0) throw new BadRequestException('billing_price_not_configured');
     await this.subscriptions.audit(organizationId, 'checkout_created', userId, 'user', { planKey, interval });
+    await this.auditLogs.record({ organizationId, actorType: 'user', actorUserId: userId, action: 'billing.checkout_created', resourceType: 'checkout', result: 'success', afterSummary: { planKey, interval, amountMinor: price.amountMinor } });
     if (price.amountMinor === 0) {
       const sub = await this.subscriptions.changeInternal(organizationId, planKey, interval, userId, price.currency);
       return { provider: 'internal', checkoutUrl: `/organizations/${organizationId}/billing?checkout=free`, subscription: sub };

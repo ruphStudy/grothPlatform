@@ -1782,6 +1782,31 @@ export interface AiUsageSummary {
   customerUsageUnits: number;
 }
 
+export interface AuditLogEntry {
+  _id: string;
+  organizationId?: string;
+  productId?: string;
+  actorType: 'user' | 'system' | 'provider';
+  actorUserId?: string;
+  action: string;
+  resourceType: string;
+  resourceId?: string;
+  result: 'success' | 'failure';
+  beforeSummary?: Record<string, unknown>;
+  afterSummary?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  requestId?: string;
+  occurredAt: string;
+  createdAt: string;
+}
+
+export interface AuditLogResponse {
+  items: AuditLogEntry[];
+  page: number;
+  limit: number;
+  total: number;
+}
+
 export interface ProductIntelligenceProfile {
   id: string;
   organizationId: string;

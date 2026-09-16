@@ -4,6 +4,7 @@ import { Model, Types } from 'mongoose';
 import { AiService } from '../../ai/ai.service';
 import { AnalyticsEvent, AnalyticsEventDocument } from '../../analytics/schemas/analytics-event.schema';
 import { AttributionTouchpoint, AttributionTouchpointDocument } from '../../attribution/schemas/attribution-touchpoint.schema';
+import { AuditLogService } from '../../audit/services/audit-log.service';
 import { QuotaService, UsageMeterService } from '../../billing/services/billing.service';
 import { Campaign, CampaignDocument } from '../../campaigns/schemas/campaign.schema';
 import { ContentVersion, ContentVersionDocument } from '../../content-generation/schemas/content-version.schema';
@@ -65,6 +66,7 @@ export class GrowthDecisionEngineService {
     private readonly explanations: DecisionExplanationService,
     private readonly quotaService: QuotaService,
     private readonly usageMeter: UsageMeterService,
+    private readonly auditLogs: AuditLogService,
     @InjectModel(GrowthDecisionRun.name) private readonly runModel: Model<GrowthDecisionRunDocument>,
     @InjectModel(GrowthOpportunity.name) private readonly opportunityModel: Model<GrowthOpportunityDocument>,
     @InjectModel(ChannelPriority.name) private readonly channelModel: Model<ChannelPriorityDocument>,
@@ -122,6 +124,7 @@ export class GrowthDecisionEngineService {
         },
       }).exec();
       await this.usageMeter.record({ organizationId, productId, category: 'growth_brain', metric: 'growth_brain.run', quantity: 1, unit: 'run', sourceType: 'growth_decision_run', sourceEntityId: run._id.toString(), idempotencyKey: `growth-brain-success:${run._id}` });
+      await this.auditLogs.record({ organizationId, productId, actorType: 'user', actorUserId: userId, action: 'growth_brain.run', resourceType: 'growth_decision_run', resourceId: run._id.toString(), result: 'success', afterSummary: { status: 'completed' } });
       return this.dashboard(organizationId, productId, userId);
     } catch (err) {
       await this.runModel.updateOne({ _id: run._id }, { $set: { status: 'failed', errorCode: err instanceof Error ? err.message.slice(0, 120) : 'growth_brain_failed', completedAt: new Date() } }).exec();

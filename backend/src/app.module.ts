@@ -8,6 +8,7 @@ import { BillingModule } from './billing/billing.module';
 import { AudienceIntelligenceModule } from './audience-intelligence/audience-intelligence.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { ApprovalsModule } from './approvals/approvals.module';
+import { AuditModule } from './audit/audit.module';
 import { AttributionModule } from './attribution/attribution.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
 import { CmsIntegrationsModule } from './cms-integrations/cms-integrations.module';
@@ -32,6 +33,7 @@ import { SocialPublishingModule } from './social-publishing/social-publishing.mo
 import { TeamModule } from './team/team.module';
 import { UsersModule } from './users/users.module';
 import { WebsiteIntelligenceModule } from './website-intelligence/website-intelligence.module';
+import { ErrorMonitoringService } from './common/monitoring/error-monitoring.service';
 
 @Module({
   imports: [
@@ -45,6 +47,7 @@ import { WebsiteIntelligenceModule } from './website-intelligence/website-intell
     }),
     UsersModule,
     AuthModule,
+    AuditModule,
     BillingModule,
     OrganizationsModule,
     ProductsModule,
@@ -74,6 +77,6 @@ import { WebsiteIntelligenceModule } from './website-intelligence/website-intell
     EmailModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, ErrorMonitoringService],
 })
 export class AppModule {}

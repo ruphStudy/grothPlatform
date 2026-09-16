@@ -1,6 +1,7 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import { AuditModule } from '../audit/audit.module';
 import { Organization, OrganizationSchema } from '../organizations/schemas/organization.schema';
 import { Product, ProductSchema } from '../products/schemas/product.schema';
 import { TeamModule } from '../team/team.module';
@@ -28,6 +29,7 @@ import { AiUsageService, BillingPlanService, PaymentProviderService, QuotaServic
 @Module({
   imports: [
     ConfigModule,
+    AuditModule,
     forwardRef(() => TeamModule),
     MongooseModule.forFeature([
       { name: BillingPlan.name, schema: BillingPlanSchema },

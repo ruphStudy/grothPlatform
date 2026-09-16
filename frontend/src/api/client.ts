@@ -5,10 +5,12 @@ export const USER_KEY = 'gip_user';
 
 export class ApiError extends Error {
   status: number;
+  requestId?: string;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, requestId?: string) {
     super(message);
     this.status = status;
+    this.requestId = requestId;
   }
 }
 
@@ -45,9 +47,13 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
+    const requestId = data?.requestId ?? response.headers.get('x-request-id') ?? undefined;
+    if (response.status === 429) {
+      throw new ApiError('Too many requests. Please try again shortly.', 429, requestId);
+    }
     const rawMessage = data?.message ?? data?.error ?? 'Request failed';
     const message = Array.isArray(rawMessage) ? rawMessage.join(', ') : String(rawMessage);
-    throw new ApiError(message, response.status);
+    throw new ApiError(message, response.status, requestId);
   }
 
   return data as T;

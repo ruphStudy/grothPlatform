@@ -14,4 +14,14 @@ export class AppController {
   getHealth() {
     return { status: 'ok', service: 'gip-backend' };
   }
+
+  @Get('health/live')
+  live() {
+    return { status: 'ok' };
+  }
+
+  @Get('health/ready')
+  ready() {
+    return { status: 'ok', checks: { app: 'ok' } };
+  }
 }

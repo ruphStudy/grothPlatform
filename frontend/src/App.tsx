@@ -3,6 +3,7 @@ import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import AnalyticsPage from './pages/AnalyticsPage';
 import ApprovalsPage from './pages/ApprovalsPage';
+import AuditLogsPage from './pages/AuditLogsPage';
 import AttributionPage from './pages/AttributionPage';
 import BillingPage from './pages/BillingPage';
 import CampaignDetailPage from './pages/CampaignDetailPage';
@@ -65,6 +66,14 @@ function App() {
           element={
             <ProtectedRoute>
               <BillingPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/organizations/:organizationId/audit-logs"
+          element={
+            <ProtectedRoute>
+              <AuditLogsPage />
             </ProtectedRoute>
           }
         />

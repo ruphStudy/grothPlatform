@@ -4,6 +4,8 @@ import ipaddr from 'ipaddr.js';
 import { promises as dns } from 'node:dns';
 
 const BLOCKED_DESTINATION_MESSAGE = 'Private or internal website destinations are not allowed';
+const MAX_URL_LENGTH = 2048;
+const ALLOWED_PROTOCOLS = new Set(['http:', 'https:']);
 
 // Explicitly-blocked hostnames beyond the generic localhost/*.localhost rule below,
 // most notably cloud metadata endpoints that are commonly abused for SSRF.
@@ -35,6 +37,7 @@ export class WebsiteUrlSecurityService {
   }
 
   async validateDestination(url: URL): Promise<void> {
+    this.validateUrlShape(url);
     if (this.isPrivateFetchAllowed()) {
       return;
     }
@@ -54,6 +57,30 @@ export class WebsiteUrlSecurityService {
     for (const address of addresses) {
       this.assertPublicIp(address);
     }
+  }
+
+  async validateUserControlledUrl(rawUrl: string): Promise<URL> {
+    if (!rawUrl || rawUrl.length > MAX_URL_LENGTH) throw new BadRequestException('URL is too long');
+    let url: URL;
+    try {
+      url = new URL(rawUrl);
+    } catch {
+      throw new BadRequestException('Invalid URL');
+    }
+    await this.validateDestination(url);
+    return url;
+  }
+
+  async validateRedirectTarget(from: URL, location: string): Promise<URL> {
+    const next = new URL(location, from);
+    await this.validateDestination(next);
+    return next;
+  }
+
+  private validateUrlShape(url: URL) {
+    if (!ALLOWED_PROTOCOLS.has(url.protocol)) throw new BadRequestException('Unsupported URL protocol');
+    if (url.username || url.password) throw new BadRequestException('URL credentials are not allowed');
+    if (url.toString().length > MAX_URL_LENGTH) throw new BadRequestException('URL is too long');
   }
 
   private isBlockedHostname(hostname: string): boolean {
