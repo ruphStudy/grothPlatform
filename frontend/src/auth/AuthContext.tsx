@@ -11,7 +11,7 @@ interface AuthContextValue {
   user: User | null;
   accessToken: string | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
+  register: (input: { firstName: string; lastName?: string; email: string; password: string; confirmPassword: string; termsAccepted: boolean; termsVersion: string; privacyVersion: string; selectedPlanKey?: string }) => Promise<void>;
   logout: () => void;
 }
 
@@ -46,10 +46,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     persistSession(data);
   }
 
-  async function register(name: string, email: string, password: string) {
+  async function register(input: { firstName: string; lastName?: string; email: string; password: string; confirmPassword: string; termsAccepted: boolean; termsVersion: string; privacyVersion: string; selectedPlanKey?: string }) {
+    const name = [input.firstName, input.lastName].filter(Boolean).join(' ').trim();
     const data = await apiRequest<AuthResponse>('/auth/register', {
       method: 'POST',
-      body: { name, email, password },
+      body: { ...input, name },
       auth: false,
     });
     persistSession(data);

@@ -265,7 +265,25 @@ export class SubscriptionService {
   async current(organizationId: string) {
     const org = await this.orgModel.findById(objectId(organizationId)).lean().exec();
     if (!org) throw new NotFoundException('organization_not_found');
-    return this.ensureFreeSubscription(organizationId);
+    const sub = await this.ensureFreeSubscription(organizationId);
+    if (sub.status === 'trialing' && sub.trialEnd && sub.trialEnd.getTime() < Date.now()) {
+      sub.status = 'expired';
+      await sub.save();
+      await this.audit(organizationId, 'trial_expired', undefined, 'system', { trialEnd: sub.trialEnd });
+    }
+    return sub;
+  }
+
+  trialStatus(subscription: OrganizationSubscriptionDocument) {
+    const remaining = subscription.trialEnd ? Math.max(0, Math.ceil((subscription.trialEnd.getTime() - Date.now()) / DAY)) : null;
+    return {
+      status: subscription.status,
+      trialStart: subscription.trialStart,
+      trialEnd: subscription.trialEnd,
+      daysRemaining: remaining,
+      active: subscription.status === 'trialing' && remaining !== null && remaining > 0,
+      expired: subscription.status === 'expired' || (subscription.trialEnd ? subscription.trialEnd.getTime() < Date.now() : false),
+    };
   }
 
   async entitlements(organizationId: string) {

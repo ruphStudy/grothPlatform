@@ -43,7 +43,8 @@ export class OrganizationBillingController {
   @Get('subscription')
   async subscription(@Req() req: { user: { userId: string } }, @Param('organizationId') organizationId: string) {
     await this.canView(organizationId, req.user.userId);
-    return this.subscriptions.current(organizationId);
+    const subscription = await this.subscriptions.current(organizationId);
+    return { ...(subscription.toObject ? subscription.toObject() : subscription), trial: this.subscriptions.trialStatus(subscription) };
   }
 
   @Post('checkout')

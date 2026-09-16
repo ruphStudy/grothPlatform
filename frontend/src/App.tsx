@@ -28,15 +28,34 @@ import SocialConnectionsCallbackPage from './pages/SocialConnectionsCallbackPage
 import SocialConnectionsPage from './pages/SocialConnectionsPage';
 import TeamPage from './pages/TeamPage';
 import InviteAcceptPage from './pages/InviteAcceptPage';
+import LandingPage from './pages/launch/LandingPage';
+import LaunchReadinessPage from './pages/launch/LaunchReadinessPage';
+import LegalPage from './pages/launch/LegalPage';
+import OnboardingPage from './pages/launch/OnboardingPage';
+import PricingPage from './pages/launch/PricingPage';
+import ProductTourPage from './pages/launch/ProductTourPage';
 
 function App() {
   return (
     <AuthProvider>
       <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/signup" element={<RegisterPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/pricing" element={<PricingPage />} />
+        <Route path="/terms" element={<LegalPage type="terms" />} />
+        <Route path="/privacy" element={<LegalPage type="privacy" />} />
         <Route path="/invite/accept" element={<InviteAcceptPage />} />
         <Route path="/forms/:publicKey" element={<PublicLeadFormPage />} />
+        <Route
+          path="/onboarding"
+          element={
+            <ProtectedRoute>
+              <OnboardingPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/dashboard"
           element={
@@ -70,6 +89,14 @@ function App() {
           }
         />
         <Route
+          path="/organizations/:organizationId/launch-readiness"
+          element={
+            <ProtectedRoute>
+              <LaunchReadinessPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/organizations/:organizationId/audit-logs"
           element={
             <ProtectedRoute>
@@ -82,6 +109,14 @@ function App() {
           element={
             <ProtectedRoute>
               <ProductPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/organizations/:organizationId/products/:productId/tour"
+          element={
+            <ProtectedRoute>
+              <ProductTourPage />
             </ProtectedRoute>
           }
         />
@@ -214,7 +249,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </AuthProvider>

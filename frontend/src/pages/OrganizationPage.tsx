@@ -118,6 +118,11 @@ export default function OrganizationPage() {
                   Billing
                 </Link>
               )}
+              {canViewBilling && (
+                <Link to={`/organizations/${organizationId}/launch-readiness`} className="btn btn-secondary">
+                  Launch Readiness
+                </Link>
+              )}
               {canViewAudit && (
                 <Link to={`/organizations/${organizationId}/audit-logs`} className="btn btn-secondary">
                   Audit Logs

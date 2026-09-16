@@ -45,6 +45,42 @@ export interface Product {
   updatedAt: string;
 }
 
+export interface LegalConfig {
+  termsVersion: string;
+  privacyVersion: string;
+  legalEntityName: string;
+  legalContactEmail: string;
+  supportEmail: string;
+}
+
+export interface OnboardingState {
+  currentStep: string;
+  completedSteps: string[];
+  selectedPlanKey?: string;
+  selectedBillingInterval: BillingInterval;
+  organizationId?: string;
+  productId?: string;
+  growthGoal?: string;
+  completedAt?: string;
+  legalAccepted: boolean;
+  tourVersion: string;
+  tour: { version: string; startedAt?: string; completedAt?: string; skippedAt?: string };
+}
+
+export interface LaunchReadinessItem {
+  key: string;
+  category: string;
+  label: string;
+  status: 'pass' | 'fail' | 'warning' | 'manual';
+  details?: string;
+  required: boolean;
+}
+
+export interface LaunchReadinessResponse {
+  summary: { requiredPassed: number; warnings: number; failures: number; manual: number };
+  items: LaunchReadinessItem[];
+}
+
 export interface TargetAudience {
   name: string;
   description: string;
@@ -1752,6 +1788,9 @@ export interface OrganizationSubscription {
   cancelAtPeriodEnd: boolean;
   provider: 'internal' | 'stripe' | 'razorpay' | 'other';
   providerPriceId?: string;
+  trialStart?: string;
+  trialEnd?: string;
+  trial?: { status: string; trialEnd?: string; daysRemaining: number | null; active: boolean; expired: boolean };
   planSnapshot: { key: string; name: string; entitlements: BillingEntitlements; price?: BillingPrice };
 }
 

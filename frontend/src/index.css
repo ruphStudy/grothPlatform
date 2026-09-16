@@ -671,6 +671,162 @@ textarea:focus {
   margin-top: 18px;
 }
 
+/* Launch pages */
+
+.public-shell {
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.public-header,
+.public-footer {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.public-nav,
+.public-footer,
+.public-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.launch-hero {
+  min-height: 520px;
+  display: grid;
+  align-items: center;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 56px 20px 72px;
+}
+
+.launch-hero h1 {
+  font-size: 52px;
+  line-height: 1;
+  max-width: 760px;
+}
+
+.launch-hero p {
+  max-width: 680px;
+  margin-top: 18px;
+  color: var(--text-muted);
+  font-size: 18px;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.public-section,
+.legal-doc {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 42px 20px;
+}
+
+.section-heading {
+  margin-bottom: 24px;
+}
+
+.public-grid,
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.public-tile,
+.pricing-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+
+.pricing-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.price {
+  font-size: 30px;
+}
+
+.public-faq,
+.legal-doc section {
+  margin-top: 24px;
+}
+
+.legal-doc {
+  max-width: 860px;
+}
+
+.legal-doc h1 {
+  font-size: 36px;
+}
+
+.legal-doc h2 {
+  font-size: 18px;
+  margin-bottom: 6px;
+}
+
+.public-auth {
+  min-height: auto;
+  padding-top: 28px;
+}
+
+.onboarding-shell {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.trial-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--warning-bg);
+  color: var(--warning);
+  border-bottom: 1px solid var(--warning-border);
+  font-weight: 600;
+}
+
+.trial-expired {
+  background: var(--error-bg);
+  color: var(--error);
+}
+
+.readiness-pass {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.readiness-fail {
+  background: var(--error-bg);
+  color: var(--error);
+}
+
+.readiness-warning,
+.readiness-manual {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
 /* Product summary */
 
 .summary-grid {
@@ -902,6 +1058,10 @@ textarea:focus {
 
   .page-title {
     font-size: 22px;
+  }
+
+  .launch-hero h1 {
+    font-size: 34px;
   }
 
   .calendar-days {

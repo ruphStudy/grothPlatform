@@ -24,6 +24,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { ProductIntelligenceModule } from './product-intelligence/product-intelligence.module';
 import { KeywordIntelligenceModule } from './keyword-intelligence/keyword-intelligence.module';
+import { LaunchModule } from './launch/launch.module';
 import { LearningModule } from './learning/learning.module';
 import { LeadsModule } from './leads/leads.module';
 import { ProductsModule } from './products/products.module';
@@ -63,6 +64,7 @@ import { ErrorMonitoringService } from './common/monitoring/error-monitoring.ser
     ApprovalsModule,
     AttributionModule,
     KeywordIntelligenceModule,
+    LaunchModule,
     LearningModule,
     GrowthStrategyModule,
     GrowthBrainModule,

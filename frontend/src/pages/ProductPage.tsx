@@ -437,6 +437,9 @@ export default function ProductPage() {
                     {link.label}
                   </Link>
                 ))}
+            <Link to={`/organizations/${organizationId}/products/${productId}/tour`} className="btn btn-secondary">
+              Product Tour
+            </Link>
             {product && <Badge status={product.status} />}
           </>
         }

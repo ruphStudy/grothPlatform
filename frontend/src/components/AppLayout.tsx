@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiRequest } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import type { InAppNotification, NotificationListResponse } from '../types';
+import type { InAppNotification, NotificationListResponse, Organization, OrganizationSubscription } from '../types';
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
@@ -10,6 +10,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const [items, setItems] = useState<InAppNotification[]>([]);
+  const [trial, setTrial] = useState<{ organizationId: string; daysRemaining: number | null; expired: boolean } | null>(null);
 
   async function loadNotifications() {
     if (!user) return;
@@ -30,6 +31,18 @@ export function AppLayout({ children }: { children: ReactNode }) {
     const timer = window.setInterval(loadNotifications, 60000);
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user) return;
+    apiRequest<Organization[]>('/organizations')
+      .then(async (orgs) => {
+        const org = orgs[0];
+        if (!org) return;
+        const sub = await apiRequest<OrganizationSubscription>(`/organizations/${org.id}/billing/subscription`);
+        if (sub.trial && (sub.trial.daysRemaining !== null || sub.trial.expired)) setTrial({ organizationId: org.id, daysRemaining: sub.trial.daysRemaining, expired: !!sub.trial.expired });
+      })
+      .catch(() => null);
   }, [user?.id]);
 
   async function openNotification(item: InAppNotification) {
@@ -75,6 +88,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
+      {trial && (
+        <div className={`trial-banner ${trial.expired ? 'trial-expired' : ''}`}>
+          {trial.expired ? 'Trial ended. Your data is safe.' : `Trial: ${trial.daysRemaining ?? 0} day(s) remaining.`}
+          <Link to={`/organizations/${trial.organizationId}/billing`}>View Plans</Link>
+        </div>
+      )}
       <main className="container app-main">{children}</main>
     </div>
   );
