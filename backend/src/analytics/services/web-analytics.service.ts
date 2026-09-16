@@ -208,6 +208,6 @@ export class WebAnalyticsService {
   }
 
   private publicBaseUrl() {
-    return (process.env.GIP_PUBLIC_URL || process.env.API_PUBLIC_URL || process.env.APP_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
+    return (process.env.BACKEND_PUBLIC_URL || process.env.GIP_PUBLIC_URL || process.env.API_PUBLIC_URL || process.env.APP_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
   }
 }

@@ -18,6 +18,8 @@ Generated assets or external object storage, if enabled, must have separate prov
 
 Use Atlas automated backups/snapshots for production clusters. Validate that restore permissions and snapshot retention are configured before launch.
 
+Production should use an explicit database name such as `gip_prod` in `MONGODB_URI`, TLS through the provider default connection string, and a least-privilege application user with `readWrite` on only the application database. Prefer provider network allowlists where backend stable egress is available; if a deployment platform has dynamic egress, document the tradeoff before using broad access.
+
 ## Generic MongoDB
 
 Use `mongodump` from a trusted operations host:
@@ -45,3 +47,5 @@ mongorestore --uri "$TARGET_MONGODB_URI" --archive=gip-YYYYMMDD.archive --gzip -
 ## Validation
 
 Do not restore production from the application UI. A non-destructive validation is to verify this document, configured backup provider, restore permissions, and a recent restorable backup exist.
+
+Indexes are created with the non-destructive `npm run db:indexes` command after build/deploy; it does not drop production indexes.

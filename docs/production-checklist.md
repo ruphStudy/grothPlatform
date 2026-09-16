@@ -1,0 +1,22 @@
+# Production Checklist
+
+- [ ] Production secrets configured in provider secret store
+- [ ] `MONGODB_URI` points to production database, not local/dev
+- [ ] MongoDB Atlas backups enabled
+- [ ] MongoDB app user has least-privilege `readWrite` on app database
+- [ ] Object storage bucket is private and configured
+- [ ] Storage credentials scoped to required bucket
+- [ ] `BACKEND_PUBLIC_URL` and `FRONTEND_PUBLIC_URL` use HTTPS
+- [ ] Frontend and backend domains configured
+- [ ] Managed SSL certificates issued
+- [ ] `CORS_ORIGINS` matches frontend domain
+- [ ] OAuth callback URLs updated
+- [ ] Billing webhook URL and secret configured
+- [ ] Email/CMS/Social webhook URLs configured if enabled
+- [ ] Monitoring enabled with environment and release values
+- [ ] CI passes on the release commit
+- [ ] Backend `/health/ready` is green
+- [ ] `npm run db:indexes` completed successfully
+- [ ] Stripe test mode disabled only when intentionally going live
+- [ ] Email/social/CMS production credentials manually verified
+- [ ] Smoke checklist in `docs/deployment.md` completed

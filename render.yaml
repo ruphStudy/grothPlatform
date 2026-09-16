@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: gip-backend
+    env: docker
+    rootDir: backend
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health/ready
+    autoDeploy: false
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: AUTO_INDEX
+        value: "false"
+      - key: TRUST_PROXY
+        value: "true"
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: FRONTEND_BASE_URL
+        sync: false
+      - key: FRONTEND_PUBLIC_URL
+        sync: false
+      - key: BACKEND_PUBLIC_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: STORAGE_PROVIDER
+        value: s3
+      - key: STORAGE_BUCKET
+        sync: false
+      - key: STORAGE_REGION
+        sync: false
+      - key: STORAGE_ACCESS_KEY_ID
+        sync: false
+      - key: STORAGE_SECRET_ACCESS_KEY
+        sync: false

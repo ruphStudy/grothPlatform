@@ -31,6 +31,7 @@ import { ResearchModule } from './research/research.module';
 import { SocialIntegrationsModule } from './social-integrations/social-integrations.module';
 import { SocialPublishingModule } from './social-publishing/social-publishing.module';
 import { TeamModule } from './team/team.module';
+import { StorageModule } from './storage/storage.module';
 import { UsersModule } from './users/users.module';
 import { WebsiteIntelligenceModule } from './website-intelligence/website-intelligence.module';
 import { ErrorMonitoringService } from './common/monitoring/error-monitoring.service';
@@ -43,6 +44,7 @@ import { ErrorMonitoringService } from './common/monitoring/error-monitoring.ser
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         uri: configService.get<string>('MONGODB_URI'),
+        autoIndex: configService.get<string>('AUTO_INDEX') === 'true' || process.env.NODE_ENV !== 'production',
       }),
     }),
     UsersModule,
@@ -71,6 +73,7 @@ import { ErrorMonitoringService } from './common/monitoring/error-monitoring.ser
     SocialIntegrationsModule,
     SocialPublishingModule,
     TeamModule,
+    StorageModule,
     CmsIntegrationsModule,
     LeadsModule,
     CrmModule,

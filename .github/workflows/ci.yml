@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [sprintdev, main, master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      NODE_ENV: development
+      MONGODB_URI: mongodb://localhost:27017/gip_ci
+      JWT_SECRET: ci-placeholder-secret
+      AI_PROVIDER: mock
+      PAYMENT_PROVIDER: mock
+      ERROR_MONITORING_ENABLED: "false"
+      VITE_API_BASE_URL: http://localhost:3000/api/v1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - name: Backend install
+        working-directory: backend
+        run: npm ci
+      - name: Backend build
+        working-directory: backend
+        run: npm run build
+      - name: Frontend install
+        working-directory: frontend
+        run: npm ci
+      - name: Frontend build
+        working-directory: frontend
+        run: npm run build
