@@ -31,6 +31,7 @@ export default function OrganizationPage() {
   const permissions = usePermissions(organizationId);
   const canCreateProduct = permissions.hasPermission('product.create');
   const canViewTeam = permissions.hasPermission('team.view');
+  const canViewBilling = permissions.hasPermission('billing.view');
 
   async function loadData() {
     if (!organizationId) return;
@@ -109,6 +110,11 @@ export default function OrganizationPage() {
               {canViewTeam && (
                 <Link to={`/organizations/${organizationId}/team`} className="btn btn-secondary">
                   Team
+                </Link>
+              )}
+              {canViewBilling && (
+                <Link to={`/organizations/${organizationId}/billing`} className="btn btn-secondary">
+                  Billing
                 </Link>
               )}
               <Badge status={organization.status} />

@@ -4,6 +4,7 @@ import { ProtectedRoute } from './auth/ProtectedRoute';
 import AnalyticsPage from './pages/AnalyticsPage';
 import ApprovalsPage from './pages/ApprovalsPage';
 import AttributionPage from './pages/AttributionPage';
+import BillingPage from './pages/BillingPage';
 import CampaignDetailPage from './pages/CampaignDetailPage';
 import CampaignsPage from './pages/CampaignsPage';
 import CmsConnectionsPage from './pages/CmsConnectionsPage';
@@ -56,6 +57,14 @@ function App() {
           element={
             <ProtectedRoute>
               <TeamPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/organizations/:organizationId/billing"
+          element={
+            <ProtectedRoute>
+              <BillingPage />
             </ProtectedRoute>
           }
         />

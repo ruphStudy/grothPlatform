@@ -6,6 +6,7 @@ import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { Organization, OrganizationDocument } from './schemas/organization.schema';
 import { AuthorizationService } from '../team/services/team.service';
 import { PERMISSIONS } from '../team/schemas/team.schema';
+import { SubscriptionService } from '../billing/services/billing.service';
 
 function slugify(name: string): string {
   return name
@@ -20,6 +21,7 @@ export class OrganizationsService {
   constructor(
     @InjectModel(Organization.name) private orgModel: Model<OrganizationDocument>,
     private readonly authorizationService: AuthorizationService,
+    private readonly subscriptionService: SubscriptionService,
   ) {}
 
   private async ensureUniqueSlug(base: string, excludeId?: string): Promise<string> {
@@ -59,6 +61,7 @@ export class OrganizationsService {
       status: 'active',
     }).save();
     await this.authorizationService.ensureOwnerMembership(org._id, ownerUserId);
+    await this.subscriptionService.ensureFreeSubscription(org._id.toString(), ownerUserId);
     return this.toSafeOrganization(org);
   }
 

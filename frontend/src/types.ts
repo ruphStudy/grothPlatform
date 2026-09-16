@@ -1712,6 +1712,76 @@ export interface InvitationPreview {
   expiresAt: string;
 }
 
+export type BillingInterval = 'monthly' | 'yearly';
+export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'unpaid' | 'cancelled' | 'expired' | 'incomplete';
+
+export interface BillingPrice {
+  interval: BillingInterval;
+  currency: string;
+  amountMinor: number;
+  providerPriceId?: string;
+}
+
+export interface BillingEntitlements {
+  [key: string]: number | boolean | null | undefined;
+}
+
+export interface BillingPlan {
+  key: string;
+  name: string;
+  description?: string;
+  status: 'active' | 'archived';
+  visibility: 'public' | 'private';
+  billingIntervalOptions: BillingInterval[];
+  prices: BillingPrice[];
+  entitlements: BillingEntitlements;
+  sortOrder: number;
+}
+
+export interface OrganizationSubscription {
+  id?: string;
+  _id?: string;
+  organizationId: string;
+  planKey: string;
+  status: SubscriptionStatus;
+  billingInterval: BillingInterval;
+  currency?: string;
+  priceAmountMinor?: number;
+  periodStart: string;
+  periodEnd: string;
+  cancelAtPeriodEnd: boolean;
+  provider: 'internal' | 'stripe' | 'razorpay' | 'other';
+  providerPriceId?: string;
+  planSnapshot: { key: string; name: string; entitlements: BillingEntitlements; price?: BillingPrice };
+}
+
+export interface UsageSummary {
+  metric: string;
+  label: string;
+  used: number;
+  limit: number | null;
+  remaining: number | null;
+  percentage: number | null;
+  warningLevel: 'none' | 'warning' | 'exceeded';
+  periodStart: string;
+  periodEnd: string;
+}
+
+export interface UsageResponse {
+  summary: UsageSummary[];
+  breakdown: { productId?: string; metric: string; used: number }[];
+}
+
+export interface AiUsageSummary {
+  feature: string;
+  provider: string;
+  model: string;
+  productId?: string;
+  calls: number;
+  tokens: number;
+  customerUsageUnits: number;
+}
+
 export interface ProductIntelligenceProfile {
   id: string;
   organizationId: string;

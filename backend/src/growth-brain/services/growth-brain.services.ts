@@ -4,6 +4,7 @@ import { Model, Types } from 'mongoose';
 import { AiService } from '../../ai/ai.service';
 import { AnalyticsEvent, AnalyticsEventDocument } from '../../analytics/schemas/analytics-event.schema';
 import { AttributionTouchpoint, AttributionTouchpointDocument } from '../../attribution/schemas/attribution-touchpoint.schema';
+import { QuotaService, UsageMeterService } from '../../billing/services/billing.service';
 import { Campaign, CampaignDocument } from '../../campaigns/schemas/campaign.schema';
 import { ContentVersion, ContentVersionDocument } from '../../content-generation/schemas/content-version.schema';
 import { GrowthStrategyReview, GrowthStrategyReviewDocument } from '../../growth-strategy/schemas/growth-strategy-review.schema';
@@ -62,6 +63,8 @@ export class GrowthDecisionEngineService {
     private readonly content: ContentPrioritizationService,
     private readonly weekly: WeeklyGrowthPlanService,
     private readonly explanations: DecisionExplanationService,
+    private readonly quotaService: QuotaService,
+    private readonly usageMeter: UsageMeterService,
     @InjectModel(GrowthDecisionRun.name) private readonly runModel: Model<GrowthDecisionRunDocument>,
     @InjectModel(GrowthOpportunity.name) private readonly opportunityModel: Model<GrowthOpportunityDocument>,
     @InjectModel(ChannelPriority.name) private readonly channelModel: Model<ChannelPriorityDocument>,
@@ -79,6 +82,8 @@ export class GrowthDecisionEngineService {
   ) {}
 
   async run(organizationId: string, productId: string, userId: string, dto: GrowthBrainRunDto) {
+    await this.quotaService.assertFeatureEnabled(organizationId, 'autonomous_brain');
+    await this.quotaService.assertCanConsume({ organizationId, metric: 'growth_brain.run', quantity: 1, idempotencyKey: `growth-brain-run:${organizationId}:${productId}:${Date.now()}` });
     const context = await this.context(organizationId, productId, userId, dto);
     const run = await this.runModel.create({
       organizationId: new Types.ObjectId(organizationId),
@@ -97,7 +102,7 @@ export class GrowthDecisionEngineService {
     } as Partial<GrowthDecisionRun>);
 
     try {
-      const aiResult = await this.callAiOnce(context);
+      const aiResult = await this.callAiOnce(organizationId, productId, run._id.toString(), context);
       this.validateAiOutput(aiResult.data, context);
       const opportunities = await this.ranking.rank(organizationId, productId, run._id, context, aiResult.data);
       const allocation = await this.allocation.allocate(organizationId, productId, run._id, opportunities, context.constraints);
@@ -116,6 +121,7 @@ export class GrowthDecisionEngineService {
           completedAt: new Date(),
         },
       }).exec();
+      await this.usageMeter.record({ organizationId, productId, category: 'growth_brain', metric: 'growth_brain.run', quantity: 1, unit: 'run', sourceType: 'growth_decision_run', sourceEntityId: run._id.toString(), idempotencyKey: `growth-brain-success:${run._id}` });
       return this.dashboard(organizationId, productId, userId);
     } catch (err) {
       await this.runModel.updateOne({ _id: run._id }, { $set: { status: 'failed', errorCode: err instanceof Error ? err.message.slice(0, 120) : 'growth_brain_failed', completedAt: new Date() } }).exec();
@@ -171,7 +177,7 @@ export class GrowthDecisionEngineService {
     };
   }
 
-  private async callAiOnce(context: any) {
+  private async callAiOnce(organizationId: string, productId: string, runId: string, context: any) {
     return this.aiService.generateStructured<any>({
       systemPrompt: [
         'You are the GIP Growth Brain. Return strict JSON only.',
@@ -190,6 +196,15 @@ export class GrowthDecisionEngineService {
         },
         context,
       }),
+      billing: {
+        organizationId,
+        productId,
+        feature: 'growth_brain',
+        action: 'decision_run',
+        sourceType: 'growth_decision_run',
+        sourceEntityId: runId,
+        idempotencyKey: `ai:growth-brain:${runId}`,
+      },
     });
   }
 

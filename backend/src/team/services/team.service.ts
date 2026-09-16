@@ -5,6 +5,7 @@ import { Model, Types } from 'mongoose';
 import { Organization, OrganizationDocument } from '../../organizations/schemas/organization.schema';
 import { Product, ProductDocument } from '../../products/schemas/product.schema';
 import { User, UserDocument } from '../../users/schemas/user.schema';
+import { SubscriptionService } from '../../billing/services/billing.service';
 import { AcceptInvitationDto, CreateRoleDto, InviteMemberDto, sanitizePermissions, UpdateMemberDto, UpdateProductAccessDto, UpdateRoleDto } from '../dto/team.dto';
 import {
   ALL_PERMISSIONS,
@@ -134,6 +135,7 @@ export class OrganizationMemberService {
     @InjectModel(ProductAccessGrant.name) private readonly grantModel: Model<ProductAccessGrantDocument>,
     @InjectModel(TeamAuditEvent.name) private readonly auditModel: Model<TeamAuditEventDocument>,
     private readonly authz: AuthorizationService,
+    private readonly subscriptions: SubscriptionService,
   ) {}
 
   async currentAccess(organizationId: string, userId: string) {
@@ -173,6 +175,7 @@ export class OrganizationMemberService {
     if (dto.roleId && member.userId.toString() === userId) throw new ForbiddenException('self_escalation_denied');
     await this.assertOwnerContinuity(organizationId, member, dto.roleId, dto.status);
     const previous = { roleId: member.roleId.toString(), status: member.status };
+    if (dto.status === 'active' && member.status !== 'active') await this.assertMemberLimit(organizationId);
     if (dto.roleId) {
       const role = await this.roleModel.findOne({ _id: new Types.ObjectId(dto.roleId), organizationId: new Types.ObjectId(organizationId) }).exec();
       if (!role) throw new BadRequestException('role_not_found');
@@ -240,6 +243,14 @@ export class OrganizationMemberService {
     const wouldDemote = nextRoleId && nextRoleId !== member.roleId.toString();
     const wouldDeactivate = nextStatus && nextStatus !== 'active';
     if (activeOwners <= 1 && (wouldDemote || wouldDeactivate)) throw new ConflictException('sole_owner_protected');
+  }
+
+  private async assertMemberLimit(organizationId: string) {
+    const sub = await this.subscriptions.current(organizationId);
+    const limit = sub.planSnapshot.entitlements.maxOrganizationMembers;
+    if (limit === null || limit === undefined) return;
+    const active = await this.memberModel.countDocuments({ organizationId: new Types.ObjectId(organizationId), status: 'active' }).exec();
+    if (active >= limit) throw new ForbiddenException({ errorCode: 'billing_quota_exceeded', metric: 'team.member_active', limit, used: active, remaining: 0, periodEnd: sub.periodEnd });
   }
 
   private memberDto(member: any, user: any, role: any, grants: any[]) {
@@ -353,6 +364,7 @@ export class InvitationService {
     @InjectModel(ProductAccessGrant.name) private readonly grantModel: Model<ProductAccessGrantDocument>,
     @InjectModel(TeamAuditEvent.name) private readonly auditModel: Model<TeamAuditEventDocument>,
     private readonly authz: AuthorizationService,
+    private readonly subscriptions: SubscriptionService,
   ) {}
 
   async list(organizationId: string, userId: string) {
@@ -369,6 +381,7 @@ export class InvitationService {
     if (existingUser && await this.memberModel.exists({ organizationId: new Types.ObjectId(organizationId), userId: existingUser._id, status: 'active' })) throw new ConflictException('member_already_exists');
     const pending = await this.invitationModel.findOne({ organizationId: new Types.ObjectId(organizationId), emailNormalized: email, status: 'pending' }).exec();
     if (pending) throw new ConflictException('pending_invitation_exists');
+    await this.assertMemberLimit(organizationId);
     await this.validateProducts(organizationId, dto.productAccessMode, dto.productIds || []);
     const token = this.token();
     const invite = await this.invitationModel.create({ organizationId: new Types.ObjectId(organizationId), emailNormalized: email, roleId: role._id, productAccessMode: dto.productAccessMode, productIds: dto.productAccessMode === 'selected_products' ? dto.productIds || [] : [], status: 'pending', tokenHash: this.hash(token), invitedByUserId: new Types.ObjectId(userId), expiresAt: new Date(Date.now() + TEAM_INVITE_EXPIRY_DAYS * 86400000) });
@@ -413,8 +426,10 @@ export class InvitationService {
     if (!user || this.email(user.email) !== invite.emailNormalized) throw new ForbiddenException('invitation_email_mismatch');
     let member = await this.memberModel.findOne({ organizationId: invite.organizationId, userId: user._id }).exec();
     if (!member) {
+      await this.assertMemberLimit(invite.organizationId.toString());
       member = await this.memberModel.create({ organizationId: invite.organizationId, userId: user._id, status: 'active', roleId: invite.roleId, productAccessMode: invite.productAccessMode, joinedAt: new Date(), invitedByUserId: invite.invitedByUserId });
     } else if (member.status !== 'active') {
+      await this.assertMemberLimit(invite.organizationId.toString());
       member.status = 'active';
       member.roleId = invite.roleId;
       member.productAccessMode = invite.productAccessMode;
@@ -447,6 +462,14 @@ export class InvitationService {
     const clean = [...new Set(productIds)];
     const count = await this.productModel.countDocuments({ organizationId: new Types.ObjectId(organizationId), _id: { $in: clean.filter(Types.ObjectId.isValid).map((id) => new Types.ObjectId(id)) } }).exec();
     if (count !== clean.length) throw new BadRequestException('foreign_product_access_denied');
+  }
+
+  private async assertMemberLimit(organizationId: string) {
+    const sub = await this.subscriptions.current(organizationId);
+    const limit = sub.planSnapshot.entitlements.maxOrganizationMembers;
+    if (limit === null || limit === undefined) return;
+    const active = await this.memberModel.countDocuments({ organizationId: new Types.ObjectId(organizationId), status: 'active' }).exec();
+    if (active >= limit) throw new ForbiddenException({ errorCode: 'billing_quota_exceeded', metric: 'team.member_active', limit, used: active, remaining: 0, periodEnd: sub.periodEnd });
   }
 
   private async findInvitation(organizationId: string, invitationId: string) {

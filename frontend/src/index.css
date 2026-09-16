@@ -426,6 +426,47 @@ p {
   text-transform: capitalize;
 }
 
+.quota-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.quota-meter {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.quota-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.quota-track {
+  height: 8px;
+  background: var(--neutral-bg);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.quota-fill {
+  height: 100%;
+  background: var(--primary);
+}
+
+.quota-warning .quota-fill {
+  background: var(--warning);
+}
+
+.quota-exceeded .quota-fill {
+  background: var(--error);
+}
+
 input,
 select,
 textarea {

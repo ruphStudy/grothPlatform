@@ -97,7 +97,19 @@ export class ProductIntelligenceService {
 
     let generation: Awaited<ReturnType<AiService['generateStructured']>>;
     try {
-      generation = await this.aiService.generateStructured<unknown>({ systemPrompt, userPrompt });
+      generation = await this.aiService.generateStructured<unknown>({
+        systemPrompt,
+        userPrompt,
+        billing: {
+          organizationId,
+          productId,
+          feature: 'product_intelligence',
+          action: 'analyze',
+          sourceType: 'product',
+          sourceEntityId: productId,
+          idempotencyKey: `product-intelligence:${productId}:${Date.now()}`,
+        },
+      });
     } catch (err) {
       if (err instanceof HttpException) throw err;
       throw new UnprocessableEntityException('AI analysis failed');

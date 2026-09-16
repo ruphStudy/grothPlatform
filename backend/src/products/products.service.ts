@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { OrganizationsService } from '../organizations/organizations.service';
+import { QuotaService, UsageMeterService } from '../billing/services/billing.service';
 import { AuthorizationService } from '../team/services/team.service';
 import { PERMISSIONS } from '../team/schemas/team.schema';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -22,6 +23,8 @@ export class ProductsService {
     @InjectModel(Product.name) private productModel: Model<ProductDocument>,
     private readonly organizationsService: OrganizationsService,
     private readonly authorizationService: AuthorizationService,
+    private readonly quotaService: QuotaService,
+    private readonly usageMeter: UsageMeterService,
   ) {}
 
   private toSafeProduct(product: ProductDocument) {
@@ -72,6 +75,7 @@ export class ProductsService {
 
   async create(organizationId: string, ownerUserId: string, dto: CreateProductDto) {
     await this.authorizationService.assertPermission(organizationId, ownerUserId, PERMISSIONS.PRODUCT_CREATE);
+    await this.quotaService.assertProductLimit(organizationId);
 
     const baseSlug = slugify(dto.name);
     const slug = await this.ensureUniqueSlug(organizationId, baseSlug);
@@ -86,6 +90,7 @@ export class ProductsService {
       targetMarkets: dto.targetMarkets ?? [],
       status: 'active',
     }).save();
+    await this.usageMeter.record({ organizationId, productId: product._id.toString(), category: 'product', metric: 'product.created', quantity: 1, unit: 'count', sourceType: 'product', sourceEntityId: product._id.toString(), idempotencyKey: `product.created:${product._id}` });
     return this.toSafeProduct(product);
   }
 

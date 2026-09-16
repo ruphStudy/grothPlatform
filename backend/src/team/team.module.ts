@@ -1,5 +1,6 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { BillingModule } from '../billing/billing.module';
 import { Organization, OrganizationSchema } from '../organizations/schemas/organization.schema';
 import { Product, ProductSchema } from '../products/schemas/product.schema';
 import { User, UserSchema } from '../users/schemas/user.schema';
@@ -9,6 +10,7 @@ import { AuthorizationService, InvitationService, OrganizationMemberService, Rol
 
 @Module({
   imports: [
+    forwardRef(() => BillingModule),
     MongooseModule.forFeature([
       { name: OrganizationMember.name, schema: OrganizationMemberSchema },
       { name: OrganizationInvitation.name, schema: OrganizationInvitationSchema },

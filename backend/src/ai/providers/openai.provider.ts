@@ -1,7 +1,7 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
-import { AiProvider, GenerateStructuredParams } from '../interfaces/ai-provider.interface';
+import { AiProvider, AiProviderResult, GenerateStructuredParams } from '../interfaces/ai-provider.interface';
 
 const DEFAULT_MODEL = 'gpt-4o-mini';
 
@@ -26,7 +26,7 @@ export class OpenAiProvider implements AiProvider {
     return this.client;
   }
 
-  async generateStructured<T>({ systemPrompt, userPrompt }: GenerateStructuredParams): Promise<T> {
+  async generateStructured<T>({ systemPrompt, userPrompt }: GenerateStructuredParams): Promise<AiProviderResult<T>> {
     const client = this.getClient();
 
     let completion;
@@ -49,7 +49,17 @@ export class OpenAiProvider implements AiProvider {
     }
 
     try {
-      return JSON.parse(content) as T;
+      const data = JSON.parse(content) as T;
+      const usage = completion.usage
+        ? {
+            inputTokens: completion.usage.prompt_tokens,
+            outputTokens: completion.usage.completion_tokens,
+            totalTokens: completion.usage.total_tokens,
+            providerCostMinor: undefined,
+            providerCostCurrency: 'USD',
+          }
+        : undefined;
+      return { data, usage };
     } catch {
       throw new ServiceUnavailableException('AI provider returned invalid JSON');
     }

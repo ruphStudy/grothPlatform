@@ -4,6 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { BillingModule } from './billing/billing.module';
 import { AudienceIntelligenceModule } from './audience-intelligence/audience-intelligence.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { ApprovalsModule } from './approvals/approvals.module';
@@ -44,6 +45,7 @@ import { WebsiteIntelligenceModule } from './website-intelligence/website-intell
     }),
     UsersModule,
     AuthModule,
+    BillingModule,
     OrganizationsModule,
     ProductsModule,
     ProductIntelligenceModule,

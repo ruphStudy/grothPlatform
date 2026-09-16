@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { AiModule } from '../ai/ai.module';
 import { AnalyticsEvent, AnalyticsEventSchema } from '../analytics/schemas/analytics-event.schema';
 import { AttributionTouchpoint, AttributionTouchpointSchema } from '../attribution/schemas/attribution-touchpoint.schema';
+import { BillingModule } from '../billing/billing.module';
 import { Campaign, CampaignSchema } from '../campaigns/schemas/campaign.schema';
 import { ContentVersion, ContentVersionSchema } from '../content-generation/schemas/content-version.schema';
 import { GrowthStrategyReview, GrowthStrategyReviewSchema } from '../growth-strategy/schemas/growth-strategy-review.schema';
@@ -32,6 +33,7 @@ import { BudgetEffortAllocationService, ChannelPrioritizationService, ContentPri
 @Module({
   imports: [
     AiModule,
+    BillingModule,
     ProductsModule,
     MongooseModule.forFeature([
       { name: GrowthDecisionRun.name, schema: GrowthDecisionRunSchema },
